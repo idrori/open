@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Benchmark Data Contamination Mitigation</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary:#1a3a5c; --accent:#2980b9; --success:#27ae60; --danger:#e74c3c; --warn:#f39c12; --purple:#8e44ad; --bg:#f4f6f8; --card:#fff; --text:#2c3e50; --muted:#7f8c8d; --border:#dce1e6; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+  .hero{background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%);color:#fff;padding:48px 24px 36px;text-align:center}
+  .hero h1{font-size:1.8em;font-weight:700;margin-bottom:10px;max-width:800px;margin-left:auto;margin-right:auto}
+  .hero p{font-size:1.05em;opacity:.9;max-width:700px;margin:0 auto 16px}
+  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{padding:4px 14px;border-radius:20px;font-size:.82em;font-weight:600;background:rgba(255,255,255,.2);color:#fff}
+  .container{max-width:1100px;margin:0 auto;padding:0 20px}
+  .tabs{display:flex;gap:4px;background:var(--card);border-radius:12px;padding:6px;margin:-24px auto 24px;max-width:600px;box-shadow:0 4px 16px rgba(0,0,0,.1);position:relative;z-index:10}
+  .tab{flex:1;padding:10px 8px;text-align:center;border-radius:8px;cursor:pointer;font-weight:600;font-size:.82em;color:var(--muted);transition:all .2s}
+  .tab:hover{background:#f0f4f8}.tab.active{background:var(--accent);color:#fff}
+  .panel{display:none}.panel.active{display:block}
+  .card{background:var(--card);border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .card h3{margin-bottom:12px;color:var(--primary)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .metric-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .metric{flex:1;min-width:120px;text-align:center;background:var(--bg);border-radius:10px;padding:14px 8px}
+  .metric .val{font-size:1.6em;font-weight:700;color:var(--accent)}
+  .metric .lbl{font-size:.82em;color:var(--muted);margin-top:2px}
+  canvas{max-height:400px}
+  table{width:100%;border-collapse:collapse;font-size:.92em}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+  th{background:var(--bg);font-weight:600;color:var(--primary)}
+  .best{font-weight:700;color:var(--success)}
+  @media(max-width:768px){.grid2{grid-template-columns:1fr}.tabs{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Effective Mitigation of Benchmark Data Contamination</h1>
+  <p>Comparing strategies to prevent inflated LLM performance metrics from training data overlap</p>
+  <div class="badges"><span class="badge">cs.CL</span><span class="badge">Gan et al. 2026</span><span class="badge">arXiv: 2601.02907</span></div>
+</div>
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="showTab(0)">Overview</div>
+    <div class="tab" onclick="showTab(1)">Detection</div>
+    <div class="tab" onclick="showTab(2)">Inflation</div>
+    <div class="tab" onclick="showTab(3)">Effectiveness</div>
+    <div class="tab" onclick="showTab(4)">Scaling</div>
+  </div>
+
+  <div class="panel active" id="p0">
+    <div class="metric-row">
+      <div class="metric"><div class="val">93.5%</div><div class="lbl">Best Effectiveness</div></div>
+      <div class="metric"><div class="val">0.977</div><div class="lbl">Best F1 (Approx.)</div></div>
+      <div class="metric"><div class="val">2.1x</div><div class="lbl">Dynamic Regen Cost</div></div>
+      <div class="metric"><div class="val">83.5%</div><div class="lbl">Embed Dedup Eff.</div></div>
+    </div>
+    <div class="card">
+      <h3>Strategy Comparison</h3>
+      <table>
+        <tr><th>Strategy</th><th>F1 (Approx.)</th><th>Effectiveness</th><th>Cost</th></tr>
+        <tr><td>No Mitigation</td><td>0.008</td><td>0.0%</td><td>1.0x</td></tr>
+        <tr><td>N-gram Dedup</td><td>0.745</td><td>58.6%</td><td>1.15x</td></tr>
+        <tr><td>Embedding Dedup</td><td>0.918</td><td>83.5%</td><td>1.45x</td></tr>
+        <tr><td>Dynamic Regen</td><td class="best">0.977</td><td class="best">93.5%</td><td>2.10x</td></tr>
+        <tr><td>Score Adjust</td><td>0.900</td><td>80.5%</td><td>1.05x</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel" id="p1">
+    <div class="card"><h3>Detection F1 by Contamination Type</h3><canvas id="chartF1"></canvas></div>
+  </div>
+
+  <div class="panel" id="p2">
+    <div class="card"><h3>Performance Inflation vs Contamination Rate</h3><canvas id="chartInflation"></canvas></div>
+  </div>
+
+  <div class="panel" id="p3">
+    <div class="card"><h3>Mitigation Effectiveness by Type (10% Rate)</h3><canvas id="chartEff"></canvas></div>
+  </div>
+
+  <div class="panel" id="p4">
+    <div class="card"><h3>Inflation Scaling with Model Size</h3><canvas id="chartScale"></canvas></div>
+  </div>
+</div>
+
+<script>
+const C={none:'#e74c3c',ngram_dedup:'#f39c12',embedding_dedup:'#2980b9',dynamic_regen:'#27ae60',score_adjustment:'#8e44ad'};
+const L={none:'No Mitigation',ngram_dedup:'N-gram Dedup',embedding_dedup:'Embedding Dedup',dynamic_regen:'Dynamic Regen',score_adjustment:'Score Adjust'};
+const S=['none','ngram_dedup','embedding_dedup','dynamic_regen','score_adjustment'];
+const SM=S.slice(1);
+
+function showTab(i){document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',j===i));document.querySelectorAll('.panel').forEach((p,j)=>p.classList.toggle('active',j===i));}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  // F1 grouped bar
+  const f1={ngram_dedup:[0.952,0.745,0.386,0.163],embedding_dedup:[0.936,0.918,0.785,0.661],dynamic_regen:[0.991,0.977,0.946,0.923],score_adjustment:[0.930,0.900,0.822,0.745]};
+  new Chart(document.getElementById('chartF1'),{type:'bar',data:{labels:['Verbatim','Approximate','Noisy','Paraphrase'],datasets:SM.map(s=>({label:L[s],data:f1[s],backgroundColor:C[s]+'cc'}))},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{min:0,max:1,title:{display:true,text:'F1 Score'}}}}});
+
+  // Inflation vs rate
+  const rates=[0,0.01,0.05,0.10,0.20,0.50];
+  const inf={none:[0,0.019,0.095,0.190,0.380,0.950],ngram_dedup:[0,0.008,0.039,0.079,0.157,0.393],embedding_dedup:[0,0.003,0.014,0.029,0.057,0.143],dynamic_regen:[0,0.001,0.005,0.010,0.019,0.048],score_adjustment:[0,0.004,0.019,0.037,0.074,0.186]};
+  new Chart(document.getElementById('chartInflation'),{type:'line',data:{labels:rates,datasets:S.map(s=>({label:L[s],data:inf[s],borderColor:C[s],borderWidth:2,pointRadius:4,fill:false}))},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{x:{title:{display:true,text:'Contamination Rate'}},y:{title:{display:true,text:'Avg Inflation'}}}}});
+
+  // Effectiveness
+  const eff={ngram_dedup:[0.950,0.586,0.236,0.086],embedding_dedup:[0.914,0.835,0.636,0.486],dynamic_regen:[0.986,0.935,0.886,0.835],score_adjustment:[0.871,0.805,0.686,0.585]};
+  new Chart(document.getElementById('chartEff'),{type:'bar',data:{labels:['Verbatim','Approximate','Noisy','Paraphrase'],datasets:SM.map(s=>({label:L[s],data:eff[s],backgroundColor:C[s]+'cc'}))},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{min:0,max:1.1,title:{display:true,text:'Effectiveness'}}}}});
+
+  // Scaling
+  const sizes=['125M','1.3B','6.7B','13B','70B'];
+  const sc={none:[0.176,0.190,0.205,0.213,0.229],ngram_dedup:[0.073,0.079,0.085,0.088,0.095],embedding_dedup:[0.026,0.029,0.031,0.032,0.035],dynamic_regen:[0.009,0.010,0.011,0.011,0.012],score_adjustment:[0.034,0.037,0.040,0.042,0.045]};
+  new Chart(document.getElementById('chartScale'),{type:'line',data:{labels:sizes,datasets:S.map(s=>({label:L[s],data:sc[s],borderColor:C[s],borderWidth:2,pointRadius:4,fill:false}))},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{title:{display:true,text:'Avg Inflation (10% contam.)'}}}}});
+});
+</script>
+</body>
+</html>

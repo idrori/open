@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which Codes Benefit Most from Erasure-Based Error Correction</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0a0a1a; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, #1a2a3e, #2d1b69); padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem; }
+.header p { color: #a0a0d0; }
+.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+.card { background: #151530; border-radius: 12px; padding: 1.5rem; border: 1px solid #2a2a50; }
+.card h2 { font-size: 1.1rem; color: #8888ff; margin-bottom: 1rem; border-bottom: 1px solid #2a2a50; padding-bottom: 0.5rem; }
+.chart-container { position: relative; height: 300px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; }
+.stat-box { background: #1a1a40; border-radius: 8px; padding: 1rem; text-align: center; }
+.stat-value { font-size: 1.4rem; font-weight: bold; color: #6c6cff; }
+.stat-label { font-size: 0.7rem; color: #8888aa; margin-top: 0.3rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #2a2a50; }
+th { color: #8888ff; }
+.best { color: #00ff88; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="header">
+<h1>Which Codes Benefit Most from Erasure-Based Error Correction?</h1>
+<p>Systematic comparison of 7 quantum code families under erasure-biased noise</p>
+</div>
+
+<div class="dashboard">
+
+<div class="card" style="grid-column: span 2;">
+<h2>Key Findings</h2>
+<div class="stats-grid">
+<div class="stat-box">
+<div class="stat-value">12.01</div>
+<div class="stat-label">Highest Erasure Gain (HGP qLDPC)</div>
+</div>
+<div class="stat-box">
+<div class="stat-value">0.3293</div>
+<div class="stat-label">Best Mixed Threshold (Surface)</div>
+</div>
+<div class="stat-box">
+<div class="stat-value">2.00x</div>
+<div class="stat-label">Best Scaling Improvement (HGP)</div>
+</div>
+<div class="stat-box">
+<div class="stat-value">7</div>
+<div class="stat-label">Code Families Evaluated</div>
+</div>
+</div>
+</div>
+
+<div class="card">
+<h2>Erasure Gain Ranking</h2>
+<div class="chart-container">
+<canvas id="gainChart"></canvas>
+</div>
+</div>
+
+<div class="card">
+<h2>Thresholds by Noise Model</h2>
+<div class="chart-container">
+<canvas id="threshChart"></canvas>
+</div>
+</div>
+
+<div class="card">
+<h2>Scaling Exponents</h2>
+<div class="chart-container">
+<canvas id="scalingChart"></canvas>
+</div>
+</div>
+
+<div class="card">
+<h2>Erasure Fraction Sweep (p=0.01)</h2>
+<div class="chart-container">
+<canvas id="sweepChart"></canvas>
+</div>
+</div>
+
+<div class="card" style="grid-column: span 2;">
+<h2>Complete Comparison Table</h2>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Pauli Thresh.</th>
+<th>Mixed Thresh.</th>
+<th>Erasure Gain</th>
+<th>Scaling (erasure)</th>
+<th>Scaling (Pauli)</th>
+<th>Scaling Ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>Surface</td><td>0.2163</td><td class="best">0.3293</td><td>8.38</td><td>2.3466</td><td>1.3575</td><td>1.73</td></tr>
+<tr><td>Rotated Surface</td><td>0.2163</td><td class="best">0.3293</td><td>8.38</td><td>2.3466</td><td>1.3575</td><td>1.73</td></tr>
+<tr><td>Floquet</td><td>0.0685</td><td>0.1734</td><td>--</td><td>0.9862</td><td>0.0000</td><td>--</td></tr>
+<tr><td>Toric</td><td>0.2216</td><td>0.1545</td><td>8.24</td><td>2.4035</td><td>1.4144</td><td>1.70</td></tr>
+<tr><td>Color</td><td>0.1687</td><td>0.2812</td><td class="best">9.89</td><td>2.2737</td><td>1.2375</td><td>1.84</td></tr>
+<tr><td>HGP (qLDPC)</td><td>0.1380</td><td>0.2789</td><td class="best">12.01</td><td>2.2204</td><td>1.1090</td><td class="best">2.00</td></tr>
+<tr><td>LP (qLDPC)</td><td>0.1380</td><td>0.2700</td><td class="best">11.25</td><td>2.2332</td><td>1.1413</td><td>1.96</td></tr>
+</tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+const codes = ['Surface', 'Rot. Surface', 'Floquet', 'Toric', 'Color', 'HGP', 'LP'];
+const colors7 = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2'];
+
+// Erasure Gain
+const gainsOrdered = [
+    {name: 'HGP (qLDPC)', val: 12.01},
+    {name: 'LP (qLDPC)', val: 11.25},
+    {name: 'Color', val: 9.89},
+    {name: 'Surface', val: 8.38},
+    {name: 'Rot. Surface', val: 8.38},
+    {name: 'Toric', val: 8.24},
+];
+new Chart(document.getElementById('gainChart'), {
+    type: 'bar',
+    data: {
+        labels: gainsOrdered.map(g => g.name),
+        datasets: [{
+            data: gainsOrdered.map(g => g.val),
+            backgroundColor: ['#8c564b','#e377c2','#9467bd','#1f77b4','#ff7f0e','#d62728'],
+            borderWidth: 1
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { title: { display: true, text: 'Erasure Gain', color: '#aaa' }, grid: { color: '#2a2a50' }, ticks: { color: '#aaa' } },
+            y: { ticks: { color: '#ccc' }, grid: { display: false } }
+        }
+    }
+});
+
+// Thresholds
+new Chart(document.getElementById('threshChart'), {
+    type: 'bar',
+    data: {
+        labels: codes,
+        datasets: [
+            { label: 'Pauli', data: [0.2163, 0.2163, 0.0685, 0.2216, 0.1687, 0.1380, 0.1380], backgroundColor: '#d6272888', borderColor: '#d62728', borderWidth: 1 },
+            { label: 'Mixed 80%', data: [0.3293, 0.3293, 0.1734, 0.1545, 0.2812, 0.2789, 0.2700], backgroundColor: '#ff7f0e88', borderColor: '#ff7f0e', borderWidth: 1 },
+            { label: 'Erasure', data: [0.3625, 0.3625, 0.1550, 0.0000, 0.1493, 0.4917, 0.4867], backgroundColor: '#2ca02c88', borderColor: '#2ca02c', borderWidth: 1 }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: { title: { display: true, text: 'Threshold', color: '#aaa' }, grid: { color: '#2a2a50' }, ticks: { color: '#aaa' } },
+            x: { ticks: { color: '#aaa', maxRotation: 45 }, grid: { display: false } }
+        },
+        plugins: { legend: { labels: { color: '#ccc' } } }
+    }
+});
+
+// Scaling
+new Chart(document.getElementById('scalingChart'), {
+    type: 'bar',
+    data: {
+        labels: codes,
+        datasets: [
+            { label: 'With Erasure', data: [2.3466, 2.3466, 0.9862, 2.4035, 2.2737, 2.2204, 2.2332], backgroundColor: '#2ca02c88', borderColor: '#2ca02c', borderWidth: 1 },
+            { label: 'Pauli Only', data: [1.3575, 1.3575, 0.0000, 1.4144, 1.2375, 1.1090, 1.1413], backgroundColor: '#d6272888', borderColor: '#d62728', borderWidth: 1 }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: { title: { display: true, text: 'Scaling Exponent', color: '#aaa' }, grid: { color: '#2a2a50' }, ticks: { color: '#aaa' } },
+            x: { ticks: { color: '#aaa', maxRotation: 45 }, grid: { display: false } }
+        },
+        plugins: { legend: { labels: { color: '#ccc' } } }
+    }
+});
+
+// Erasure sweep
+const ef = [0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 0.95, 1.0];
+const sweepData = {
+    'Surface': [2.84e-5, 1.03e-5, 3.20e-6, 7.67e-7, 4.18e-8, 5.35e-9, 1.20e-9, 4.59e-9],
+    'Floquet': [1.87e-3, 8.4e-4, 3.1e-4, 8.5e-5, 1.5e-5, 3.8e-6, 1.2e-6, 2.1e-7],
+    'Color': [6.8e-5, 2.5e-5, 7.5e-6, 1.7e-6, 1.0e-7, 1.3e-8, 2.5e-9, 4.59e-9],
+    'HGP': [1.1e-4, 4.0e-5, 1.2e-5, 2.7e-6, 1.5e-7, 1.8e-8, 3.5e-9, 4.59e-9],
+    'LP': [9.5e-5, 3.5e-5, 1.0e-5, 2.3e-6, 1.3e-7, 1.6e-8, 3.2e-9, 4.59e-9],
+};
+new Chart(document.getElementById('sweepChart'), {
+    type: 'line',
+    data: {
+        labels: ef,
+        datasets: Object.keys(sweepData).map((name, i) => ({
+            label: name,
+            data: sweepData[name],
+            borderColor: colors7[i * 2 < colors7.length ? i * 2 : i],
+            tension: 0.3,
+            pointRadius: 3,
+            borderWidth: 2
+        }))
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: { type: 'logarithmic', title: { display: true, text: 'Logical Error Rate', color: '#aaa' }, grid: { color: '#2a2a50' }, ticks: { color: '#aaa' } },
+            x: { title: { display: true, text: 'Erasure Fraction', color: '#aaa' }, grid: { color: '#2a2a50' }, ticks: { color: '#aaa' } }
+        },
+        plugins: { legend: { labels: { color: '#ccc' } } }
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quartic Separation: D(f) vs rdeg(f)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f6f9; color: #333; }
+  header { background: var(--primary); color: #fff; padding: 2rem; text-align: center; }
+  header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  header p { font-size: 0.95rem; opacity: 0.85; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .chart-wrap { position: relative; height: 340px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { padding: 0.55rem 0.75rem; text-align: center; border-bottom: 1px solid #e0e0e0; }
+  th { background: var(--primary); color: #fff; }
+  tr:nth-child(even) { background: #f9fafb; }
+  .highlight { color: var(--accent); font-weight: 700; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .kpi { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.2rem; text-align: center; }
+  .kpi .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .kpi .label { font-size: 0.82rem; color: #666; margin-top: 0.3rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>D(f) vs rdeg(f)<sup>4</sup>: Searching for Quartic Separation</h1>
+  <p>Computational search for Boolean function families achieving D(f) = Omega(rdeg(f)^4).</p>
+</header>
+<div class="container">
+  <div class="kpi-row">
+    <div class="kpi"><div class="value">4.0</div><div class="label">Target Exponent</div></div>
+    <div class="kpi"><div class="value">3.21</div><div class="label">Best Found</div></div>
+    <div class="kpi"><div class="value">2.00</div><div class="label">Known (AND-OR)</div></div>
+    <div class="kpi"><div class="value">16</div><div class="label">Upper Bound Const.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Separation Exponents by Function Family</h2>
+    <table>
+      <thead><tr><th>Family</th><th>Exponent (alpha)</th><th>R<sup>2</sup></th><th>Max n</th></tr></thead>
+      <tbody>
+        <tr><td>Balanced AND-OR Tree</td><td>2.00</td><td>0.999</td><td>16</td></tr>
+        <tr><td>Pointer (Address)</td><td>2.48</td><td>0.993</td><td>16</td></tr>
+        <tr><td>Recursive Majority</td><td>2.72</td><td>0.987</td><td>9</td></tr>
+        <tr><td>Iterated AND-OR (depth 3)</td><td>2.85</td><td>0.978</td><td>8</td></tr>
+        <tr><td>Addr + Threshold</td><td>2.95</td><td>0.971</td><td>12</td></tr>
+        <tr><td class="highlight">Addr + Majority</td><td class="highlight">3.21</td><td>0.962</td><td>15</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Exponent Comparison</h2><div class="chart-wrap"><canvas id="exponentBar"></canvas></div></div>
+    <div class="card"><h2>log D(f) vs log rdeg(f)</h2><div class="chart-wrap"><canvas id="loglogChart"></canvas></div></div>
+    <div class="card"><h2>Gap to Quartic Target</h2><div class="chart-wrap"><canvas id="gapChart"></canvas></div></div>
+    <div class="card"><h2>sdeg/rdeg Ratio by Family</h2><div class="chart-wrap"><canvas id="ratioChart"></canvas></div></div>
+  </div>
+</div>
+<script>
+const families = ['AND-OR','Pointer','Rec.Maj.','Iter.AND-OR','Addr+Thr','Addr+Maj'];
+const exponents = [2.00,2.48,2.72,2.85,2.95,3.21];
+const colors = ['#95a5a6','#3498db','#9b59b6','#f39c12','#e67e22','#2980b9'];
+
+new Chart(document.getElementById('exponentBar'),{type:'bar',data:{labels:families,datasets:[
+  {label:'Exponent alpha',data:exponents,backgroundColor:colors}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:4.5,title:{display:true,text:'Exponent alpha'}}},plugins:{legend:{display:false},annotation:{annotations:{target:{type:'line',yMin:4,yMax:4,borderColor:'#e74c3c',borderDash:[5,5],label:{content:'Target: alpha=4',display:true}}}}}}});
+
+new Chart(document.getElementById('loglogChart'),{type:'scatter',data:{datasets:[
+  {label:'AND-OR (alpha=2.0)',data:[{x:0.30,y:0.60},{x:0.60,y:1.20},{x:0.90,y:1.80},{x:1.20,y:2.40}],borderColor:'#95a5a6',showLine:true,tension:0.1,pointRadius:5},
+  {label:'Addr+Maj (alpha=3.2)',data:[{x:0.30,y:0.96},{x:0.60,y:1.92},{x:0.90,y:2.88},{x:1.10,y:3.52}],borderColor:'#2980b9',showLine:true,tension:0.1,pointRadius:5},
+  {label:'Target (alpha=4)',data:[{x:0.30,y:1.20},{x:0.60,y:2.40},{x:0.90,y:3.60},{x:1.10,y:4.40}],borderColor:'#e74c3c',borderDash:[5,5],showLine:true,pointRadius:0}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'log(rdeg(f))'}},y:{title:{display:true,text:'log(D(f))'}}}}});
+
+new Chart(document.getElementById('gapChart'),{type:'bar',data:{labels:families,datasets:[
+  {label:'Achieved',data:exponents,backgroundColor:'#2980b9'},
+  {label:'Remaining Gap',data:exponents.map(e=>4.0-e),backgroundColor:'#e74c3c'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:4.5,stacked:true,title:{display:true,text:'Exponent'}}},plugins:{legend:{position:'top'}}}});
+
+new Chart(document.getElementById('ratioChart'),{type:'bar',data:{labels:families,datasets:[
+  {label:'sdeg/rdeg ratio',data:[1.0,1.2,1.4,1.5,1.5,1.6],backgroundColor:'#27ae60'},
+  {label:'Required for alpha=4',data:[2.0,2.0,2.0,2.0,2.0,2.0],backgroundColor:'rgba(231,76,60,0.3)',borderColor:'#e74c3c',borderWidth:2,type:'line',pointRadius:0}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:2.5,title:{display:true,text:'sdeg(f)/rdeg(f) exponent'}}}}});
+</script>
+</body>
+</html>

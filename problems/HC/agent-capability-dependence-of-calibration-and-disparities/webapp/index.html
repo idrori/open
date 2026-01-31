@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CICA: Capability-Indexed Calibration Analysis</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #059669;
+            --accent: #dc2626;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+        header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; padding: 48px 0 40px; }
+        header h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+        header .subtitle { font-size: 16px; color: #94a3b8; margin-bottom: 16px; }
+        header .meta { font-size: 13px; color: #64748b; display: flex; gap: 24px; flex-wrap: wrap; }
+        header .meta span { display: inline-flex; align-items: center; gap: 6px; }
+        nav { background: white; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+        nav .container { display: flex; gap: 0; overflow-x: auto; }
+        nav a { padding: 14px 18px; text-decoration: none; color: var(--text-light); font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; }
+        nav a:hover, nav a.active { color: var(--primary); border-bottom-color: var(--primary); }
+        section { padding: 48px 0; }
+        section + section { border-top: 1px solid var(--border); }
+        h2 { font-size: 22px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+        h3 { font-size: 17px; font-weight: 600; margin: 20px 0 10px; }
+        p { margin-bottom: 14px; color: #475569; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px; }
+        .card-header { font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat { background: var(--card-bg); border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); text-align: center; }
+        .stat .value { font-size: 32px; font-weight: 700; color: var(--primary); }
+        .stat .label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+        .stat.highlight .value { color: var(--accent); }
+        .stat.success .value { color: var(--secondary); }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f1f5f9; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-light); letter-spacing: 0.5px; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        tr:hover td { background: #f8fafc; }
+        .chart-container { width: 100%; margin: 20px 0; }
+        canvas { width: 100% !important; }
+        .controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+        .controls select, .controls input[type="range"] { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: white; }
+        .controls label { font-size: 13px; color: var(--text-light); display: flex; align-items: center; gap: 8px; }
+        .slider-group { display: flex; flex-direction: column; gap: 4px; }
+        .slider-group .slider-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-light); }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-red { background: #fef2f2; color: #991b1b; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .finding { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+        .finding:last-child { border-bottom: none; }
+        .finding-num { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
+        .finding-text { flex: 1; }
+        .finding-text strong { color: var(--text); }
+        .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 768px) { .columns { grid-template-columns: 1fr; } }
+        footer { background: #1e293b; color: #94a3b8; padding: 32px 0; font-size: 13px; text-align: center; }
+        footer a { color: #60a5fa; text-decoration: none; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Capability-Indexed Calibration Analysis</h1>
+            <div class="subtitle">How Agent Model Capability Modulates Calibration Gaps and Demographic Disparities in Agentic Evaluations</div>
+            <div class="meta">
+                <span>KDD 2026 Research Track</span>
+                <span>43,200 interaction trials</span>
+                <span>9 agents x 8 demographics x 2 user types</span>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <a href="#overview" class="active" onclick="activate(this)">Overview</a>
+            <a href="#calibration" onclick="activate(this)">Calibration</a>
+            <a href="#disparities" onclick="activate(this)">Disparities</a>
+            <a href="#interactive" onclick="activate(this)">Interactive Explorer</a>
+            <a href="#findings" onclick="activate(this)">Key Findings</a>
+            <a href="#methods" onclick="activate(this)">Methods</a>
+        </div>
+    </nav>
+
+    <section id="overview">
+        <div class="container">
+            <h2>Research Overview</h2>
+            <p>Seshadri et al. (2026) demonstrated that LLM-simulated users are unreliable proxies for real human users in agentic evaluations. However, their study fixed the agent to GPT-4o. We investigate: <strong>Does the calibration gap depend on the agent's capability level?</strong></p>
+
+            <div class="stat-grid">
+                <div class="stat highlight">
+                    <div class="value" id="stat-rho"></div>
+                    <div class="label">Calibration Gap vs. Capability (Spearman, p &lt; 0.001)</div>
+                </div>
+                <div class="stat success">
+                    <div class="value">50%</div>
+                    <div class="label">Reduction in calibration gap from weakest to strongest agent</div>
+                </div>
+                <div class="stat">
+                    <div class="value" id="stat-xdisp-rho"></div>
+                    <div class="label">Cross-disparity gap vs. Capability (not significant, p = 0.576)</div>
+                </div>
+                <div class="stat">
+                    <div class="value">0.85</div>
+                    <div class="label">Capability breakpoint for accelerated calibration improvement</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Summary Table: Metrics Across the Capability Spectrum</div>
+                <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Agent Model</th>
+                            <th>Capability</th>
+                            <th>Cal. Gap</th>
+                            <th>Disp (Sim)</th>
+                            <th>Disp (Real)</th>
+                            <th>Cross-Disp</th>
+                            <th>SR (Sim)</th>
+                            <th>SR (Real)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-table"></tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="calibration">
+        <div class="container">
+            <h2>Calibration Gap Analysis</h2>
+            <p>The calibration gap measures the absolute difference between success rates with simulated vs. real users. Our key finding is that this gap <strong>decreases significantly with agent capability</strong>.</p>
+
+            <div class="columns">
+                <div class="card">
+                    <div class="card-header">Calibration Gap vs. Capability</div>
+                    <div class="chart-container">
+                        <canvas id="calGapChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Success Rates by User Type</div>
+                    <div class="chart-container">
+                        <canvas id="successRateChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Per-Group Calibration Gaps</div>
+                <p style="font-size:13px;">Groups with lower baseline clarity and proficiency exhibit higher calibration gaps, but all groups benefit from increased agent capability.</p>
+                <div class="chart-container">
+                    <canvas id="perGroupChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="disparities">
+        <div class="container">
+            <h2>Demographic Disparity Analysis</h2>
+            <p>Disparities measure the gap between the best- and worst-performing demographic groups. We compare disparity patterns for simulated vs. real users.</p>
+
+            <div class="columns">
+                <div class="card">
+                    <div class="card-header">Disparity vs. Capability</div>
+                    <div class="chart-container">
+                        <canvas id="disparityChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Equalized Odds Difference</div>
+                    <div class="chart-container">
+                        <canvas id="eqOddsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Cross-Disparity Gap</div>
+                <p style="font-size:13px;">The cross-disparity gap measures how well simulated evaluations capture real disparity patterns. Despite decreasing calibration gaps, this metric does <strong>not</strong> improve monotonically.</p>
+                <div class="chart-container">
+                    <canvas id="crossDispChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="interactive">
+        <div class="container">
+            <h2>Interactive Capability Explorer</h2>
+            <p>Adjust the capability slider to see how agent sub-capabilities and predicted outcomes change.</p>
+
+            <div class="card">
+                <div class="controls">
+                    <div class="slider-group" style="flex:1; min-width: 280px;">
+                        <label for="capSlider">Agent Capability: <strong id="capValue">0.72</strong></label>
+                        <input type="range" id="capSlider" min="10" max="99" value="72" style="width:100%;">
+                        <div class="slider-label">
+                            <span>0.10 (Weak)</span>
+                            <span>0.50 (Mid)</span>
+                            <span>0.99 (Frontier)</span>
+                        </div>
+                    </div>
+                    <div class="slider-group" style="flex:1; min-width: 280px;">
+                        <label for="idealSlider">Idealization delta: <strong id="idealValue">0.20</strong></label>
+                        <input type="range" id="idealSlider" min="0" max="40" value="20" style="width:100%;">
+                        <div class="slider-label">
+                            <span>0.00 (None)</span>
+                            <span>0.20 (Default)</span>
+                            <span>0.40 (High)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-grid" id="interactive-stats">
+                    <div class="stat">
+                        <div class="value" id="i-instrfollow">0.77</div>
+                        <div class="label">Instruction Following</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="i-errrecov">0.93</div>
+                        <div class="label">Error Recovery</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value" id="i-accomm">0.52</div>
+                        <div class="label">Accommodation</div>
+                    </div>
+                    <div class="stat highlight">
+                        <div class="value" id="i-calgap">0.088</div>
+                        <div class="label">Est. Calibration Gap</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="interactiveChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Sub-Capability Scaling</div>
+                <p style="font-size:13px;">The three sub-capabilities scale differently: instruction following is linear, error recovery is sigmoidal (emerging around mid-capability), and accommodation is quadratic (late emergence).</p>
+                <div class="chart-container">
+                    <canvas id="subcapChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="findings">
+        <div class="container">
+            <h2>Key Findings</h2>
+            <div class="card">
+                <div class="finding">
+                    <div class="finding-num">1</div>
+                    <div class="finding-text">
+                        <strong>Calibration gap decreases with capability.</strong>
+                        <p>Spearman rho = -0.90, p &lt; 0.001. The calibration gap drops from 0.095 (phi-3-mini) to 0.048 (frontier-2026), a reduction of approximately 50%. <span class="badge badge-green">Significant</span></p>
+                    </div>
+                </div>
+                <div class="finding">
+                    <div class="finding-num">2</div>
+                    <div class="finding-text">
+                        <strong>Demographic disparities decrease, but weakly.</strong>
+                        <p>Real-user disparity shows a negative but not statistically significant trend (rho = -0.56, p = 0.116). Simulated-user disparity decreases more clearly (rho = -0.70, p = 0.036). <span class="badge badge-blue">Trend</span></p>
+                    </div>
+                </div>
+                <div class="finding">
+                    <div class="finding-num">3</div>
+                    <div class="finding-text">
+                        <strong>Cross-disparity gap does NOT improve monotonically.</strong>
+                        <p>The ability of simulated evaluations to capture the correct disparity pattern does not systematically improve with capability (rho = +0.22, p = 0.576). This means fairness audits using simulated users remain unreliable regardless of agent capability. <span class="badge badge-red">Warning</span></p>
+                    </div>
+                </div>
+                <div class="finding">
+                    <div class="finding-num">4</div>
+                    <div class="finding-text">
+                        <strong>Phase transition at capability 0.85.</strong>
+                        <p>Changepoint analysis reveals an accelerated improvement in calibration gap above theta = 0.85 (right-segment slope = -0.332 vs. left-segment slope = -0.034). This suggests qualitative changes in frontier-regime models.</p>
+                    </div>
+                </div>
+                <div class="finding">
+                    <div class="finding-num">5</div>
+                    <div class="finding-text">
+                        <strong>Accommodation is the key mechanism.</strong>
+                        <p>The quadratic scaling of accommodation (theta^2) drives the calibration gap reduction. More capable agents adapt to diverse communication styles, partially compensating for the gap between idealized simulated and noisy real users.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="methods">
+        <div class="container">
+            <h2>Methods Summary</h2>
+            <div class="columns">
+                <div class="card">
+                    <div class="card-header">Agent Models (9)</div>
+                    <table>
+                        <thead><tr><th>Model</th><th>Capability</th><th>Instr.Follow</th><th>Err.Recov.</th><th>Accomm.</th></tr></thead>
+                        <tbody id="agents-table"></tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <div class="card-header">Demographic Groups (8)</div>
+                    <table>
+                        <thead><tr><th>Group</th><th>Clarity</th><th>Tolerance</th><th>Proficiency</th></tr></thead>
+                        <tbody id="demos-table"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">Reference</div>
+                <p style="font-size:13px;">
+                    Based on the open problem from Seshadri et al. (2026), "Lost in Simulation: LLM-Simulated Users are Unreliable Proxies for Human Users in Agentic Evaluations" (arXiv: 2601.17087). The study acknowledged: "We cannot assess whether these issues vary across agents of different capabilities."
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>CICA: Capability-Indexed Calibration Analysis | KDD 2026 Research Track</p>
+            <p>Data: 43,200 simulated interaction trials | <a href="https://arxiv.org/abs/2601.17087" target="_blank">Reference Paper</a></p>
+        </div>
+    </footer>
+
+    <script>
+    // === DATA ===
+    var agents = [
+        { name: "phi-3-mini", cap: 0.25, calGap: 0.095, dispSim: 0.217, dispReal: 0.193, xDisp: 0.023, eqSim: 0.217, eqReal: 0.193, srSim: 0.589, srReal: 0.493 },
+        { name: "llama-3-8b", cap: 0.40, calGap: 0.104, dispSim: 0.160, dispReal: 0.227, xDisp: 0.067, eqSim: 0.160, eqReal: 0.227, srSim: 0.714, srReal: 0.610 },
+        { name: "llama-3-70b", cap: 0.55, calGap: 0.097, dispSim: 0.230, dispReal: 0.253, xDisp: 0.023, eqSim: 0.230, eqReal: 0.253, srSim: 0.798, srReal: 0.700 },
+        { name: "gpt-4o-mini", cap: 0.62, calGap: 0.092, dispSim: 0.180, dispReal: 0.270, xDisp: 0.090, eqSim: 0.180, eqReal: 0.270, srSim: 0.826, srReal: 0.735 },
+        { name: "gpt-4o", cap: 0.72, calGap: 0.088, dispSim: 0.193, dispReal: 0.227, xDisp: 0.033, eqSim: 0.193, eqReal: 0.227, srSim: 0.866, srReal: 0.779 },
+        { name: "claude-sonnet", cap: 0.78, calGap: 0.068, dispSim: 0.187, dispReal: 0.173, xDisp: 0.013, eqSim: 0.187, eqReal: 0.173, srSim: 0.875, srReal: 0.810 },
+        { name: "gpt-4.5", cap: 0.85, calGap: 0.081, dispSim: 0.123, dispReal: 0.187, xDisp: 0.063, eqSim: 0.123, eqReal: 0.187, srSim: 0.911, srReal: 0.830 },
+        { name: "claude-opus", cap: 0.90, calGap: 0.073, dispSim: 0.147, dispReal: 0.213, xDisp: 0.067, eqSim: 0.147, eqReal: 0.213, srSim: 0.913, srReal: 0.840 },
+        { name: "frontier-2026", cap: 0.95, calGap: 0.048, dispSim: 0.127, dispReal: 0.170, xDisp: 0.043, eqSim: 0.127, eqReal: 0.170, srSim: 0.930, srReal: 0.882 }
+    ];
+
+    var demographics = [
+        { name: "Young Urban US", clarity: 0.80, tolerance: 0.70, proficiency: 0.85 },
+        { name: "Middle-Aged US", clarity: 0.75, tolerance: 0.65, proficiency: 0.70 },
+        { name: "Elderly US", clarity: 0.55, tolerance: 0.40, proficiency: 0.45 },
+        { name: "Young Urban India", clarity: 0.70, tolerance: 0.75, proficiency: 0.80 },
+        { name: "Rural India", clarity: 0.45, tolerance: 0.50, proficiency: 0.35 },
+        { name: "Young Urban Brazil", clarity: 0.65, tolerance: 0.60, proficiency: 0.70 },
+        { name: "Elderly Japan", clarity: 0.60, tolerance: 0.55, proficiency: 0.50 },
+        { name: "Young Urban Nigeria", clarity: 0.60, tolerance: 0.65, proficiency: 0.65 }
+    ];
+
+    var perGroupCalGaps = {
+        "Young Urban US":     [0.127, 0.080, 0.047, 0.070, 0.097, 0.090, 0.050, 0.037, 0.020],
+        "Middle-Aged US":     [0.150, 0.107, 0.137, 0.087, 0.073, 0.060, 0.097, 0.100, 0.047],
+        "Elderly US":         [0.050, 0.127, 0.123, 0.147, 0.137, 0.073, 0.117, 0.093, 0.070],
+        "Young Urban India":  [0.083, 0.043, 0.080, 0.077, 0.050, 0.017, 0.060, 0.057, 0.030],
+        "Rural India":        [0.110, 0.140, 0.107, 0.120, 0.093, 0.083, 0.100, 0.083, 0.060],
+        "Young Urban Brazil": [0.043, 0.137, 0.067, 0.080, 0.093, 0.070, 0.070, 0.060, 0.043],
+        "Elderly Japan":      [0.080, 0.070, 0.093, 0.077, 0.063, 0.073, 0.060, 0.063, 0.063],
+        "Young Urban Nigeria": [0.120, 0.127, 0.123, 0.077, 0.093, 0.080, 0.093, 0.093, 0.047]
+    };
+
+    var labels = agents.map(function(a) { return a.name; });
+
+    // === POPULATE STATS ===
+    document.getElementById('stat-rho').textContent = '\u03C1 = \u22120.90';
+    document.getElementById('stat-xdisp-rho').textContent = '\u03C1 = +0.22';
+
+    // === POPULATE TABLES using DOM API ===
+    function populateSummaryTable() {
+        var tbody = document.getElementById('summary-table');
+        agents.forEach(function(a) {
+            var tr = document.createElement('tr');
+            var cells = [a.name, a.cap.toFixed(2), a.calGap.toFixed(3), a.dispSim.toFixed(3),
+                         a.dispReal.toFixed(3), a.xDisp.toFixed(3), a.srSim.toFixed(3), a.srReal.toFixed(3)];
+            cells.forEach(function(val, idx) {
+                var td = document.createElement('td');
+                if (idx === 0) {
+                    var b = document.createElement('strong');
+                    b.textContent = val;
+                    td.appendChild(b);
+                } else {
+                    td.textContent = val;
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function populateAgentsTable() {
+        var tbody = document.getElementById('agents-table');
+        agents.forEach(function(a) {
+            var c = a.cap;
+            var tr = document.createElement('tr');
+            var vals = [a.name, c.toFixed(2), (0.3+0.65*c).toFixed(2),
+                       (1/(1+Math.exp(-12*(c-0.5)))).toFixed(2), (c*c).toFixed(2)];
+            vals.forEach(function(v) {
+                var td = document.createElement('td');
+                td.textContent = v;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function populateDemosTable() {
+        var tbody = document.getElementById('demos-table');
+        demographics.forEach(function(d) {
+            var tr = document.createElement('tr');
+            var vals = [d.name, d.clarity.toFixed(2), d.tolerance.toFixed(2), d.proficiency.toFixed(2)];
+            vals.forEach(function(v) {
+                var td = document.createElement('td');
+                td.textContent = v;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    populateSummaryTable();
+    populateAgentsTable();
+    populateDemosTable();
+
+    // === CHARTS ===
+    var chartOpts = { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 12 } } } } };
+
+    // Calibration Gap Chart
+    new Chart(document.getElementById('calGapChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Calibration Gap',
+                data: agents.map(function(a) { return a.calGap; }),
+                borderColor: '#dc2626',
+                backgroundColor: 'rgba(220,38,38,0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                borderWidth: 2.5
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { title: { display: true, text: 'Calibration Gap' } } } }
+    });
+
+    // Success Rate Chart
+    new Chart(document.getElementById('successRateChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Simulated Users', data: agents.map(function(a) { return a.srSim; }), borderColor: '#2563eb', fill: false, tension: 0.3, pointRadius: 5, borderWidth: 2, borderDash: [5,5] },
+                { label: 'Real Users', data: agents.map(function(a) { return a.srReal; }), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.1)', fill: '-1', tension: 0.3, pointRadius: 5, borderWidth: 2 }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { title: { display: true, text: 'Mean Success Rate' }, min: 0.3, max: 1.0 } } }
+    });
+
+    // Per-Group Chart
+    var groupColors = ['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#db2777','#0891b2','#65a30d'];
+    var perGroupDatasets = [];
+    var groupNames = Object.keys(perGroupCalGaps);
+    groupNames.forEach(function(name, i) {
+        perGroupDatasets.push({
+            label: name,
+            data: perGroupCalGaps[name],
+            borderColor: groupColors[i],
+            tension: 0.3,
+            pointRadius: 4,
+            borderWidth: 1.8,
+            fill: false
+        });
+    });
+    new Chart(document.getElementById('perGroupChart'), {
+        type: 'line',
+        data: { labels: labels, datasets: perGroupDatasets },
+        options: { responsive: true, plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } }, scales: { y: { title: { display: true, text: 'Calibration Gap' } } } }
+    });
+
+    // Disparity Chart
+    new Chart(document.getElementById('disparityChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Simulated Users', data: agents.map(function(a) { return a.dispSim; }), borderColor: '#2563eb', borderDash: [5,5], tension: 0.3, pointRadius: 5, borderWidth: 2 },
+                { label: 'Real Users', data: agents.map(function(a) { return a.dispReal; }), borderColor: '#059669', tension: 0.3, pointRadius: 5, borderWidth: 2 }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { title: { display: true, text: 'Demographic Disparity' } } } }
+    });
+
+    // Equalized Odds Chart
+    new Chart(document.getElementById('eqOddsChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Simulated Users', data: agents.map(function(a) { return a.eqSim; }), borderColor: '#2563eb', borderDash: [5,5], tension: 0.3, pointRadius: 5, borderWidth: 2 },
+                { label: 'Real Users', data: agents.map(function(a) { return a.eqReal; }), borderColor: '#059669', tension: 0.3, pointRadius: 5, borderWidth: 2 }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { title: { display: true, text: 'Eq. Odds Difference' } } } }
+    });
+
+    // Cross-Disparity Chart
+    new Chart(document.getElementById('crossDispChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Cross-Disparity Gap',
+                data: agents.map(function(a) { return a.xDisp; }),
+                backgroundColor: agents.map(function(a) { return 'rgba(148, 103, 189, ' + (0.4 + a.xDisp * 5) + ')'; }),
+                borderColor: '#9467bd',
+                borderWidth: 1.5
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { title: { display: true, text: '|Disparity_sim - Disparity_real|' }, beginAtZero: true } } }
+    });
+
+    // Sub-capability Chart
+    var subcapN = 50;
+    var subcapLabels = [];
+    var subcapIF = [];
+    var subcapER = [];
+    var subcapAC = [];
+    for (var i = 0; i < subcapN; i++) {
+        var c = 0.1 + 0.9 * i / (subcapN - 1);
+        subcapLabels.push(c.toFixed(2));
+        subcapIF.push(0.3 + 0.65 * c);
+        subcapER.push(1 / (1 + Math.exp(-12 * (c - 0.5))));
+        subcapAC.push(c * c);
+    }
+    new Chart(document.getElementById('subcapChart'), {
+        type: 'line',
+        data: {
+            labels: subcapLabels,
+            datasets: [
+                { label: 'Instruction Following (linear)', data: subcapIF, borderColor: '#2563eb', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+                { label: 'Error Recovery (sigmoid)', data: subcapER, borderColor: '#d97706', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+                { label: 'Accommodation (quadratic)', data: subcapAC, borderColor: '#059669', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { x: { title: { display: true, text: 'Capability' } }, y: { title: { display: true, text: 'Sub-Capability Level' }, min: 0, max: 1.05 } } }
+    });
+
+    // === INTERACTIVE EXPLORER ===
+    var capSlider = document.getElementById('capSlider');
+    var idealSlider = document.getElementById('idealSlider');
+    var interactiveChart = null;
+
+    function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+    function updateInteractive() {
+        var cap = parseInt(capSlider.value) / 100;
+        var delta = parseInt(idealSlider.value) / 100;
+        document.getElementById('capValue').textContent = cap.toFixed(2);
+        document.getElementById('idealValue').textContent = delta.toFixed(2);
+
+        var instrFollow = 0.3 + 0.65 * cap;
+        var errRecov = sigmoid(12 * (cap - 0.5));
+        var accomm = cap * cap;
+
+        document.getElementById('i-instrfollow').textContent = instrFollow.toFixed(2);
+        document.getElementById('i-errrecov').textContent = errRecov.toFixed(2);
+        document.getElementById('i-accomm').textContent = accomm.toFixed(2);
+
+        // Per-group bars
+        var groupLabels = [];
+        var simData = [];
+        var realData = [];
+        var totalSim = 0, totalReal = 0;
+        demographics.forEach(function(d) {
+            var cSim = Math.min(1, d.clarity + delta);
+            var pSim = Math.min(1, d.proficiency + delta);
+            var sSim = 0.6*cSim + 0.3*pSim + 0.1*accomm*(1-cSim)*0.5;
+            var sReal = 0.6*d.clarity + 0.3*d.proficiency + 0.1*accomm*(1-d.clarity)*0.5;
+            var pSuccSim = instrFollow * (0.5 + 0.5*sSim);
+            var pSuccReal = instrFollow * (0.5 + 0.5*sReal);
+            groupLabels.push(d.name);
+            simData.push(pSuccSim);
+            realData.push(pSuccReal);
+            totalSim += pSuccSim;
+            totalReal += pSuccReal;
+        });
+        var calGap = Math.abs(totalSim / demographics.length - totalReal / demographics.length);
+        document.getElementById('i-calgap').textContent = calGap.toFixed(3);
+
+        if (interactiveChart) interactiveChart.destroy();
+        interactiveChart = new Chart(document.getElementById('interactiveChart'), {
+            type: 'bar',
+            data: {
+                labels: groupLabels,
+                datasets: [
+                    { label: 'Simulated Success Prob.', data: simData, backgroundColor: 'rgba(37,99,235,0.6)', borderColor: '#2563eb', borderWidth: 1 },
+                    { label: 'Real Success Prob.', data: realData, backgroundColor: 'rgba(5,150,105,0.6)', borderColor: '#059669', borderWidth: 1 }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { title: { display: true, text: 'Success Probability' }, min: 0, max: 1 } }
+            }
+        });
+    }
+
+    capSlider.addEventListener('input', updateInteractive);
+    idealSlider.addEventListener('input', updateInteractive);
+    updateInteractive();
+
+    // === NAV ===
+    function activate(el) {
+        var links = document.querySelectorAll('nav a');
+        for (var i = 0; i < links.length; i++) { links[i].classList.remove('active'); }
+        el.classList.add('active');
+    }
+    </script>
+</body>
+</html>

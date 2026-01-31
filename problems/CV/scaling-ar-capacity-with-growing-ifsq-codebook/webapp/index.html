@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scaling AR Model Capacity with Growing iFSQ Codebook | KDD 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a1a2e;
+  --secondary: #16213e;
+  --accent: #0f3460;
+  --highlight: #e94560;
+  --bg: #f5f6fa;
+  --card: #ffffff;
+  --text: #2d3436;
+  --text-light: #636e72;
+  --border: #dfe6e9;
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --info: #74b9ff;
+  --radius: 10px;
+  --shadow: 0 4px 20px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  scroll-behavior: smooth;
+}
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--primary);
+  padding: 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+}
+
+nav .nav-inner {
+  max-width: 1300px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+
+nav .nav-brand {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 14px 0;
+  white-space: nowrap;
+}
+
+nav .nav-brand span { color: var(--highlight); }
+
+nav .nav-links {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+nav .nav-links a {
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  font-size: 0.82rem;
+  padding: 14px 12px;
+  display: block;
+  transition: color 0.2s, background 0.2s;
+  border-radius: 6px 6px 0 0;
+  font-weight: 500;
+}
+
+nav .nav-links a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 60%, #1b3a6b 100%);
+  color: white;
+  padding: 60px 24px 50px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(ellipse at 30% 50%, rgba(233,69,96,0.12) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 30%, rgba(15,52,96,0.25) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.hero > * { position: relative; z-index: 1; }
+
+.hero .venue-badge {
+  display: inline-block;
+  background: var(--highlight);
+  color: white;
+  padding: 6px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.hero h1 {
+  font-size: 2.2rem;
+  line-height: 1.25;
+  max-width: 900px;
+  margin: 0 auto 16px;
+  font-weight: 800;
+}
+
+.hero .subtitle {
+  font-size: 1.05rem;
+  color: rgba(255,255,255,0.75);
+  max-width: 750px;
+  margin: 0 auto 30px;
+  line-height: 1.6;
+}
+
+.hero .category-tag {
+  display: inline-block;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 4px 14px;
+  border-radius: 14px;
+  font-size: 0.8rem;
+  margin-bottom: 28px;
+  backdrop-filter: blur(4px);
+}
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  max-width: 1100px;
+  margin: -30px auto 30px;
+  padding: 0 24px;
+  position: relative;
+  z-index: 2;
+}
+
+.metric-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 22px 18px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  border-top: 3px solid var(--highlight);
+}
+
+.metric-card .metric-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.1;
+}
+
+.metric-card .metric-label {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.container {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+section {
+  padding: 50px 0;
+}
+
+section:nth-child(even) {
+  background: #fff;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.section-header h2 {
+  font-size: 1.65rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.section-header p {
+  color: var(--text-light);
+  max-width: 700px;
+  margin: 0 auto;
+  font-size: 0.95rem;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+}
+
+.card h3 {
+  font-size: 1.15rem;
+  color: var(--primary);
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.equation-box {
+  background: linear-gradient(135deg, #f8f9fe, #eef1fb);
+  border: 2px solid #d1d8f0;
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  margin: 20px 0;
+  font-size: 1.15rem;
+}
+
+.equation-box .eq-main {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 1.3rem;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.equation-box .eq-stats {
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  gap: 24px;
+}
+
+.chart-box {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.chart-box h3 {
+  font-size: 1.05rem;
+  color: var(--primary);
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.chart-box .chart-desc {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  margin-bottom: 16px;
+}
+
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+  height: 380px;
+}
+
+.chart-wrapper canvas {
+  max-height: 380px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+thead {
+  background: var(--primary);
+  color: white;
+}
+
+th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody tr:nth-child(even) { background: #f9fafb; }
+tbody tr:hover { background: #eef2ff; }
+
+.val-good { color: var(--success); font-weight: 600; }
+.val-warn { color: #e17055; font-weight: 600; }
+
+.findings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.finding-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--highlight);
+}
+
+.finding-card .finding-number {
+  width: 32px;
+  height: 32px;
+  background: var(--highlight);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.finding-card h4 {
+  font-size: 1rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.finding-card p {
+  font-size: 0.88rem;
+  color: var(--text-light);
+  line-height: 1.55;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.method-list { list-style: none; padding: 0; }
+
+.method-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.method-list li:last-child { border-bottom: none; }
+
+.method-list .method-bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--highlight);
+  flex-shrink: 0;
+  margin-top: 7px;
+}
+
+.model-sizes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.model-size-card {
+  background: #f0f3ff;
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  border: 1px solid #d5daf0;
+}
+
+.model-size-card .ms-name {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.model-size-card .ms-detail {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.controls label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.controls select, .controls input[type="range"] {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  background: white;
+  color: var(--text);
+}
+
+.heatmap-cell {
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 4px;
+  transition: transform 0.15s;
+}
+
+.heatmap-cell:hover { transform: scale(1.05); z-index: 1; }
+
+.heatmap-header {
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+footer {
+  background: var(--primary);
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  padding: 30px 24px;
+  font-size: 0.82rem;
+}
+
+footer a {
+  color: var(--highlight);
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.5rem; }
+  .metrics-row { grid-template-columns: repeat(2, 1fr); }
+  .chart-grid { grid-template-columns: 1fr; }
+  .two-col { grid-template-columns: 1fr; }
+  .model-sizes { grid-template-columns: repeat(2, 1fr); }
+  nav .nav-links { display: none; }
+  .chart-wrapper { height: 300px; }
+  .chart-wrapper canvas { max-height: 300px; }
+}
+
+@media (max-width: 480px) {
+  .metrics-row { grid-template-columns: 1fr; }
+  .findings-grid { grid-template-columns: 1fr; }
+  .model-sizes { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand"><span>KDD</span> 2026 Research</div>
+    <ul class="nav-links">
+      <li><a href="#problem">Problem</a></li>
+      <li><a href="#methods">Methods</a></li>
+      <li><a href="#info-theory">Info Theory</a></li>
+      <li><a href="#scaling">Scaling Law</a></li>
+      <li><a href="#utilization">Utilization</a></li>
+      <li><a href="#heatmap">Heatmap</a></li>
+      <li><a href="#joint-factored">Heads</a></li>
+      <li><a href="#correlation">Correlation</a></li>
+      <li><a href="#findings">Findings</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="venue-badge">KDD 2026 &middot; Toronto, Canada</div>
+  <div class="category-tag">cs.CV &mdash; Computer Vision &middot; Research Track</div>
+  <h1>Scaling Autoregressive Model Capacity with Increasing iFSQ Codebook Size</h1>
+  <p class="subtitle">Establishing a power-law relationship between iFSQ codebook size and transformer capacity requirements for image generation, revealing sub-linear scaling and effective vocabulary saturation.</p>
+</header>
+
+<div class="metrics-row">
+  <div class="metric-card">
+    <div class="metric-value">0.768</div>
+    <div class="metric-label">Capacity Scaling Exponent</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">0.996</div>
+    <div class="metric-label">R-squared Fit</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">17.6</div>
+    <div class="metric-label">Effective Vocab (bits)</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">144x</div>
+    <div class="metric-label">Max Param Savings (Factored)</div>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="container">
+    <div class="section-header">
+      <h2>Problem Statement</h2>
+      <p>How should autoregressive model capacity scale as the iFSQ codebook grows?</p>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h3>Background</h3>
+        <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7;">
+          Improved Finite Scalar Quantization (iFSQ) replaces learned VQ codebooks with a fixed grid of quantization levels per latent dimension. Each dimension is quantized to L = 2<sup>K</sup> + 1 levels, yielding an implicit codebook of size V = L<sup>d</sup>. While iFSQ avoids codebook collapse and achieves full per-dimension utilization, autoregressive generation quality peaks at K = 4 bits per dimension and degrades at higher K, even as reconstruction quality continues to improve.
+        </p>
+        <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7; margin-top:12px;">
+          Lin et al. (2026) conjecture that the fixed-capacity autoregressive model cannot effectively predict tokens from increasingly large vocabularies. This work addresses this conjecture through information-theoretic analysis, systematic scaling experiments, and architectural innovations.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Research Questions</h3>
+        <ul class="method-list">
+          <li><span class="method-bullet"></span><span>Does increasing the iFSQ codebook size require proportionally scaling the autoregressive transformer capacity?</span></li>
+          <li><span class="method-bullet"></span><span>What is the quantitative relationship (scaling law) between codebook size V and required model parameters N?</span></li>
+          <li><span class="method-bullet"></span><span>How does the effective vocabulary compare to the nominal codebook size for natural image distributions?</span></li>
+          <li><span class="method-bullet"></span><span>Can factored prediction heads fundamentally alter the scaling relationship by reducing output layer complexity?</span></li>
+          <li><span class="method-bullet"></span><span>How does spatial correlation in image data affect the capacity requirements?</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="methods">
+  <div class="container">
+    <div class="section-header">
+      <h2>Methods</h2>
+      <p>Three complementary analyses: information-theoretic, empirical scaling, and architectural</p>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h3>Experimental Setup</h3>
+        <ul class="method-list">
+          <li><span class="method-bullet"></span><span><strong>Synthetic data:</strong> AR(1) process with correlation rho = 0.8, S = 64 tokens, d = 8 latent dimensions</span></li>
+          <li><span class="method-bullet"></span><span><strong>Codebook sweep:</strong> K in {2, 3, 4, 5, 6} bits per dimension</span></li>
+          <li><span class="method-bullet"></span><span><strong>Training:</strong> 10 epochs, 5,000 sequences, batch size 64, AdamW with lr = 3e-4</span></li>
+          <li><span class="method-bullet"></span><span><strong>Evaluation:</strong> 1,000 held-out sequences, cross-entropy loss</span></li>
+          <li><span class="method-bullet"></span><span><strong>Scaling law:</strong> log(L) = a + b*log(N) + c*log(V)</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Model Architectures</h3>
+        <p style="font-size:0.88rem; color:var(--text-light); margin-bottom:14px;">Causal transformer with pre-norm residual connections, factored embeddings, and factored output heads</p>
+        <div class="model-sizes">
+          <div class="model-size-card">
+            <div class="ms-name">Tiny</div>
+            <div class="ms-detail">d=64, 2 layers<br>2 heads<br>~175K params</div>
+          </div>
+          <div class="model-size-card">
+            <div class="ms-name">Small</div>
+            <div class="ms-detail">d=128, 4 layers<br>4 heads<br>~1.3M params</div>
+          </div>
+          <div class="model-size-card">
+            <div class="ms-name">Medium</div>
+            <div class="ms-detail">d=256, 6 layers<br>8 heads<br>~8M params</div>
+          </div>
+          <div class="model-size-card">
+            <div class="ms-name">Large</div>
+            <div class="ms-detail">d=384, 8 layers<br>8 heads<br>~24M params</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="info-theory">
+  <div class="container">
+    <div class="section-header">
+      <h2>Information-Theoretic Analysis</h2>
+      <p>Codebook growth and output layer parameter requirements (d = 16 latent dimensions)</p>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Codebook Capacity vs. Output Parameters</h3>
+        <div class="chart-desc">Factored output heads scale linearly while joint heads scale exponentially</div>
+        <div class="chart-wrapper"><canvas id="infoTheoryChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>Data Table: Information-Theoretic Analysis</h3>
+        <div class="chart-desc">d = 16 latent dimensions, d_model = 768</div>
+        <div class="table-wrap">
+          <table id="infoTheoryTable">
+            <thead>
+              <tr>
+                <th>K</th>
+                <th>L</th>
+                <th>log2(V)</th>
+                <th>Bits/Token</th>
+                <th>Factored Params</th>
+                <th>log2(Joint Params)</th>
+              </tr>
+            </thead>
+            <tbody id="infoTheoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="scaling">
+  <div class="container">
+    <div class="section-header">
+      <h2>Scaling Law Analysis</h2>
+      <p>Power-law relationship between model size, codebook size, and evaluation loss</p>
+    </div>
+
+    <div class="equation-box">
+      <div class="eq-main">log(L) = 0.711 &minus; 0.112 &middot; log(N) + 0.086 &middot; log(V)</div>
+      <div class="eq-stats">R&sup2; = 0.996 | Capacity exponent gamma = -c/b = 0.768 | Sub-linear scaling: 2^0.768 ~ 1.70x per doubling of V</div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Evaluation Loss vs. Model Parameters</h3>
+        <div class="chart-desc">By codebook size K, showing consistent power-law decay</div>
+        <div class="chart-wrapper"><canvas id="scalingLossChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>Predicted vs. Actual Loss</h3>
+        <div class="chart-desc">Tight clustering around identity line confirms R-squared = 0.996</div>
+        <div class="chart-wrapper"><canvas id="predActualChart"></canvas></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="card">
+        <h3>Scaling Law Data Points</h3>
+        <div class="table-wrap">
+          <table id="scalingTable">
+            <thead>
+              <tr>
+                <th>K</th>
+                <th>Model</th>
+                <th>Parameters</th>
+                <th>log2(V)</th>
+                <th>Eval Loss</th>
+                <th>Predicted Loss</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="scalingBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="utilization">
+  <div class="container">
+    <div class="section-header">
+      <h2>Codebook Utilization Analysis</h2>
+      <p>Effective vocabulary saturates near ~17.6 bits regardless of nominal codebook size</p>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Effective vs. Nominal Vocabulary</h3>
+        <div class="chart-desc">log2 scale; effective vocabulary plateaus while nominal grows linearly with K</div>
+        <div class="chart-wrapper"><canvas id="utilizationChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>Utilization Ratio (log scale)</h3>
+        <div class="chart-desc">Drops from 0.929 at K=2 to 0.314 at K=7</div>
+        <div class="chart-wrapper"><canvas id="utilizationRatioChart"></canvas></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="card">
+        <h3>Codebook Utilization Data (zero correlation)</h3>
+        <div class="table-wrap">
+          <table id="utilizationTable">
+            <thead>
+              <tr>
+                <th>K</th>
+                <th>L</th>
+                <th>log2(Nominal V)</th>
+                <th>Unique Codes</th>
+                <th>log2(Effective V)</th>
+                <th>Utilization Ratio</th>
+                <th>Per-Dim Utilization</th>
+              </tr>
+            </thead>
+            <tbody id="utilizationBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="heatmap">
+  <div class="container">
+    <div class="section-header">
+      <h2>Scaling Heatmap</h2>
+      <p>Evaluation loss across codebook sizes (K) and model sizes</p>
+    </div>
+    <div class="card">
+      <h3>Loss Heatmap: K vs. Model Size</h3>
+      <p style="font-size:0.85rem; color:var(--text-light); margin-bottom:16px;">Larger models achieve disproportionately larger improvements at higher K</p>
+      <div id="heatmapContainer" style="max-width:700px; margin:0 auto;"></div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="chart-box">
+        <h3>Training Curves: Small Model Across Codebook Sizes</h3>
+        <div class="chart-desc">Higher K consistently leads to higher loss throughout training</div>
+        <div class="chart-wrapper"><canvas id="trainingCurvesChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="joint-factored">
+  <div class="container">
+    <div class="section-header">
+      <h2>Joint vs. Factored Prediction Heads</h2>
+      <p>Factored heads match joint performance with dramatically fewer parameters</p>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Loss Comparison at K = 2</h3>
+        <div class="chart-desc">Joint vs. factored head performance by model size</div>
+        <div class="chart-wrapper"><canvas id="jointFactoredLossChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>Parameter Efficiency</h3>
+        <div class="chart-desc">Factored heads achieve comparable loss with far fewer parameters</div>
+        <div class="chart-wrapper"><canvas id="jointFactoredParamsChart"></canvas></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="card">
+        <h3>Joint vs. Factored Head Data (K = 2)</h3>
+        <div class="table-wrap">
+          <table id="jointFactoredTable">
+            <thead>
+              <tr>
+                <th>Model (d_model)</th>
+                <th>Joint Loss</th>
+                <th>Factored Loss</th>
+                <th>Joint Params</th>
+                <th>Factored Params</th>
+                <th>Loss Ratio</th>
+                <th>Param Ratio</th>
+              </tr>
+            </thead>
+            <tbody id="jointFactoredBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="correlation">
+  <div class="container">
+    <div class="section-header">
+      <h2>Correlation Sensitivity</h2>
+      <p>Effect of spatial correlation on capacity requirements</p>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Evaluation Loss by Correlation Strength</h3>
+        <div class="chart-desc">Higher correlation reduces loss; effect is stronger at lower K</div>
+        <div class="controls">
+          <label for="corrKSelect">Codebook K:</label>
+          <select id="corrKSelect">
+            <option value="all" selected>All K values</option>
+            <option value="3">K = 3</option>
+            <option value="4">K = 4</option>
+            <option value="5">K = 5</option>
+          </select>
+        </div>
+        <div class="chart-wrapper"><canvas id="correlationChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>Correlation Sensitivity Data</h3>
+        <div class="chart-desc">Small model (d_model = 128), evaluation loss</div>
+        <div class="table-wrap">
+          <table id="correlationTable">
+            <thead>
+              <tr>
+                <th>K</th>
+                <th>rho = 0.0</th>
+                <th>rho = 0.3</th>
+                <th>rho = 0.5</th>
+                <th>rho = 0.7</th>
+                <th>rho = 0.9</th>
+                <th>Reduction</th>
+              </tr>
+            </thead>
+            <tbody id="correlationBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="findings">
+  <div class="container">
+    <div class="section-header">
+      <h2>Key Findings</h2>
+      <p>Summary of results and practical recommendations</p>
+    </div>
+    <div class="findings-grid">
+      <div class="finding-card">
+        <div class="finding-number">1</div>
+        <h4>Sub-linear Capacity Scaling</h4>
+        <p>The capacity scaling exponent gamma = 0.768 means model parameters need grow sub-linearly with codebook size. When V doubles, parameters only need to scale by 2^0.768 = 1.70x, not 2x. This confirms the conjecture of Lin et al. (2026) while showing the relationship is sub-linear.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-number">2</div>
+        <h4>Effective Vocabulary Saturation</h4>
+        <p>The effective vocabulary saturates near log2(V_eff) = 17.6 bits regardless of nominal codebook size, with utilization ratio dropping from 0.929 at K=2 to 0.314 at K=7. The AR model only needs to predict over the effective vocabulary, not the full nominal codebook.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-number">3</div>
+        <h4>Factored Heads Resolve Output Bottleneck</h4>
+        <p>Factored prediction heads reduce output layer parameters from exponential O(L^d) to linear O(d*L) growth. At K=2 with d=8, factored heads match joint head performance with 7.3x to 144.2x fewer parameters when sufficient body capacity is available.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-number">4</div>
+        <h4>Practical Recommendations</h4>
+        <p>For iFSQ-based AR generation with K > 4: (1) always use factored prediction heads, (2) scale transformer body sub-linearly with codebook size (exponent ~0.77), (3) prioritize model capacity based on image complexity rather than nominal codebook size.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>KDD 2026 &middot; Toronto, Canada | Research Track | Category: Computer Vision</p>
+  <p style="margin-top:8px;">Scaling Autoregressive Model Capacity with Increasing iFSQ Codebook Size</p>
+</footer>
+
+<script>
+// ===== DATA =====
+var infoTheoryData = [
+  {K:1,L:3,log2V:25.36,factored:36864,log2Joint:34.94},
+  {K:2,L:5,log2V:37.15,factored:61440,log2Joint:46.74},
+  {K:3,L:9,log2V:50.72,factored:110592,log2Joint:60.30},
+  {K:4,L:17,log2V:65.40,factored:208896,log2Joint:74.98},
+  {K:5,L:33,log2V:80.71,factored:405504,log2Joint:90.30},
+  {K:6,L:65,log2V:96.36,factored:798720,log2Joint:105.94},
+  {K:7,L:129,log2V:112.18,factored:1585152,log2Joint:121.76},
+  {K:8,L:257,log2V:128.09,factored:3158016,log2Joint:137.67},
+  {K:9,L:513,log2V:144.05,factored:6303744,log2Joint:153.63},
+  {K:10,L:1025,log2V:160.02,factored:12595200,log2Joint:169.61}
+];
+
+var scalingLawCoeffs = {
+  a: 0.7113, b: -0.1117, c: 0.0858, gamma: 0.768, r2: 0.996
+};
+
+var scalingData = [
+  {K:2,params:174592,log2V:18.58,loss:1.610,label:'Tiny'},
+  {K:2,params:1340416,log2V:18.58,loss:1.250,label:'Small'},
+  {K:2,params:7956480,log2V:18.58,loss:1.059,label:'Medium'},
+  {K:2,params:23780352,log2V:18.58,loss:1.059,label:'Large'},
+  {K:3,params:176640,log2V:25.36,loss:2.366,label:'Tiny'},
+  {K:3,params:1344512,log2V:25.36,loss:1.865,label:'Small'},
+  {K:3,params:7964672,log2V:25.36,loss:1.457,label:'Medium'},
+  {K:3,params:23792640,log2V:25.36,loss:1.304,label:'Large'},
+  {K:4,params:180736,log2V:32.70,loss:3.626,label:'Tiny'},
+  {K:4,params:1352704,log2V:32.70,loss:2.920,label:'Small'},
+  {K:4,params:7981056,log2V:32.70,loss:2.365,label:'Medium'},
+  {K:4,params:23817216,log2V:32.70,loss:2.079,label:'Large'},
+  {K:5,params:188928,log2V:40.36,loss:5.834,label:'Tiny'},
+  {K:5,params:1369088,log2V:40.36,loss:4.592,label:'Small'},
+  {K:5,params:8013824,log2V:40.36,loss:3.724,label:'Medium'},
+  {K:5,params:23866368,log2V:40.36,loss:3.525,label:'Large'},
+  {K:6,params:205312,log2V:48.18,loss:9.671,label:'Tiny'},
+  {K:6,params:1401856,log2V:48.18,loss:7.364,label:'Small'},
+  {K:6,params:8079360,log2V:48.18,loss:6.003,label:'Medium'},
+  {K:6,params:23964672,log2V:48.18,loss:5.325,label:'Large'}
+];
+
+var utilizationData = [
+  {K:2,L:5,log2Nom:18.58,unique:156455,log2Eff:17.26,ratio:0.929},
+  {K:3,L:9,log2Nom:25.36,unique:199581,log2Eff:17.61,ratio:0.694},
+  {K:4,L:17,log2Nom:32.70,unique:199995,log2Eff:17.61,ratio:0.539},
+  {K:5,L:33,log2Nom:40.36,unique:200000,log2Eff:17.61,ratio:0.436},
+  {K:6,L:65,log2Nom:48.18,unique:200000,log2Eff:17.61,ratio:0.366},
+  {K:7,L:129,log2Nom:56.09,unique:200000,log2Eff:17.61,ratio:0.314}
+];
+
+var jointFactoredData = [
+  {dModel:64,label:'Tiny',jLoss:1.059,fLoss:1.610,jParams:25167936,fParams:174592,lossRatio:0.658,paramRatio:144.15},
+  {dModel:128,label:'Small',jLoss:1.059,fLoss:1.250,jParams:51318912,fParams:1340416,lossRatio:0.848,paramRatio:38.29},
+  {dModel:256,label:'Medium',jLoss:1.059,fLoss:1.059,jParams:107880704,fParams:7956480,lossRatio:1.000,paramRatio:13.56},
+  {dModel:384,label:'Large',jLoss:1.059,fLoss:1.059,jParams:173617536,fParams:23780352,lossRatio:1.000,paramRatio:7.30}
+];
+
+var correlationData = [
+  {K:3, rhos:[3.207, 3.039, 2.884, 2.709, 2.587]},
+  {K:4, rhos:[3.849, 3.557, 3.457, 3.351, 3.169]},
+  {K:5, rhos:[4.415, 4.217, 4.108, 3.926, 3.790]}
+];
+var rhoLabels = ['0.0', '0.3', '0.5', '0.7', '0.9'];
+
+var trainingCurves = {
+  2: [2.410,2.345,2.281,2.139,2.050,2.015,1.901,1.774,1.715,1.596],
+  3: [3.564,3.420,3.315,3.133,3.013,2.880,2.716,2.638,2.505,2.366],
+  4: [5.453,5.210,5.083,4.811,4.624,4.456,4.194,4.036,3.867,3.578],
+  5: [8.794,8.419,8.184,7.797,7.429,7.098,6.821,6.475,6.179,5.848],
+  6: [14.451,13.990,13.384,12.881,12.390,11.822,11.251,10.724,10.229,9.649]
+};
+
+var K_COLORS = {
+  2: '#2ecc71', 3: '#3498db', 4: '#9b59b6', 5: '#e67e22', 6: '#e74c3c'
+};
+var K_COLORS_BG = {
+  2: 'rgba(46,204,113,0.15)', 3: 'rgba(52,152,219,0.15)', 4: 'rgba(155,89,182,0.15)',
+  5: 'rgba(230,126,34,0.15)', 6: 'rgba(231,76,60,0.15)'
+};
+
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+
+function formatParams(v) {
+  if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return (v/1e3).toFixed(0) + 'K';
+  return String(v);
+}
+
+// ===== 1. Info-Theory Chart =====
+new Chart(document.getElementById('infoTheoryChart'), {
+  type: 'bar',
+  data: {
+    labels: infoTheoryData.map(function(d){ return 'K=' + d.K; }),
+    datasets: [
+      {
+        label: 'Factored Output Params',
+        data: infoTheoryData.map(function(d){ return d.factored; }),
+        backgroundColor: 'rgba(52,152,219,0.7)',
+        borderColor: '#3498db',
+        borderWidth: 1,
+        yAxisID: 'y'
+      },
+      {
+        label: 'log2(V) Bits',
+        data: infoTheoryData.map(function(d){ return d.log2V; }),
+        type: 'line',
+        borderColor: '#e74c3c',
+        backgroundColor: 'rgba(231,76,60,0.1)',
+        pointBackgroundColor: '#e74c3c',
+        pointRadius: 4,
+        borderWidth: 2,
+        yAxisID: 'y1',
+        fill: true
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { type: 'linear', position: 'left', title: { display: true, text: 'Factored Params' },
+           ticks: { callback: function(v){ return formatParams(v); } }},
+      y1: { type: 'linear', position: 'right', title: { display: true, text: 'log2(V) Bits' },
+            grid: { drawOnChartArea: false }}
+    }
+  }
+});
+
+// Info Theory Table
+(function(){
+  var tb = document.getElementById('infoTheoryBody');
+  infoTheoryData.forEach(function(d) {
+    var tr = document.createElement('tr');
+    var td1 = document.createElement('td'); td1.textContent = d.K;
+    var td2 = document.createElement('td'); td2.textContent = d.L;
+    var td3 = document.createElement('td'); td3.textContent = d.log2V.toFixed(2);
+    var td4 = document.createElement('td'); td4.textContent = d.log2V.toFixed(2);
+    var td5 = document.createElement('td'); td5.textContent = d.factored.toLocaleString();
+    var td6 = document.createElement('td'); td6.textContent = d.log2Joint.toFixed(2);
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tr.appendChild(td4); tr.appendChild(td5); tr.appendChild(td6);
+    tb.appendChild(tr);
+  });
+})();
+
+// ===== 2. Scaling Law Charts =====
+(function(){
+  var kValues = [2,3,4,5,6];
+  var datasets = kValues.map(function(k) {
+    var pts = scalingData.filter(function(d){ return d.K === k; });
+    return {
+      label: 'K = ' + k,
+      data: pts.map(function(d){ return {x: d.params, y: d.loss}; }),
+      borderColor: K_COLORS[k],
+      backgroundColor: K_COLORS_BG[k],
+      pointBackgroundColor: K_COLORS[k],
+      pointRadius: 5,
+      borderWidth: 2,
+      fill: false,
+      tension: 0.3
+    };
+  });
+  new Chart(document.getElementById('scalingLossChart'), {
+    type: 'line',
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { type: 'logarithmic', title: { display: true, text: 'Model Parameters' },
+             ticks: { callback: function(v){ return formatParams(v); } }},
+        y: { title: { display: true, text: 'Evaluation Loss' }, beginAtZero: false }
+      }
+    }
+  });
+})();
+
+// Predicted vs Actual
+(function(){
+  var a = scalingLawCoeffs.a, b = scalingLawCoeffs.b, c = scalingLawCoeffs.c;
+  var pts = scalingData.map(function(d) {
+    var pred = Math.exp(a + b * Math.log(d.params) + c * Math.log(Math.pow(2, d.log2V)));
+    return {x: d.loss, y: pred, K: d.K};
+  });
+  var kValues = [2,3,4,5,6];
+  var datasets = kValues.map(function(k) {
+    return {
+      label: 'K = ' + k,
+      data: pts.filter(function(p){ return p.K === k; }).map(function(p){ return {x: p.x, y: p.y}; }),
+      backgroundColor: K_COLORS[k],
+      pointBackgroundColor: K_COLORS[k],
+      pointRadius: 6,
+      borderWidth: 0
+    };
+  });
+  var allVals = pts.map(function(p){ return Math.min(p.x, p.y); });
+  var allValsMax = pts.map(function(p){ return Math.max(p.x, p.y); });
+  var minV = Math.min.apply(null, allVals);
+  var maxV = Math.max.apply(null, allValsMax);
+  datasets.push({
+    label: 'Identity Line',
+    data: [{x: minV*0.9, y: minV*0.9}, {x: maxV*1.1, y: maxV*1.1}],
+    type: 'line',
+    borderColor: 'rgba(0,0,0,0.3)',
+    borderDash: [6,4],
+    borderWidth: 2,
+    pointRadius: 0,
+    fill: false
+  });
+  new Chart(document.getElementById('predActualChart'), {
+    type: 'scatter',
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { title: { display: true, text: 'Actual Loss' } },
+        y: { title: { display: true, text: 'Predicted Loss' } }
+      }
+    }
+  });
+})();
+
+// Scaling Table
+(function(){
+  var a = scalingLawCoeffs.a, b = scalingLawCoeffs.b, c = scalingLawCoeffs.c;
+  var tb = document.getElementById('scalingBody');
+  scalingData.forEach(function(d) {
+    var pred = Math.exp(a + b * Math.log(d.params) + c * Math.log(Math.pow(2, d.log2V)));
+    var err = Math.abs(d.loss - pred);
+    var tr = document.createElement('tr');
+    var cells = [d.K, d.label, d.params.toLocaleString(), d.log2V.toFixed(2), d.loss.toFixed(3), pred.toFixed(3), err.toFixed(3)];
+    cells.forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+})();
+
+// ===== 3. Utilization Charts =====
+new Chart(document.getElementById('utilizationChart'), {
+  type: 'line',
+  data: {
+    labels: utilizationData.map(function(d){ return 'K=' + d.K; }),
+    datasets: [
+      {
+        label: 'log2(Nominal V)',
+        data: utilizationData.map(function(d){ return d.log2Nom; }),
+        borderColor: '#e74c3c',
+        backgroundColor: 'rgba(231,76,60,0.1)',
+        pointBackgroundColor: '#e74c3c',
+        pointRadius: 5,
+        borderWidth: 2,
+        fill: true
+      },
+      {
+        label: 'log2(Effective V)',
+        data: utilizationData.map(function(d){ return d.log2Eff; }),
+        borderColor: '#2ecc71',
+        backgroundColor: 'rgba(46,204,113,0.15)',
+        pointBackgroundColor: '#2ecc71',
+        pointRadius: 5,
+        borderWidth: 3,
+        fill: true
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { title: { display: true, text: 'log2(Vocabulary Size)' }, beginAtZero: true }
+    }
+  }
+});
+
+new Chart(document.getElementById('utilizationRatioChart'), {
+  type: 'bar',
+  data: {
+    labels: utilizationData.map(function(d){ return 'K=' + d.K; }),
+    datasets: [{
+      label: 'Utilization Ratio (log scale)',
+      data: utilizationData.map(function(d){ return d.ratio; }),
+      backgroundColor: utilizationData.map(function(d){
+        if (d.ratio > 0.7) return 'rgba(46,204,113,0.7)';
+        if (d.ratio > 0.5) return 'rgba(241,196,15,0.7)';
+        return 'rgba(231,76,60,0.7)';
+      }),
+      borderColor: utilizationData.map(function(d){
+        if (d.ratio > 0.7) return '#2ecc71';
+        if (d.ratio > 0.5) return '#f1c40f';
+        return '#e74c3c';
+      }),
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { title: { display: true, text: 'Utilization Ratio' }, min: 0, max: 1 }
+    }
+  }
+});
+
+// Utilization Table
+(function(){
+  var tb = document.getElementById('utilizationBody');
+  utilizationData.forEach(function(d) {
+    var tr = document.createElement('tr');
+    var ratioClass = d.ratio > 0.7 ? 'val-good' : (d.ratio < 0.5 ? 'val-warn' : '');
+    var cells = [
+      {val: d.K, cls: ''},
+      {val: d.L, cls: ''},
+      {val: d.log2Nom.toFixed(2), cls: ''},
+      {val: d.unique.toLocaleString(), cls: ''},
+      {val: d.log2Eff.toFixed(2), cls: ''},
+      {val: d.ratio.toFixed(3), cls: ratioClass},
+      {val: '1.000', cls: ''}
+    ];
+    cells.forEach(function(c) {
+      var td = document.createElement('td');
+      td.textContent = c.val;
+      if (c.cls) td.className = c.cls;
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+})();
+
+// ===== 4. Heatmap =====
+(function(){
+  var kValues = [2,3,4,5,6];
+  var modelLabels = ['Tiny','Small','Medium','Large'];
+  var container = document.getElementById('heatmapContainer');
+  container.style.gridTemplateColumns = '100px repeat(' + modelLabels.length + ', 1fr)';
+  container.style.display = 'grid';
+  container.style.gap = '2px';
+
+  var corner = document.createElement('div');
+  corner.className = 'heatmap-cell heatmap-header';
+  corner.textContent = 'K \\ Model';
+  container.appendChild(corner);
+
+  modelLabels.forEach(function(ml) {
+    var cell = document.createElement('div');
+    cell.className = 'heatmap-cell heatmap-header';
+    cell.textContent = ml;
+    container.appendChild(cell);
+  });
+
+  var allLosses = scalingData.map(function(d){ return d.loss; });
+  var minLoss = Math.min.apply(null, allLosses);
+  var maxLoss = Math.max.apply(null, allLosses);
+
+  kValues.forEach(function(k) {
+    var labelCell = document.createElement('div');
+    labelCell.className = 'heatmap-cell heatmap-header';
+    labelCell.textContent = 'K = ' + k;
+    container.appendChild(labelCell);
+
+    modelLabels.forEach(function(ml) {
+      var dp = scalingData.filter(function(d){ return d.K === k && d.label === ml; })[0];
+      var cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      if (dp) {
+        var t = (dp.loss - minLoss) / (maxLoss - minLoss);
+        var r = Math.round(46 + t * (231 - 46));
+        var g = Math.round(204 + t * (76 - 204));
+        var bc = Math.round(113 + t * (60 - 113));
+        cell.style.background = 'rgba(' + r + ',' + g + ',' + bc + ',0.25)';
+        cell.style.color = '#2d3436';
+        cell.textContent = dp.loss.toFixed(3);
+      }
+      container.appendChild(cell);
+    });
+  });
+})();
+
+// Training Curves
+(function(){
+  var epochs = [1,2,3,4,5,6,7,8,9,10];
+  var kValues = [2,3,4,5,6];
+  var datasets = kValues.map(function(k) {
+    return {
+      label: 'K = ' + k,
+      data: trainingCurves[k],
+      borderColor: K_COLORS[k],
+      backgroundColor: K_COLORS_BG[k],
+      pointBackgroundColor: K_COLORS[k],
+      pointRadius: 3,
+      borderWidth: 2,
+      fill: false,
+      tension: 0.3
+    };
+  });
+  new Chart(document.getElementById('trainingCurvesChart'), {
+    type: 'line',
+    data: { labels: epochs, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch' } },
+        y: { title: { display: true, text: 'Training Loss' } }
+      }
+    }
+  });
+})();
+
+// ===== 5. Joint vs Factored =====
+(function(){
+  var labels = jointFactoredData.map(function(d){ return d.label + ' (d=' + d.dModel + ')'; });
+  new Chart(document.getElementById('jointFactoredLossChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Joint Head',
+          data: jointFactoredData.map(function(d){ return d.jLoss; }),
+          backgroundColor: 'rgba(231,76,60,0.7)',
+          borderColor: '#e74c3c',
+          borderWidth: 1
+        },
+        {
+          label: 'Factored Head',
+          data: jointFactoredData.map(function(d){ return d.fLoss; }),
+          backgroundColor: 'rgba(52,152,219,0.7)',
+          borderColor: '#3498db',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { title: { display: true, text: 'Evaluation Loss' }, beginAtZero: true }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('jointFactoredParamsChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Joint Params',
+          data: jointFactoredData.map(function(d){ return d.jParams; }),
+          backgroundColor: 'rgba(231,76,60,0.7)',
+          borderColor: '#e74c3c',
+          borderWidth: 1
+        },
+        {
+          label: 'Factored Params',
+          data: jointFactoredData.map(function(d){ return d.fParams; }),
+          backgroundColor: 'rgba(52,152,219,0.7)',
+          borderColor: '#3498db',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { type: 'logarithmic', title: { display: true, text: 'Parameters (log scale)' },
+             ticks: { callback: function(v){ return formatParams(v); } }}
+      }
+    }
+  });
+
+  // Table
+  var tb = document.getElementById('jointFactoredBody');
+  jointFactoredData.forEach(function(d) {
+    var tr = document.createElement('tr');
+    var lrClass = d.lossRatio >= 1.0 ? 'val-good' : '';
+    var cells = [
+      {val: d.label + ' (d=' + d.dModel + ')', cls: ''},
+      {val: d.jLoss.toFixed(3), cls: ''},
+      {val: d.fLoss.toFixed(3), cls: ''},
+      {val: d.jParams.toLocaleString(), cls: ''},
+      {val: d.fParams.toLocaleString(), cls: ''},
+      {val: d.lossRatio.toFixed(3), cls: lrClass},
+      {val: d.paramRatio.toFixed(1) + 'x', cls: ''}
+    ];
+    cells.forEach(function(c) {
+      var td = document.createElement('td');
+      td.textContent = c.val;
+      if (c.cls) td.className = c.cls;
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+})();
+
+// ===== 6. Correlation =====
+var correlationChart = null;
+function buildCorrelationChart(filterK) {
+  var ctx = document.getElementById('correlationChart');
+  if (correlationChart) correlationChart.destroy();
+  var colors = {3: '#3498db', 4: '#9b59b6', 5: '#e67e22'};
+  var data = filterK === 'all' ? correlationData : correlationData.filter(function(d){ return d.K === parseInt(filterK); });
+  var datasets = data.map(function(d) {
+    return {
+      label: 'K = ' + d.K,
+      data: d.rhos,
+      borderColor: colors[d.K],
+      backgroundColor: colors[d.K] + '22',
+      pointBackgroundColor: colors[d.K],
+      pointRadius: 5,
+      borderWidth: 2,
+      fill: true,
+      tension: 0.3
+    };
+  });
+  correlationChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: rhoLabels.map(function(r){ return '\u03C1 = ' + r; }), datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { title: { display: true, text: 'Evaluation Loss' } }
+      }
+    }
+  });
+}
+buildCorrelationChart('all');
+document.getElementById('corrKSelect').addEventListener('change', function(e){ buildCorrelationChart(e.target.value); });
+
+// Correlation Table
+(function(){
+  var tb = document.getElementById('correlationBody');
+  correlationData.forEach(function(d) {
+    var reduction = ((d.rhos[0] - d.rhos[4]) / d.rhos[0] * 100).toFixed(1);
+    var tr = document.createElement('tr');
+    var tdK = document.createElement('td');
+    tdK.textContent = d.K;
+    tr.appendChild(tdK);
+    d.rhos.forEach(function(r) {
+      var td = document.createElement('td');
+      td.textContent = r.toFixed(3);
+      tr.appendChild(td);
+    });
+    var tdRed = document.createElement('td');
+    tdRed.textContent = reduction + '%';
+    tdRed.className = 'val-good';
+    tr.appendChild(tdRed);
+    tb.appendChild(tr);
+  });
+})();
+
+// Smooth scroll
+document.querySelectorAll('nav a[href^="#"]').forEach(function(a) {
+  a.addEventListener('click', function(e) {
+    e.preventDefault();
+    var target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      var navH = document.querySelector('nav').offsetHeight;
+      window.scrollTo({ top: target.offsetTop - navH - 10, behavior: 'smooth' });
+    }
+  });
+});
+</script>
+</body>
+</html>

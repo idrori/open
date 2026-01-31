@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spurious Artifacts in SDFT</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#2c3e50;--red:#e74c3c;--green:#27ae60;--purple:#8e44ad;--orange:#e67e22;--gray:#95a5a6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;margin-bottom:.5rem}
+header p{opacity:.85;font-size:.9rem;max-width:700px;margin:0 auto}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.controls{background:var(--card);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;align-items:end}
+.cg{display:flex;flex-direction:column;gap:.3rem}
+.cg label{font-size:.85rem;font-weight:600;color:var(--primary)}
+.cg input[type=range]{width:100%;accent-color:var(--accent)}
+.cg .v{font-size:.8rem;color:var(--gray);text-align:right}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:10px;padding:1.25rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h3{font-size:.95rem;color:var(--primary);margin-bottom:.75rem;border-bottom:2px solid var(--accent);padding-bottom:.4rem}
+canvas{width:100%!important;max-height:310px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.06);border-top:3px solid var(--accent)}
+.stat .n{font-size:1.4rem;font-weight:700;color:var(--primary)}
+.stat .l{font-size:.72rem;color:var(--gray);margin-top:.2rem}
+</style>
+</head>
+<body>
+<header>
+<h1>Principled Mitigation of Spurious Linguistic Artifacts in SDFT</h1>
+<p>Explore how counterfactual token weighting compares to heuristic masking for preventing student models from inheriting teacher-conditioned artifacts.</p>
+</header>
+<div class="container">
+<div class="controls">
+<div class="cg"><label>Artifact Boost (log-prob)</label><input type="range" id="boost" min="0.5" max="5.0" step="0.5" value="3.0"><div class="v" id="boostV">3.0</div></div>
+<div class="cg"><label>CF Threshold tau</label><input type="range" id="tau" min="0.1" max="3.0" step="0.1" value="1.0"><div class="v" id="tauV">1.0</div></div>
+<div class="cg"><label>Mask-k (heuristic)</label><input type="range" id="maskk" min="1" max="8" step="1" value="3"><div class="v" id="maskkV">3</div></div>
+<div class="cg"><label>Training Epochs</label><input type="range" id="epochs" min="5" max="50" step="5" value="20"><div class="v" id="epochsV">20</div></div>
+</div>
+<div class="stats">
+<div class="stat"><div class="n" id="sNaive">--</div><div class="l">Naive Artifact Rate</div></div>
+<div class="stat"><div class="n" id="sMask">--</div><div class="l">Mask-k Artifact Rate</div></div>
+<div class="stat"><div class="n" id="sCF">--</div><div class="l">CF Weighting Artifact Rate</div></div>
+<div class="stat"><div class="n" id="sTask">--</div><div class="l">CF Task Performance</div></div>
+</div>
+<div class="grid">
+<div class="card"><h3>Artifact Adoption Rate by Method</h3><canvas id="c1"></canvas></div>
+<div class="card"><h3>Task Performance by Method</h3><canvas id="c2"></canvas></div>
+<div class="card"><h3>Position-Specific Artifact Probability</h3><canvas id="c3"></canvas></div>
+<div class="card"><h3>Artifact-Performance Tradeoff (Pareto)</h3><canvas id="c4"></canvas></div>
+</div>
+</div>
+<script>
+const col={naive:'#e74c3c',mask:'#e67e22',cf:'#2980b9',poe:'#27ae60',mi:'#8e44ad'};
+function rng(s){let m=s;return()=>{m=Math.imul(48271,m)%2147483647;return(m&2147483647)/2147483648}}
+function simMethods(boost,tau,maskk,epochs){
+  const r=rng(42);
+  const artifactBase=Math.min(0.5,0.1*boost);
+  const naiveArt=artifactBase*(1-Math.exp(-epochs/10))+r()*0.02;
+  const maskArt=Math.max(0.02,naiveArt*(maskk<3?0.6:maskk<5?0.4:0.25))+r()*0.01;
+  const cfArt=Math.max(0.01,naiveArt*0.15*Math.exp(-tau*0.3))+r()*0.005;
+  const poeArt=Math.max(0.02,naiveArt*0.25)+r()*0.01;
+  const miArt=Math.max(0.02,naiveArt*0.20)+r()*0.01;
+  const naiveTask=0.95+r()*0.02;
+  const maskTask=Math.max(0.85,0.95-0.01*maskk)+r()*0.01;
+  const cfTask=Math.min(0.99,0.97+0.005*tau)+r()*0.005;
+  const poeTask=0.93+r()*0.01;
+  const miTask=0.94+r()*0.01;
+  return{
+    methods:['Naive SDFT','Mask-k','CF Weighting','Prod. Experts','MI Filter'],
+    artifacts:[naiveArt,maskArt,cfArt,poeArt,miArt],
+    tasks:[naiveTask,maskTask,cfTask,poeTask,miTask]
+  };
+}
+function simPositions(boost,tau,maskk){
+  const r=rng(55),positions=Array.from({length:20},(_,i)=>i);
+  const naive=[],mask=[],cf=[];
+  for(let i=0;i<20;i++){
+    const baseProb=i<5?0.3*boost/3.0*Math.exp(-i*0.3):0.02+r()*0.01;
+    naive.push(baseProb);
+    mask.push(i<maskk?0:baseProb);
+    const cfWeight=1/(1+Math.exp(5*(baseProb-tau*0.1)));
+    cf.push(baseProb*cfWeight);
+  }
+  return{positions,naive,mask,cf};
+}
+function simPareto(boost,epochs){
+  const r=rng(77),taus=[],arts=[],tasks=[];
+  for(let t=0.1;t<=3.0;t+=0.2){
+    taus.push(+t.toFixed(1));
+    const d=simMethods(boost,t,3,epochs);
+    arts.push(d.artifacts[2]*100);
+    tasks.push(d.tasks[2]*100);
+  }
+  return{taus,arts,tasks};
+}
+let charts={};
+function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg)}
+function update(){
+  const boost=+document.getElementById('boost').value;
+  const tau=+document.getElementById('tau').value;
+  const maskk=+document.getElementById('maskk').value;
+  const epochs=+document.getElementById('epochs').value;
+  document.getElementById('boostV').textContent=boost.toFixed(1);
+  document.getElementById('tauV').textContent=tau.toFixed(1);
+  document.getElementById('maskkV').textContent=maskk;
+  document.getElementById('epochsV').textContent=epochs;
+  const d=simMethods(boost,tau,maskk,epochs);
+  document.getElementById('sNaive').textContent=(d.artifacts[0]*100).toFixed(1)+'%';
+  document.getElementById('sMask').textContent=(d.artifacts[1]*100).toFixed(1)+'%';
+  document.getElementById('sCF').textContent=(d.artifacts[2]*100).toFixed(1)+'%';
+  document.getElementById('sTask').textContent=(d.tasks[2]*100).toFixed(1)+'%';
+  const colors=[col.naive,col.mask,col.cf,col.poe,col.mi];
+  mk('c1',{type:'bar',data:{labels:d.methods,datasets:[
+    {label:'Artifact Rate',data:d.artifacts.map(v=>v*100),backgroundColor:colors.map(c=>c+'cc')}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Artifact Rate (%)'},min:0}}}});
+  mk('c2',{type:'bar',data:{labels:d.methods,datasets:[
+    {label:'Task Performance',data:d.tasks.map(v=>v*100),backgroundColor:colors.map(c=>c+'cc')}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Task Performance (%)'},min:80,max:100}}}});
+  const p=simPositions(boost,tau,maskk);
+  mk('c3',{type:'line',data:{labels:p.positions,datasets:[
+    {label:'Naive SDFT',data:p.naive,borderColor:col.naive,tension:.3,pointRadius:2,borderWidth:2,fill:false},
+    {label:'Mask-k',data:p.mask,borderColor:col.mask,tension:.3,pointRadius:2,borderWidth:2,fill:false},
+    {label:'CF Weighting',data:p.cf,borderColor:col.cf,tension:.3,pointRadius:2,borderWidth:2,fill:false}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,font:{size:10}}}},scales:{x:{title:{display:true,text:'Token Position'}},y:{title:{display:true,text:'Artifact Probability'},min:0}}}});
+  const pa=simPareto(boost,epochs);
+  mk('c4',{type:'scatter',data:{datasets:[
+    {label:'CF Weighting (varying tau)',data:pa.arts.map((a,i)=>({x:a,y:pa.tasks[i]})),backgroundColor:col.cf+'cc',pointRadius:5,borderColor:col.cf}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{x:{title:{display:true,text:'Artifact Rate (%)'},min:0},y:{title:{display:true,text:'Task Performance (%)'},min:90,max:100}}}});
+}
+document.querySelectorAll('input').forEach(e=>e.addEventListener('input',update));
+update();
+</script>
+</body>
+</html>

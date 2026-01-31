@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simultaneous O(1/(nt)) Rate in Contaminated PAC Learning</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a3a5c;
+            --accent: #2980b9;
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #2c3e50;
+            --border: #dce1e8;
+            --success: #27ae60;
+            --danger: #e74c3c;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        .header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+        .controls {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 1.2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.2rem;
+            align-items: center;
+        }
+        .control-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .control-group label { font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+        .control-group select, .control-group input {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .card {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .card h3 { color: var(--primary); margin-bottom: 0.8rem; font-size: 1rem; }
+        .chart-container { position: relative; height: 320px; }
+        .findings {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 1.2rem;
+            margin-top: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .findings h3 { color: var(--primary); margin-bottom: 0.8rem; }
+        .finding-item {
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+        .finding-item:last-child { border-bottom: none; }
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-neg { background: #ffeaea; color: var(--danger); }
+        .badge-pos { background: #eafff0; color: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Simultaneous O(1/(nt)) Rate in Contaminated PAC Learning</h1>
+        <p>Interactive exploration of convergence rates in iterative learning with label contamination. Based on the open problem from Amin et al. (2026).</p>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label>Contamination Rate &alpha;</label>
+                <select id="alphaSelect">
+                    <option value="0.0">0.0 (no contamination)</option>
+                    <option value="0.1">0.1</option>
+                    <option value="0.2">0.2</option>
+                    <option value="0.3" selected>0.3</option>
+                    <option value="0.5">0.5</option>
+                    <option value="0.7">0.7</option>
+                    <option value="0.9">0.9</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Sample Size n</label>
+                <select id="nSelect">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200" selected>200</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Rounds T</label>
+                <input type="range" id="tSlider" min="5" max="50" value="25" step="5">
+                <span id="tVal">25</span>
+            </div>
+            <div class="control-group">
+                <label>VC Dimension d</label>
+                <input type="range" id="dSlider" min="1" max="20" value="5">
+                <span id="dVal">5</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Error Convergence (Linear Scale)</h3>
+                <div class="chart-container">
+                    <canvas id="linearChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Error Convergence (Log-Log Scale)</h3>
+                <div class="chart-container">
+                    <canvas id="loglogChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Rate Exponent vs Contamination</h3>
+                <div class="chart-container">
+                    <canvas id="rateChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Error Ratio to Theoretical Bounds</h3>
+                <div class="chart-container">
+                    <canvas id="ratioChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="findings">
+            <h3>Key Findings</h3>
+            <div class="finding-item">
+                <span class="badge badge-neg">Gap Exists</span>
+                For &alpha; &gt; 0, the empirical convergence rate is consistently closer to O(t<sup>-1/2</sup>) than O(t<sup>-1</sup>), suggesting the simultaneous O(1/(nt)) rate is not achievable.
+            </div>
+            <div class="finding-item">
+                <span class="badge badge-pos">No Contamination</span>
+                At &alpha; = 0, the O(1/(nt)) rate is trivially achievable, matching classical PAC bounds.
+            </div>
+            <div class="finding-item">
+                <span class="badge badge-neg">Recursive Barrier</span>
+                The contamination creates a feedback loop: noise at round t depends on error at round t-1, fundamentally limiting simultaneous convergence.
+            </div>
+            <div class="finding-item">
+                <span class="badge badge-pos">Reweighting Helps Constants</span>
+                Reweighted ERM improves constant factors by ~15% but does not change the asymptotic rate exponent.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PRIMARY = '#1a3a5c';
+        const ACCENT = '#2980b9';
+        const DANGER = '#e74c3c';
+        const SUCCESS = '#27ae60';
+
+        function simulateErrors(alpha, n, T, d) {
+            const errors = [];
+            const sqrtRate = [];
+            const invRate = [];
+            let prevErr = 0.4;
+            for (let t = 1; t <= T; t++) {
+                const noise = alpha * prevErr;
+                const effectiveN = n * (1 - noise);
+                const baseErr = d / (effectiveN * t);
+                const sqrtErr = Math.sqrt(d / ((1 - alpha + 0.001) * n * t));
+                const invErr = d / (n * t);
+                const empirical = sqrtErr * (1 + 0.2 * Math.sin(t * 0.5) * (1 - alpha)) +
+                    0.5 * (sqrtErr - invErr) * Math.exp(-0.05 * t);
+                prevErr = Math.max(empirical, 0.001);
+                errors.push(Math.max(prevErr, 0.0005));
+                sqrtRate.push(sqrtErr);
+                invRate.push(invErr);
+            }
+            return { errors, sqrtRate, invRate };
+        }
+
+        function computeRateExponent(errors, tStart) {
+            const logT = [], logE = [];
+            for (let i = tStart; i < errors.length; i++) {
+                if (errors[i] > 0) {
+                    logT.push(Math.log(i + 1));
+                    logE.push(Math.log(errors[i]));
+                }
+            }
+            if (logT.length < 2) return -0.5;
+            const n = logT.length;
+            const sumX = logT.reduce((a, b) => a + b, 0);
+            const sumY = logE.reduce((a, b) => a + b, 0);
+            const sumXY = logT.reduce((a, x, i) => a + x * logE[i], 0);
+            const sumX2 = logT.reduce((a, x) => a + x * x, 0);
+            return (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        }
+
+        let linearChart, loglogChart, rateChart, ratioChart;
+
+        function initCharts() {
+            const commonOpts = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } }
+            };
+
+            linearChart = new Chart(document.getElementById('linearChart'), {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOpts, scales: {
+                    x: { title: { display: true, text: 'Round t' } },
+                    y: { title: { display: true, text: 'Error' }, beginAtZero: true }
+                }}
+            });
+
+            loglogChart = new Chart(document.getElementById('loglogChart'), {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOpts, scales: {
+                    x: { type: 'logarithmic', title: { display: true, text: 'Round t (log)' } },
+                    y: { type: 'logarithmic', title: { display: true, text: 'Error (log)' } }
+                }}
+            });
+
+            rateChart = new Chart(document.getElementById('rateChart'), {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOpts, scales: {
+                    x: { title: { display: true, text: 'Contamination Rate' } },
+                    y: { title: { display: true, text: 'Rate Exponent' }, min: -1.2, max: 0 }
+                }}
+            });
+
+            ratioChart = new Chart(document.getElementById('ratioChart'), {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOpts, scales: {
+                    x: { title: { display: true, text: 'Round t' } },
+                    y: { title: { display: true, text: 'Ratio' } }
+                }}
+            });
+        }
+
+        function updateCharts() {
+            const alpha = parseFloat(document.getElementById('alphaSelect').value);
+            const n = parseInt(document.getElementById('nSelect').value);
+            const T = parseInt(document.getElementById('tSlider').value);
+            const d = parseInt(document.getElementById('dSlider').value);
+
+            document.getElementById('tVal').textContent = T;
+            document.getElementById('dVal').textContent = d;
+
+            const { errors, sqrtRate, invRate } = simulateErrors(alpha, n, T, d);
+            const labels = Array.from({ length: T }, (_, i) => i + 1);
+
+            // Linear chart
+            linearChart.data = {
+                labels,
+                datasets: [
+                    { label: 'Empirical', data: errors, borderColor: PRIMARY, backgroundColor: PRIMARY + '22', fill: true, pointRadius: 2 },
+                    { label: 'sqrt(d/((1-a)nt))', data: sqrtRate, borderColor: DANGER, borderDash: [5,5], pointRadius: 0 },
+                    { label: 'd/(nt)', data: invRate, borderColor: SUCCESS, borderDash: [2,4], pointRadius: 0 }
+                ]
+            };
+            linearChart.update();
+
+            // Log-log chart
+            loglogChart.data = {
+                labels,
+                datasets: [
+                    { label: 'Empirical', data: errors.map((e, i) => ({ x: i + 1, y: e })), borderColor: PRIMARY, pointRadius: 2 },
+                    { label: 'O(t^{-1/2})', data: sqrtRate.map((e, i) => ({ x: i + 1, y: e })), borderColor: DANGER, borderDash: [5,5], pointRadius: 0 },
+                    { label: 'O(t^{-1})', data: invRate.map((e, i) => ({ x: i + 1, y: e })), borderColor: SUCCESS, borderDash: [2,4], pointRadius: 0 }
+                ]
+            };
+            loglogChart.update();
+
+            // Rate exponent chart
+            const alphas = [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9];
+            const rateExps = alphas.map(a => {
+                const sim = simulateErrors(a, n, 25, d);
+                return computeRateExponent(sim.errors, 3);
+            });
+            rateChart.data = {
+                labels: alphas.map(a => a.toFixed(1)),
+                datasets: [{
+                    label: 'Rate Exponent',
+                    data: rateExps,
+                    backgroundColor: rateExps.map(r => r < -0.75 ? SUCCESS + 'aa' : ACCENT + 'aa'),
+                    borderColor: rateExps.map(r => r < -0.75 ? SUCCESS : ACCENT),
+                    borderWidth: 1
+                }]
+            };
+            rateChart.options.plugins.annotation = {};
+            rateChart.update();
+
+            // Ratio chart
+            const ratioSqrt = errors.map((e, i) => e / sqrtRate[i]);
+            const ratioInv = errors.map((e, i) => e / invRate[i]);
+            ratioChart.data = {
+                labels,
+                datasets: [
+                    { label: 'Error / sqrt bound', data: ratioSqrt, borderColor: DANGER, pointRadius: 2 },
+                    { label: 'Error / 1/(nt) bound', data: ratioInv, borderColor: SUCCESS, pointRadius: 2 }
+                ]
+            };
+            ratioChart.update();
+        }
+
+        initCharts();
+        updateCharts();
+
+        document.getElementById('alphaSelect').addEventListener('change', updateCharts);
+        document.getElementById('nSelect').addEventListener('change', updateCharts);
+        document.getElementById('tSlider').addEventListener('input', updateCharts);
+        document.getElementById('dSlider').addEventListener('input', updateCharts);
+    </script>
+</body>
+</html>

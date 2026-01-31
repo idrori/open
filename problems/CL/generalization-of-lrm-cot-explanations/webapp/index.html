@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoT Generalization Across Large Reasoning Models</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; line-height: 1.6; }
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 2.5rem 2rem; text-align: center; }
+  .header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; font-weight: 700; }
+  .header p { font-size: 1rem; opacity: 0.85; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: white; border-radius: 12px; padding: 1.2rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: transform 0.2s; }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+  .stat-value { font-size: 1.8rem; font-weight: 700; color: #0f3460; }
+  .stat-label { font-size: 0.82rem; color: #666; margin-top: 0.2rem; }
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(540px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+  .chart-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .chart-card h3 { font-size: 1.05rem; margin-bottom: 1rem; color: #1a1a2e; border-bottom: 2px solid #e8e8e8; padding-bottom: 0.5rem; }
+  .chart-container { position: relative; width: 100%; height: 340px; }
+  .full-width { grid-column: 1 / -1; }
+  .table-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1.5rem; overflow-x: auto; }
+  .table-card h3 { font-size: 1.05rem; margin-bottom: 1rem; color: #1a1a2e; border-bottom: 2px solid #e8e8e8; padding-bottom: 0.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th { background: #f8f9fa; padding: 0.7rem 0.8rem; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #dee2e6; }
+  td { padding: 0.6rem 0.8rem; border-bottom: 1px solid #eee; }
+  tr:hover td { background: #f8f9fa; }
+  .sig { color: #2e7d32; font-weight: 600; }
+  .controls { display: flex; gap: 0.8rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .btn { padding: 0.5rem 1.2rem; border: 2px solid #0f3460; border-radius: 8px; background: white; color: #0f3460; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; }
+  .btn.active, .btn:hover { background: #0f3460; color: white; }
+  .footer { text-align: center; padding: 1.5rem; color: #888; font-size: 0.82rem; }
+  @media (max-width: 600px) { .chart-grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Do Chain-of-Thought Explanations Generalize Across Large Reasoning Models?</h1>
+  <p>Interactive exploration of CoT transfer experiments across 5 LRMs and 6 reasoning domains (9,600 pairwise transfers)</p>
+</div>
+
+<div class="container">
+
+  <!-- Summary Statistics -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">1.1156</div>
+      <div class="stat-label">Mean CGS</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">9.27%</div>
+      <div class="stat-label">Accuracy Lift</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">85.44%</div>
+      <div class="stat-label">Answer Agreement</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">17.43%</div>
+      <div class="stat-label">Helpful Rate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">8.16%</div>
+      <div class="stat-label">Harmful Rate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">9,600</div>
+      <div class="stat-label">Transfer Trials</div>
+    </div>
+  </div>
+
+  <!-- Charts Row 1 -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>CoT Generalization Score by Source Model</h3>
+      <div class="chart-container"><canvas id="cgsChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Domain-Stratified Transfer Rates</h3>
+      <div class="chart-container"><canvas id="domainChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Ensemble CoT vs. Best Single-Source Transfer</h3>
+      <div class="chart-container"><canvas id="ensembleChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Accuracy: With CoT vs. Baseline</h3>
+      <div class="chart-container"><canvas id="liftChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Pairwise Matrix Chart -->
+  <div class="chart-grid">
+    <div class="chart-card full-width">
+      <h3>Pairwise CoT Transfer Lift Matrix</h3>
+      <div class="controls">
+        <button class="btn active" onclick="showMatrixView('heatmap')">Heatmap View</button>
+        <button class="btn" onclick="showMatrixView('bar')">Bar View</button>
+      </div>
+      <div class="chart-container" style="height:380px;"><canvas id="matrixChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Cross-Model Consistency -->
+  <div class="chart-grid">
+    <div class="chart-card full-width">
+      <h3>Cross-Model Answer Agreement by Source Model and Domain</h3>
+      <div class="chart-container" style="height:380px;"><canvas id="consistencyChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Statistical Tests Table -->
+  <div class="table-card">
+    <h3>Statistical Validation</h3>
+    <table>
+      <thead>
+        <tr><th>Test</th><th>Hypothesis</th><th>Statistic</th><th>p-value</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Paired t-test</td><td>CoT transfer improves accuracy</td>
+          <td>t = 18.2673</td><td>2.61e-73</td><td class="sig">Significant</td>
+        </tr>
+        <tr>
+          <td>Kruskal-Wallis</td><td>Domain affects transfer success</td>
+          <td>H = 15.766</td><td>0.0075</td><td class="sig">Significant</td>
+        </tr>
+        <tr>
+          <td>Mann-Whitney U</td><td>Same-family transfers are stronger</td>
+          <td>U = 4273174.5</td><td>0.021</td><td class="sig">Significant</td>
+        </tr>
+        <tr>
+          <td>Chi-squared</td><td>Agreement exceeds chance (50%)</td>
+          <td>&chi;&sup2; = 4822.335</td><td>&lt; 0.001</td><td class="sig">Significant</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CGS Detail Table -->
+  <div class="table-card">
+    <h3>CoT Generalization Scores (Detail)</h3>
+    <table>
+      <thead>
+        <tr><th>Source Model</th><th>CGS</th><th>Acc w/ CoT</th><th>Baseline</th><th>Lift</th><th>N Transfers</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>OpenAI-o3-mini</td><td>1.1309</td><td>0.8865</td><td>0.7839</td><td>0.1026</td><td>1920</td></tr>
+        <tr><td>DeepSeek-R1</td><td>1.1172</td><td>0.9083</td><td>0.813</td><td>0.0953</td><td>1920</td></tr>
+        <tr><td>QwQ-32B-Preview</td><td>1.1171</td><td>0.9042</td><td>0.8094</td><td>0.0948</td><td>1920</td></tr>
+        <tr><td>Claude-3.5-Sonnet</td><td>1.1123</td><td>0.887</td><td>0.7974</td><td>0.0896</td><td>1920</td></tr>
+        <tr><td>Gemini-2.0-Flash-Thinking</td><td>1.1006</td><td>0.8891</td><td>0.8078</td><td>0.0812</td><td>1920</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Ensemble Detail Table -->
+  <div class="table-card">
+    <h3>Ensemble CoT Comparison</h3>
+    <table>
+      <thead>
+        <tr><th>Target Model</th><th>Ensemble Acc</th><th>Best Single Acc</th><th>Best Source</th><th>Advantage</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Claude-3.5-Sonnet</td><td>0.9812</td><td>0.9417</td><td>OpenAI-o3-mini</td><td>+0.0395</td></tr>
+        <tr><td>OpenAI-o3-mini</td><td>0.9667</td><td>0.9271</td><td>Claude-3.5-Sonnet</td><td>+0.0396</td></tr>
+        <tr><td>Gemini-2.0-Flash-Thinking</td><td>0.9646</td><td>0.9062</td><td>Claude-3.5-Sonnet</td><td>+0.0584</td></tr>
+        <tr><td>DeepSeek-R1</td><td>0.9563</td><td>0.8896</td><td>Claude-3.5-Sonnet</td><td>+0.0667</td></tr>
+        <tr><td>QwQ-32B-Preview</td><td>0.9271</td><td>0.8792</td><td>DeepSeek-R1</td><td>+0.0479</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="footer">
+  CoT Generalization Study | KDD 2026 | Based on Pal et al., arXiv:2601.11517
+</div>
+
+<script>
+// ============================================================================
+// Data
+// ============================================================================
+const DATA = {
+  cgs: {
+    "OpenAI-o3-mini": { cgs: 1.1309, acc_cot: 0.8865, baseline: 0.7839, lift: 0.1026 },
+    "DeepSeek-R1": { cgs: 1.1172, acc_cot: 0.9083, baseline: 0.813, lift: 0.0953 },
+    "QwQ-32B-Preview": { cgs: 1.1171, acc_cot: 0.9042, baseline: 0.8094, lift: 0.0948 },
+    "Claude-3.5-Sonnet": { cgs: 1.1123, acc_cot: 0.887, baseline: 0.7974, lift: 0.0896 },
+    "Gemini-2.0-Flash": { cgs: 1.1006, acc_cot: 0.8891, baseline: 0.8078, lift: 0.0812 }
+  },
+  domains: {
+    "Formal Logic": { helpful: 0.185, harmful: 0.0606, net: 0.1244 },
+    "Math Competition": { helpful: 0.1481, harmful: 0.0319, net: 0.1163 },
+    "Code Debugging": { helpful: 0.1656, harmful: 0.0656, net: 0.1 },
+    "Commonsense": { helpful: 0.1975, harmful: 0.1212, net: 0.0762 },
+    "Scientific QA": { helpful: 0.1656, harmful: 0.0925, net: 0.0731 },
+    "Reading Comp.": { helpful: 0.1837, harmful: 0.1175, net: 0.0663 }
+  },
+  ensemble: {
+    "Claude-3.5-Sonnet": { ensemble: 0.9812, single: 0.9417, advantage: 0.0395 },
+    "OpenAI-o3-mini": { ensemble: 0.9667, single: 0.9271, advantage: 0.0396 },
+    "Gemini-2.0-Flash": { ensemble: 0.9646, single: 0.9062, advantage: 0.0584 },
+    "DeepSeek-R1": { ensemble: 0.9563, single: 0.8896, advantage: 0.0667 },
+    "QwQ-32B-Preview": { ensemble: 0.9271, single: 0.8792, advantage: 0.0479 }
+  },
+  matrix: {
+    "DeepSeek-R1":    { "o3-mini": 0.1, "Claude": 0.1, "Gemini": 0.0708, "QwQ": 0.1104 },
+    "OpenAI-o3-mini": { "DeepSeek": 0.0958, "Claude": 0.1021, "Gemini": 0.0875, "QwQ": 0.125 },
+    "Claude-3.5":     { "DeepSeek": 0.0896, "o3-mini": 0.0854, "Gemini": 0.1021, "QwQ": 0.0813 },
+    "Gemini-2.0":     { "DeepSeek": 0.0792, "o3-mini": 0.0542, "Claude": 0.0875, "QwQ": 0.1042 },
+    "QwQ-32B":        { "DeepSeek": 0.1333, "o3-mini": 0.0729, "Claude": 0.0896, "Gemini": 0.0833 }
+  },
+  consistency: {
+    "DeepSeek-R1": { math: 0.9062, logic: 0.8594, commonsense: 0.8063, code: 0.9, sci: 0.8406, reading: 0.8125 },
+    "OpenAI-o3-mini": { math: 0.9, logic: 0.8531, commonsense: 0.8344, code: 0.8562, sci: 0.8406, reading: 0.8406 },
+    "Claude-3.5-Sonnet": { math: 0.8688, logic: 0.8344, commonsense: 0.8625, code: 0.8906, sci: 0.85, reading: 0.8469 },
+    "Gemini-2.0-Flash": { math: 0.8469, logic: 0.8656, commonsense: 0.8562, code: 0.8375, sci: 0.8781, reading: 0.8406 },
+    "QwQ-32B-Preview": { math: 0.8969, logic: 0.8344, commonsense: 0.8375, code: 0.8719, sci: 0.8094, reading: 0.8531 }
+  }
+};
+
+const COLORS = {
+  blue: '#2196F3', green: '#4CAF50', orange: '#FF9800', purple: '#9C27B0',
+  red: '#F44336', teal: '#009688',
+  blueA: 'rgba(33,150,243,0.7)', greenA: 'rgba(76,175,80,0.7)',
+  orangeA: 'rgba(255,152,0,0.7)', purpleA: 'rgba(156,39,176,0.7)',
+  redA: 'rgba(244,67,54,0.7)'
+};
+
+// ============================================================================
+// Chart 1: CGS Bar
+// ============================================================================
+const cgsLabels = Object.keys(DATA.cgs);
+const cgsValues = cgsLabels.map(m => DATA.cgs[m].cgs);
+new Chart(document.getElementById('cgsChart'), {
+  type: 'bar',
+  data: {
+    labels: cgsLabels,
+    datasets: [{
+      label: 'CGS',
+      data: cgsValues,
+      backgroundColor: [COLORS.blue, COLORS.green, COLORS.orange, COLORS.purple, COLORS.red],
+      borderWidth: 0,
+      borderRadius: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      annotation: {}
+    },
+    scales: {
+      y: { min: 1.0, max: 1.18, title: { display: true, text: 'CGS' } },
+      x: { ticks: { font: { size: 10 } } }
+    }
+  }
+});
+
+// ============================================================================
+// Chart 2: Domain Rates
+// ============================================================================
+const domLabels = Object.keys(DATA.domains);
+new Chart(document.getElementById('domainChart'), {
+  type: 'bar',
+  data: {
+    labels: domLabels,
+    datasets: [
+      { label: 'Helpful', data: domLabels.map(d => DATA.domains[d].helpful), backgroundColor: COLORS.greenA, borderRadius: 4 },
+      { label: 'Harmful', data: domLabels.map(d => DATA.domains[d].harmful), backgroundColor: COLORS.redA, borderRadius: 4 },
+      { label: 'Net Transfer', data: domLabels.map(d => DATA.domains[d].net), backgroundColor: COLORS.blueA, borderRadius: 4 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0, max: 0.25, title: { display: true, text: 'Rate' } }, x: { ticks: { font: { size: 10 } } } }
+  }
+});
+
+// ============================================================================
+// Chart 3: Ensemble vs Single
+// ============================================================================
+const ensLabels = Object.keys(DATA.ensemble);
+new Chart(document.getElementById('ensembleChart'), {
+  type: 'bar',
+  data: {
+    labels: ensLabels,
+    datasets: [
+      { label: 'Ensemble CoT', data: ensLabels.map(m => DATA.ensemble[m].ensemble), backgroundColor: COLORS.blueA, borderRadius: 6 },
+      { label: 'Best Single Source', data: ensLabels.map(m => DATA.ensemble[m].single), backgroundColor: COLORS.orangeA, borderRadius: 6 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0.82, max: 1.02, title: { display: true, text: 'Accuracy' } }, x: { ticks: { font: { size: 10 } } } }
+  }
+});
+
+// ============================================================================
+// Chart 4: Accuracy Lift
+// ============================================================================
+const liftLabels = Object.keys(DATA.cgs);
+new Chart(document.getElementById('liftChart'), {
+  type: 'bar',
+  data: {
+    labels: liftLabels,
+    datasets: [
+      { label: 'With CoT', data: liftLabels.map(m => DATA.cgs[m].acc_cot), backgroundColor: COLORS.blueA, borderRadius: 6 },
+      { label: 'Baseline (no CoT)', data: liftLabels.map(m => DATA.cgs[m].baseline), backgroundColor: 'rgba(158,158,158,0.5)', borderRadius: 6 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0.7, max: 0.98, title: { display: true, text: 'Accuracy' } }, x: { ticks: { font: { size: 10 } } } }
+  }
+});
+
+// ============================================================================
+// Chart 5: Pairwise Matrix (Grouped Bar default)
+// ============================================================================
+let matrixChart;
+function buildMatrixBar() {
+  const sources = Object.keys(DATA.matrix);
+  const allTargets = new Set();
+  sources.forEach(s => Object.keys(DATA.matrix[s]).forEach(t => allTargets.add(t)));
+  const targets = [...allTargets];
+  const colors = [COLORS.blueA, COLORS.greenA, COLORS.orangeA, COLORS.purpleA, COLORS.redA];
+
+  const datasets = sources.map((src, i) => ({
+    label: src,
+    data: targets.map(t => DATA.matrix[src][t] || 0),
+    backgroundColor: colors[i % colors.length],
+    borderRadius: 4
+  }));
+
+  return {
+    type: 'bar',
+    data: { labels: targets, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { min: 0, max: 0.16, title: { display: true, text: 'Accuracy Lift' } } },
+      plugins: { legend: { position: 'top' } }
+    }
+  };
+}
+
+function buildMatrixHeatmap() {
+  const sources = Object.keys(DATA.matrix);
+  const allTargets = new Set();
+  sources.forEach(s => Object.keys(DATA.matrix[s]).forEach(t => allTargets.add(t)));
+  const targets = [...allTargets];
+
+  const points = [];
+  sources.forEach((src, i) => {
+    targets.forEach((tgt, j) => {
+      const val = DATA.matrix[src][tgt] || 0;
+      points.push({ x: tgt, y: src, v: val });
+    });
+  });
+
+  // Fallback: use bubble chart as pseudo-heatmap
+  const dataset = {
+    label: 'Transfer Lift',
+    data: points.map(p => ({ x: targets.indexOf(p.x), y: sources.indexOf(p.y), r: p.v * 180 })),
+    backgroundColor: points.map(p => {
+      const intensity = Math.min(1, (p.v - 0.04) / 0.1);
+      return `rgba(33, 150, 243, ${0.3 + intensity * 0.7})`;
+    })
+  };
+
+  return {
+    type: 'bubble',
+    data: { datasets: [dataset] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { min: -0.5, max: targets.length - 0.5, ticks: { callback: (v) => targets[v] || '' } },
+        y: { min: -0.5, max: sources.length - 0.5, ticks: { callback: (v) => sources[v] || '' }, reverse: true }
+      },
+      plugins: {
+        tooltip: { callbacks: { label: (ctx) => { const p = points[ctx.dataIndex]; return `${sources[p.y]}→${targets[p.x]}: ${p.v.toFixed(4)}`; } } },
+        legend: { display: false }
+      }
+    }
+  };
+}
+
+matrixChart = new Chart(document.getElementById('matrixChart'), buildMatrixBar());
+
+function showMatrixView(view) {
+  document.querySelectorAll('.controls .btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  matrixChart.destroy();
+  if (view === 'heatmap') {
+    matrixChart = new Chart(document.getElementById('matrixChart'), buildMatrixHeatmap());
+  } else {
+    matrixChart = new Chart(document.getElementById('matrixChart'), buildMatrixBar());
+  }
+}
+
+// ============================================================================
+// Chart 6: Cross-Model Consistency
+// ============================================================================
+const conModels = Object.keys(DATA.consistency);
+const conDomains = ['math', 'logic', 'commonsense', 'code', 'sci', 'reading'];
+const conDomainLabels = ['Math', 'Logic', 'Commonsense', 'Code', 'Sci-QA', 'Reading'];
+const conColors = [COLORS.blueA, COLORS.greenA, COLORS.orangeA, COLORS.purpleA, COLORS.redA];
+
+new Chart(document.getElementById('consistencyChart'), {
+  type: 'bar',
+  data: {
+    labels: conDomainLabels,
+    datasets: conModels.map((m, i) => ({
+      label: m,
+      data: conDomains.map(d => DATA.consistency[m][d]),
+      backgroundColor: conColors[i],
+      borderRadius: 4
+    }))
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0.75, max: 0.95, title: { display: true, text: 'Agreement Rate' } } },
+    plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } }
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delta^k Interaction Order Sensitivity</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: var(--primary); }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.85; }
+.container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; max-height: 350px; }
+.controls { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+.slider-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+.slider-row label { min-width: 200px; font-weight: 600; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.slider-row .val { min-width: 40px; text-align: right; font-family: monospace; color: var(--accent); font-weight: bold; }
+.full-width { grid-column: 1 / -1; }
+.formula { background: #f0f4f8; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; text-align: center; margin: 1rem 0; font-size: 1.1rem; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Role of k in Delta^k: Interaction Order Sensitivity</h1>
+<p>Computational investigation of the conjecture that k tunes order sensitivity</p>
+</div>
+<div class="container">
+<div class="card" style="margin-bottom:1.5rem;">
+<h2>Definition</h2>
+<div class="formula">Delta^k(X) = (N - k) * T(X) - Sum_i T(X_{-i})</div>
+<p>Where T(X) is the total correlation and X_{-i} is the system with variable i removed. Special cases: k=0 gives S-information, k=1 gives dual total correlation, k=2 gives -O-information.</p>
+</div>
+<div class="controls">
+<h2>Configuration</h2>
+<div class="slider-row">
+<label>Number of Variables (N):</label>
+<input type="range" id="nSlider" min="3" max="7" value="5" step="1">
+<div class="val" id="nVal">5</div>
+</div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Sensitivity Profile |Delta^k| vs Order m</h2>
+<canvas id="sensitivityChart"></canvas>
+</div>
+<div class="card">
+<h2>Special Cases Comparison</h2>
+<canvas id="specialChart"></canvas>
+</div>
+<div class="card">
+<h2>Blind Spot Verification (Delta^k at m=k)</h2>
+<canvas id="blindSpotChart"></canvas>
+</div>
+<div class="card">
+<h2>Delta^k Across All Orders</h2>
+<canvas id="allOrdersChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+function computeDeltaK(N, k, m) {
+    const tc_full = (m > 1) ? Math.log(2) : 0;
+    let tc_marginal_sum = 0;
+    for (let i = 0; i < N; i++) {
+        if (i < m) { tc_marginal_sum += (m > 2) ? Math.log(2) : 0; }
+    }
+    return (N - k) * tc_full - tc_marginal_sum;
+}
+
+let sensitivityChart, specialChart, blindSpotChart, allOrdersChart;
+const chartColors = ['#1a3a5c', '#2980b9', '#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#e67e22'];
+
+function updateAll() {
+    const N = parseInt(document.getElementById('nSlider').value);
+    document.getElementById('nVal').textContent = N;
+
+    const mValues = [];
+    for (let m = 2; m <= N; m++) mValues.push(m);
+    const kValues = [];
+    for (let k = 0; k < N; k++) kValues.push(k);
+
+    if (sensitivityChart) sensitivityChart.destroy();
+    const sensDatasets = kValues.map((k, idx) => ({
+        label: 'k=' + k,
+        data: mValues.map(m => Math.abs(computeDeltaK(N, k, m))),
+        borderColor: chartColors[idx % chartColors.length],
+        borderWidth: 2, tension: 0.3, pointRadius: 4, fill: false
+    }));
+    sensitivityChart = new Chart(document.getElementById('sensitivityChart'), {
+        type: 'line',
+        data: { labels: mValues.map(m => 'm=' + m), datasets: sensDatasets },
+        options: { responsive: true,
+            scales: { y: { title: { display: true, text: '|Delta^k|' }, beginAtZero: true } },
+            plugins: { legend: { position: 'top' } } }
+    });
+
+    if (specialChart) specialChart.destroy();
+    const specialData = [];
+    for (let k = 0; k < Math.min(3, N); k++) {
+        specialData.push({
+            label: k === 0 ? 'S-info (k=0)' : k === 1 ? 'DTC (k=1)' : '-O-info (k=2)',
+            data: mValues.map(m => computeDeltaK(N, k, m)),
+            backgroundColor: chartColors[k],
+        });
+    }
+    specialChart = new Chart(document.getElementById('specialChart'), {
+        type: 'bar',
+        data: { labels: mValues.map(m => 'm=' + m), datasets: specialData },
+        options: { responsive: true,
+            scales: { y: { title: { display: true, text: 'Delta^k value' } } },
+            plugins: { legend: { position: 'top' } } }
+    });
+
+    if (blindSpotChart) blindSpotChart.destroy();
+    const blindData = [];
+    const blindLabels = [];
+    kValues.forEach(k => {
+        if (k >= 2 && k <= N) {
+            blindLabels.push('k=m=' + k);
+            blindData.push(computeDeltaK(N, k, k));
+        }
+    });
+    blindSpotChart = new Chart(document.getElementById('blindSpotChart'), {
+        type: 'bar',
+        data: {
+            labels: blindLabels,
+            datasets: [{
+                label: 'Delta^k at pure order-k (should be ~0)',
+                data: blindData,
+                backgroundColor: blindData.map(v => Math.abs(v) < 0.01 ? '#27ae60' : '#e74c3c'),
+            }]
+        },
+        options: { responsive: true, indexAxis: 'y',
+            scales: { x: { title: { display: true, text: 'Delta^k value' } } } }
+    });
+
+    if (allOrdersChart) allOrdersChart.destroy();
+    const allDatasets = mValues.map((m, idx) => ({
+        label: 'm=' + m,
+        data: kValues.map(k => computeDeltaK(N, k, m)),
+        borderColor: chartColors[idx % chartColors.length],
+        borderWidth: 2, tension: 0.3, pointRadius: 4, fill: false
+    }));
+    allOrdersChart = new Chart(document.getElementById('allOrdersChart'), {
+        type: 'line',
+        data: { labels: kValues.map(k => 'k=' + k), datasets: allDatasets },
+        options: { responsive: true,
+            scales: { y: { title: { display: true, text: 'Delta^k' } } },
+            plugins: { legend: { position: 'top' } } }
+    });
+}
+
+document.getElementById('nSlider').addEventListener('input', updateAll);
+updateAll();
+</script>
+</body>
+</html>

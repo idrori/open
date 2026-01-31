@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Source of Gains from Arbitrary-Order Decoding in Diffusion Language Models</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #1a56db;
+  --primary-light: #e1effe;
+  --secondary: #9333ea;
+  --accent: #dc2626;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-light: #64748b;
+  --border: #e2e8f0;
+  --exploit-color: #3b82f6;
+  --novelty-color: #ef4444;
+  --diff-color: #3b82f6;
+  --ar-color: #f59e0b;
+  --constrained-color: #10b981;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.hero {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d1b69 50%, #1a1a2e 100%);
+  color: white;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+.hero h1 {
+  font-size: 2.2rem;
+  max-width: 900px;
+  margin: 0 auto 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.hero .subtitle {
+  font-size: 1.1rem;
+  opacity: 0.85;
+  max-width: 700px;
+  margin: 0 auto 1.5rem;
+}
+.hero .venue {
+  display: inline-block;
+  background: rgba(255,255,255,0.15);
+  padding: 0.4rem 1.2rem;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+.section { margin-bottom: 3rem; }
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--primary);
+  border-bottom: 3px solid var(--primary);
+  padding-bottom: 0.5rem;
+  display: inline-block;
+}
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.card h3 {
+  font-size: 1.15rem;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.stat-card {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.25rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid var(--border);
+}
+.stat-card .stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.stat-card .stat-label {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-top: 0.25rem;
+}
+.finding-box {
+  background: var(--primary-light);
+  border-left: 4px solid var(--primary);
+  padding: 1rem 1.25rem;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 1rem;
+}
+.finding-box strong { color: var(--primary); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th, td {
+  padding: 0.6rem 0.8rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: #f1f5f9;
+  font-weight: 600;
+  color: var(--text);
+  position: sticky;
+  top: 0;
+}
+td:first-child, th:first-child { text-align: left; font-weight: 500; }
+tr:hover { background: #f8fafc; }
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+.chart-container canvas { width: 100% !important; }
+.method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.method-card {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.method-card .method-num {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.method-card h4 { font-size: 1rem; margin-bottom: 0.4rem; }
+.method-card p { font-size: 0.85rem; color: var(--text-light); }
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.tab-btn {
+  padding: 0.5rem 1.2rem;
+  border: 2px solid var(--border);
+  background: var(--card);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.tab-btn.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+.tab-btn:hover { border-color: var(--primary); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.highlight { background: #fef3c7; padding: 0.1rem 0.3rem; border-radius: 3px; font-weight: 600; }
+.legend-inline {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+.legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+@media (max-width: 900px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .method-grid { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 1.5rem; }
+  .hero { padding: 2.5rem 1rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- Hero Section -->
+<div class="hero">
+  <h1>Exploitation or Innovation? Decomposing the Source of Gains from Arbitrary-Order Decoding in Diffusion Language Models</h1>
+  <p class="subtitle">A causal attribution framework separating exploitation gains (bidirectional context) from novelty gains (new reasoning strategies) across four domains.</p>
+  <span class="venue">KDD 2026 &middot; Research Track &middot; CL</span>
+</div>
+
+<div class="container">
+
+  <!-- Key Stats -->
+  <div class="section">
+    <div class="grid-4">
+      <div class="stat-card">
+        <div class="stat-value">4</div>
+        <div class="stat-label">Domains Evaluated</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">32</div>
+        <div class="stat-label">Problem Instances</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">75.9-89.6%</div>
+        <div class="stat-label">Exploitation Fraction (3 domains)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">48.0%</div>
+        <div class="stat-label">Exploitation in Structured Text</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem & Methods -->
+  <div class="section">
+    <h2 class="section-title">Problem &amp; Methods</h2>
+    <div class="card">
+      <h3>Research Question</h3>
+      <p>Diffusion language models (dLLMs) enable arbitrary-order token generation, relaxing the strict left-to-right constraint of autoregressive (AR) models. But do performance gains arise from <strong>better exploitation of existing patterns</strong> (via bidirectional context) or from <strong>genuinely new reasoning strategies</strong> unattainable under AR decoding?</p>
+    </div>
+    <h3 style="margin: 1.5rem 0 1rem;">Three-Level Decoding Ablation</h3>
+    <div class="method-grid">
+      <div class="method-card">
+        <div class="method-num">1</div>
+        <h4>AR Decoding</h4>
+        <p>Standard left-to-right generation. Tokens use only forward (past) context.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-num">2</div>
+        <h4>Constrained Non-Sequential</h4>
+        <p>Fixed non-LR permutation (even then odd). Provides partial bidirectional context.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-num">3</div>
+        <h4>Adaptive Diffusion</h4>
+        <p>Iterative denoising with adaptive ordering. Full bidirectional context and adaptive reordering.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 1rem;">
+      <p><strong>Exploitation Gain</strong> = Constrained - AR &nbsp;|&nbsp; <strong>Novelty Gain</strong> = Diffusion - Constrained &nbsp;|&nbsp; <strong>Total Gain</strong> = Diffusion - AR</p>
+    </div>
+  </div>
+
+  <!-- Causal Attribution Chart -->
+  <div class="section">
+    <h2 class="section-title">Causal Attribution at 50% Masking</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Exploitation vs. Novelty Gains</h3>
+        <div class="chart-container"><canvas id="causalChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Exploitation Fraction by Domain</h3>
+        <div class="chart-container"><canvas id="exploitFracChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Domain</th><th>Diffusion Acc</th><th>AR Acc</th><th>Total Gain</th><th>Exploitation</th><th>Novelty</th><th>Exploit %</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Math</td><td>0.6990</td><td>0.5923</td><td>0.1067</td><td>0.0956</td><td>0.0111</td><td>89.6%</td></tr>
+          <tr><td>Code</td><td>0.7512</td><td>0.7030</td><td>0.0482</td><td>0.0366</td><td>0.0116</td><td>75.9%</td></tr>
+          <tr><td>Logic</td><td>0.7341</td><td>0.6612</td><td>0.0729</td><td>0.0788</td><td>-0.0058</td><td>108.0%</td></tr>
+          <tr><td>Structured</td><td>0.7266</td><td>0.5571</td><td>0.1695</td><td>0.0813</td><td>0.0882</td><td>48.0%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Exploitation Across Mask Levels -->
+  <div class="section">
+    <h2 class="section-title">Exploitation Fraction Across Mask Levels</h2>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="mask-chart">Chart</button>
+      <button class="tab-btn" data-tab="mask-table">Data Table</button>
+    </div>
+    <div id="mask-chart" class="tab-content active">
+      <div class="card">
+        <div class="chart-container"><canvas id="maskLevelChart"></canvas></div>
+      </div>
+    </div>
+    <div id="mask-table" class="tab-content">
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Domain</th><th>Mask</th><th>Diff Acc</th><th>AR Acc</th><th>Constrained Acc</th><th>Total Gain</th><th>Exploit Gain</th><th>Novelty Gain</th><th>Exploit %</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Math</td><td>0.3</td><td>0.8530</td><td>0.7939</td><td>0.8370</td><td>0.0590</td><td>0.0431</td><td>0.0160</td><td>72.9%</td></tr>
+            <tr><td>Math</td><td>0.5</td><td>0.6990</td><td>0.5923</td><td>0.6879</td><td>0.1067</td><td>0.0956</td><td>0.0111</td><td>89.6%</td></tr>
+            <tr><td>Math</td><td>0.7</td><td>0.6052</td><td>0.5486</td><td>0.5359</td><td>0.0565</td><td>-0.0127</td><td>0.0692</td><td>-22.5%</td></tr>
+            <tr><td>Code</td><td>0.3</td><td>0.8481</td><td>0.8165</td><td>0.8741</td><td>0.0316</td><td>0.0575</td><td>-0.0259</td><td>182.0%</td></tr>
+            <tr><td>Code</td><td>0.5</td><td>0.7512</td><td>0.7030</td><td>0.7396</td><td>0.0482</td><td>0.0366</td><td>0.0116</td><td>75.9%</td></tr>
+            <tr><td>Code</td><td>0.7</td><td>0.6200</td><td>0.5956</td><td>0.6234</td><td>0.0244</td><td>0.0278</td><td>-0.0034</td><td>113.9%</td></tr>
+            <tr><td>Logic</td><td>0.3</td><td>0.8143</td><td>0.7821</td><td>0.8313</td><td>0.0321</td><td>0.0492</td><td>-0.0171</td><td>153.1%</td></tr>
+            <tr><td>Logic</td><td>0.5</td><td>0.7341</td><td>0.6612</td><td>0.7400</td><td>0.0729</td><td>0.0788</td><td>-0.0058</td><td>108.0%</td></tr>
+            <tr><td>Logic</td><td>0.7</td><td>0.6559</td><td>0.5178</td><td>0.5816</td><td>0.1382</td><td>0.0639</td><td>0.0743</td><td>46.2%</td></tr>
+            <tr><td>Structured</td><td>0.3</td><td>0.8401</td><td>0.7139</td><td>0.7822</td><td>0.1262</td><td>0.0683</td><td>0.0578</td><td>54.2%</td></tr>
+            <tr><td>Structured</td><td>0.5</td><td>0.7266</td><td>0.5571</td><td>0.6384</td><td>0.1695</td><td>0.0813</td><td>0.0882</td><td>48.0%</td></tr>
+            <tr><td>Structured</td><td>0.7</td><td>0.6075</td><td>0.4491</td><td>0.5090</td><td>0.1584</td><td>0.0599</td><td>0.0985</td><td>37.8%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Sensitivity -->
+  <div class="section">
+    <h2 class="section-title">Order Sensitivity Analysis</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Order Sensitivity Ratio by Domain</h3>
+        <div class="chart-container"><canvas id="orderSensChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Forward vs. Backward Dependencies</h3>
+        <div class="chart-container"><canvas id="fwdBwdChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Domain</th><th>Mean Ratio</th><th>Std</th><th>Forward Dep</th><th>Backward Dep</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Code</td><td>0.9768</td><td>0.0541</td><td>0.0417</td><td>0.0407</td></tr>
+          <tr><td>Math</td><td>0.9669</td><td>0.0481</td><td>0.0364</td><td>0.0349</td></tr>
+          <tr><td>Logic</td><td>0.8672</td><td>0.1508</td><td>0.0333</td><td>0.0299</td></tr>
+          <tr><td>Structured</td><td>0.8496</td><td>0.1890</td><td>0.0278</td><td>0.0232</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Pattern Coverage -->
+  <div class="section">
+    <h2 class="section-title">Pattern Coverage</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Coverage Ratio (Diffusion / AR)</h3>
+        <div class="chart-container"><canvas id="coverageChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Coverage Details</h3>
+        <table>
+          <thead>
+            <tr><th>Domain</th><th>AR Coverage</th><th>Diff Coverage</th><th>Ratio</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Code</td><td>20.00</td><td>713,955.78</td><td>32,570.44</td></tr>
+            <tr><td>Math</td><td>15.38</td><td>106,911.05</td><td>5,383.75</td></tr>
+            <tr><td>Logic</td><td>15.88</td><td>78,692.79</td><td>4,178.98</td></tr>
+            <tr><td>Structured</td><td>12.75</td><td>18,573.68</td><td>1,090.81</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Oracle & Diversity -->
+  <div class="section">
+    <h2 class="section-title">Oracle &amp; Diversity Analysis</h2>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="oracle-chart">Oracle Chart</button>
+      <button class="tab-btn" data-tab="diversity-chart">Diversity by k</button>
+      <button class="tab-btn" data-tab="oracle-table">Data Tables</button>
+    </div>
+    <div id="oracle-chart" class="tab-content active">
+      <div class="card">
+        <h3>Best-of-k Oracle Accuracy (k=8)</h3>
+        <div class="chart-container"><canvas id="oracleChart"></canvas></div>
+      </div>
+    </div>
+    <div id="diversity-chart" class="tab-content">
+      <div class="card">
+        <h3>Oracle Gap by Sample Size k</h3>
+        <div class="chart-container"><canvas id="diversityChart"></canvas></div>
+      </div>
+    </div>
+    <div id="oracle-table" class="tab-content">
+      <div class="card">
+        <h3>Best-of-k Oracle at k=8</h3>
+        <table>
+          <thead>
+            <tr><th>Domain</th><th>Diff Oracle</th><th>AR Oracle</th><th>Gap</th><th>Diff Diversity</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Math</td><td>0.7908</td><td>0.6973</td><td>+0.0935</td><td>0.0685</td></tr>
+            <tr><td>Code</td><td>0.7987</td><td>0.7637</td><td>+0.0349</td><td>0.0567</td></tr>
+            <tr><td>Logic</td><td>0.7811</td><td>0.7099</td><td>+0.0711</td><td>0.0601</td></tr>
+            <tr><td>Structured</td><td>0.7724</td><td>0.6732</td><td>+0.0992</td><td>0.0708</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top: 1rem;">
+        <h3>Oracle Gap Across k Values</h3>
+        <table>
+          <thead>
+            <tr><th>Domain</th><th>k=2</th><th>k=4</th><th>k=8</th><th>k=16</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Math</td><td>0.1127</td><td>0.0977</td><td>0.0935</td><td>0.0657</td></tr>
+            <tr><td>Code</td><td>0.0542</td><td>0.0645</td><td>0.0349</td><td>0.0290</td></tr>
+            <tr><td>Logic</td><td>0.0729</td><td>0.0579</td><td>0.0711</td><td>0.0394</td></tr>
+            <tr><td>Structured</td><td>0.1695</td><td>0.1313</td><td>0.0992</td><td>0.0541</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Findings -->
+  <div class="section">
+    <h2 class="section-title">Key Findings</h2>
+    <div class="finding-box">
+      <strong>Finding 1: Exploitation dominates in standard reasoning domains.</strong>
+      <p>For math (89.6%), code (75.9%), and logic (108.0%), the majority of the gain from arbitrary-order decoding comes from better utilization of existing solution patterns through bidirectional context, not from novel reasoning strategies.</p>
+    </div>
+    <div class="finding-box">
+      <strong>Finding 2: Structured text is the exception.</strong>
+      <p>Structured text shows only 48.0% exploitation, with a novelty gain of 0.0882 comparable to the exploitation gain of 0.0813. Rigid syntactic constraints (JSON, SQL, HTML) create genuine opportunities for non-sequential strategies.</p>
+    </div>
+    <div class="finding-box">
+      <strong>Finding 3: Gains vary substantially across mask fractions.</strong>
+      <p>At low masking (0.3), exploitation dominates everywhere. At high masking (0.7), novelty gains become more prominent, especially for math (exploitation fraction drops to -22.5%) and structured text (37.8%).</p>
+    </div>
+    <div class="finding-box">
+      <strong>Finding 4: Diffusion consistently achieves higher oracle accuracy.</strong>
+      <p>Best-of-k oracle analysis at k=8 shows diffusion advantages of +0.0349 (code) to +0.0992 (structured text) across all domains, indicating greater solution diversity.</p>
+    </div>
+  </div>
+
+  <!-- Correlation -->
+  <div class="section">
+    <h2 class="section-title">Correlation Analysis</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Order Sensitivity vs. Total Gain</h3>
+        <div class="chart-container"><canvas id="corrChart"></canvas></div>
+        <p style="text-align:center; margin-top:0.5rem; font-size:0.9rem; color:var(--text-light);">Pearson r = -0.586 (lower symmetry correlates with higher gain)</p>
+      </div>
+      <div class="card">
+        <h3>Correlation Summary</h3>
+        <table>
+          <thead>
+            <tr><th>Metric Pair</th><th>Pearson r</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Order Sensitivity vs. Total Gain</td><td>-0.586</td></tr>
+            <tr><td>Exploitation Fraction vs. Coverage Ratio</td><td>-0.014</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:1rem;">
+          <p style="font-size:0.9rem; color:var(--text-light);">Domains with less symmetric dependencies (lower order sensitivity ratio) tend to show larger total gains from diffusion decoding. However, the exploitation fraction is nearly uncorrelated with pattern coverage ratio.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== DATA =====
+const domains = ['Math', 'Code', 'Logic', 'Structured'];
+const domainColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'];
+
+const causalData = {
+  math: {exploit: 0.095635, novelty: 0.011111, total: 0.106746, diffAcc: 0.699008, arAcc: 0.592262, exploitFrac: 0.895911},
+  code: {exploit: 0.036597, novelty: 0.011634, total: 0.048231, diffAcc: 0.75119, arAcc: 0.702959, exploitFrac: 0.758784},
+  logic: {exploit: 0.078755, novelty: -0.005815, total: 0.07294, diffAcc: 0.734141, arAcc: 0.661201, exploitFrac: 1.079717},
+  structured: {exploit: 0.081319, novelty: 0.088225, total: 0.169544, diffAcc: 0.726602, arAcc: 0.557058, exploitFrac: 0.479631}
+};
+
+const maskData = {
+  math: {
+    '0.3': {exploitFrac: 0.729412, total: 0.059028, exploit: 0.043056, novelty: 0.015972},
+    '0.5': {exploitFrac: 0.895911, total: 0.106746, exploit: 0.095635, novelty: 0.011111},
+    '0.7': {exploitFrac: -0.224561, total: 0.056548, exploit: -0.012698, novelty: 0.069246}
+  },
+  code: {
+    '0.3': {exploitFrac: 1.820272, total: 0.031613, exploit: 0.057545, novelty: -0.025932},
+    '0.5': {exploitFrac: 0.758784, total: 0.048231, exploit: 0.036597, novelty: 0.011634},
+    '0.7': {exploitFrac: 1.139145, total: 0.024423, exploit: 0.027821, novelty: -0.003398}
+  },
+  logic: {
+    '0.3': {exploitFrac: 1.530672, total: 0.032147, exploit: 0.049206, novelty: -0.017059},
+    '0.5': {exploitFrac: 1.079717, total: 0.07294, exploit: 0.078755, novelty: -0.005815},
+    '0.7': {exploitFrac: 0.46229, total: 0.138168, exploit: 0.063874, novelty: 0.074294}
+  },
+  structured: {
+    '0.3': {exploitFrac: 0.541622, total: 0.126187, exploit: 0.068346, novelty: 0.057841},
+    '0.5': {exploitFrac: 0.479631, total: 0.169544, exploit: 0.081319, novelty: 0.088225},
+    '0.7': {exploitFrac: 0.378222, total: 0.158418, exploit: 0.059917, novelty: 0.098501}
+  }
+};
+
+const orderSensitivity = {
+  math: {ratio: 0.966937, std: 0.048058, fwd: 0.036359, bwd: 0.034937},
+  code: {ratio: 0.97678, std: 0.054057, fwd: 0.041746, bwd: 0.040742},
+  logic: {ratio: 0.867171, std: 0.150787, fwd: 0.03327, bwd: 0.02989},
+  structured: {ratio: 0.849555, std: 0.188961, fwd: 0.02785, bwd: 0.023208}
+};
+
+const coverage = {
+  math: {ar: 15.38, diff: 106911.05, ratio: 5383.75},
+  code: {ar: 20.00, diff: 713955.78, ratio: 32570.44},
+  logic: {ar: 15.88, diff: 78692.79, ratio: 4178.98},
+  structured: {ar: 12.75, diff: 18573.68, ratio: 1090.81}
+};
+
+const diversity = {
+  math:       {k: [2,4,8,16], diffOracle: [0.70496,0.745238,0.790774,0.790774], arOracle: [0.592262,0.64752,0.697321,0.725099], gap: [0.112698,0.097718,0.093452,0.065675]},
+  code:       {k: [2,4,8,16], diffOracle: [0.757143,0.773447,0.798657,0.798657], arOracle: [0.702959,0.708911,0.763731,0.769683], gap: [0.054184,0.064536,0.034926,0.028974]},
+  logic:      {k: [2,4,8,16], diffOracle: [0.734141,0.740391,0.781051,0.790666], arOracle: [0.661201,0.682443,0.709916,0.751296], gap: [0.07294,0.057948,0.071135,0.03937]},
+  structured: {k: [2,4,8,16], diffOracle: [0.726602,0.745832,0.772416,0.80813],  arOracle: [0.557058,0.61449,0.673229,0.754074],  gap: [0.169544,0.131342,0.099187,0.054056]}
+};
+
+const correlation = {
+  osSens: [0.966937, 0.97678, 0.867171, 0.849555],
+  totalGain: [0.106746, 0.048231, 0.07294, 0.169544]
+};
+
+// ===== CHARTS =====
+
+// Causal Attribution Stacked Bar
+new Chart(document.getElementById('causalChart'), {
+  type: 'bar',
+  data: {
+    labels: domains,
+    datasets: [
+      {label: 'Exploitation Gain', data: [causalData.math.exploit, causalData.code.exploit, causalData.logic.exploit, causalData.structured.exploit], backgroundColor: '#3b82f6'},
+      {label: 'Novelty Gain', data: [causalData.math.novelty, causalData.code.novelty, causalData.logic.novelty, causalData.structured.novelty], backgroundColor: '#ef4444'}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {legend: {position: 'top'}, tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(4)}}},
+    scales: {x: {stacked: true}, y: {stacked: true, title: {display: true, text: 'Gain'}}}
+  }
+});
+
+// Exploitation Fraction Horizontal Bar
+new Chart(document.getElementById('exploitFracChart'), {
+  type: 'bar',
+  data: {
+    labels: domains,
+    datasets: [{
+      label: 'Exploitation Fraction',
+      data: [causalData.math.exploitFrac*100, causalData.code.exploitFrac*100, causalData.logic.exploitFrac*100, causalData.structured.exploitFrac*100],
+      backgroundColor: domainColors
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: {display: false},
+      tooltip: {callbacks: {label: ctx => ctx.raw.toFixed(1) + '%'}}
+    },
+    scales: {
+      x: {title: {display: true, text: 'Exploitation %'}, min: 0, max: 120,
+        ticks: {callback: v => v + '%'}
+      }
+    }
+  }
+});
+
+// Mask Level Line Chart
+new Chart(document.getElementById('maskLevelChart'), {
+  type: 'line',
+  data: {
+    labels: ['0.3', '0.5', '0.7'],
+    datasets: [
+      {label: 'Math', data: [maskData.math['0.3'].exploitFrac*100, maskData.math['0.5'].exploitFrac*100, maskData.math['0.7'].exploitFrac*100], borderColor: '#3b82f6', backgroundColor: '#3b82f640', tension: 0.2, fill: false, pointRadius: 5},
+      {label: 'Code', data: [maskData.code['0.3'].exploitFrac*100, maskData.code['0.5'].exploitFrac*100, maskData.code['0.7'].exploitFrac*100], borderColor: '#f59e0b', backgroundColor: '#f59e0b40', tension: 0.2, fill: false, pointRadius: 5},
+      {label: 'Logic', data: [maskData.logic['0.3'].exploitFrac*100, maskData.logic['0.5'].exploitFrac*100, maskData.logic['0.7'].exploitFrac*100], borderColor: '#10b981', backgroundColor: '#10b98140', tension: 0.2, fill: false, pointRadius: 5},
+      {label: 'Structured', data: [maskData.structured['0.3'].exploitFrac*100, maskData.structured['0.5'].exploitFrac*100, maskData.structured['0.7'].exploitFrac*100], borderColor: '#8b5cf6', backgroundColor: '#8b5cf640', tension: 0.2, fill: false, pointRadius: 5}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {position: 'top'},
+      tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(1) + '%'}},
+      annotation: {
+        annotations: {
+          line50: {type: 'line', yMin: 50, yMax: 50, borderColor: '#94a3b8', borderDash: [6,4], borderWidth: 1,
+            label: {content: '50% threshold', display: true, position: 'end', font: {size: 10}, color: '#94a3b8'}}
+        }
+      }
+    },
+    scales: {
+      x: {title: {display: true, text: 'Mask Fraction'}},
+      y: {title: {display: true, text: 'Exploitation Fraction (%)'}, ticks: {callback: v => v + '%'}}
+    }
+  }
+});
+
+// Order Sensitivity Bar
+new Chart(document.getElementById('orderSensChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Code', 'Math', 'Logic', 'Structured'],
+    datasets: [{
+      label: 'Order Sensitivity Ratio',
+      data: [orderSensitivity.code.ratio, orderSensitivity.math.ratio, orderSensitivity.logic.ratio, orderSensitivity.structured.ratio],
+      backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6'],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {legend: {display: false}, tooltip: {callbacks: {label: ctx => 'Ratio: ' + ctx.raw.toFixed(4)}}},
+    scales: {y: {min: 0.7, max: 1.05, title: {display: true, text: 'Ratio (backward/forward)'}}}
+  }
+});
+
+// Forward vs Backward Grouped Bar
+new Chart(document.getElementById('fwdBwdChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Code', 'Math', 'Logic', 'Structured'],
+    datasets: [
+      {label: 'Forward Dep', data: [orderSensitivity.code.fwd, orderSensitivity.math.fwd, orderSensitivity.logic.fwd, orderSensitivity.structured.fwd], backgroundColor: '#3b82f6'},
+      {label: 'Backward Dep', data: [orderSensitivity.code.bwd, orderSensitivity.math.bwd, orderSensitivity.logic.bwd, orderSensitivity.structured.bwd], backgroundColor: '#ef4444'}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {legend: {position: 'top'}, tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(4)}}},
+    scales: {y: {title: {display: true, text: 'Mean Dependency Strength'}}}
+  }
+});
+
+// Coverage Chart (log scale)
+new Chart(document.getElementById('coverageChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Code', 'Math', 'Logic', 'Structured'],
+    datasets: [{
+      label: 'Coverage Ratio',
+      data: [coverage.code.ratio, coverage.math.ratio, coverage.logic.ratio, coverage.structured.ratio],
+      backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6']
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {legend: {display: false}, tooltip: {callbacks: {label: ctx => ctx.raw.toLocaleString() + 'x'}}},
+    scales: {y: {type: 'logarithmic', title: {display: true, text: 'Ratio (log scale)'}}}
+  }
+});
+
+// Oracle Grouped Bar
+new Chart(document.getElementById('oracleChart'), {
+  type: 'bar',
+  data: {
+    labels: domains,
+    datasets: [
+      {label: 'Diffusion Oracle', data: [0.790774, 0.798657, 0.781051, 0.772416], backgroundColor: '#3b82f6'},
+      {label: 'AR Oracle', data: [0.697321, 0.763731, 0.709916, 0.673229], backgroundColor: '#f59e0b'}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {legend: {position: 'top'}, tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(4)}}},
+    scales: {y: {min: 0.5, max: 0.9, title: {display: true, text: 'Oracle Accuracy'}}}
+  }
+});
+
+// Diversity Line Chart
+new Chart(document.getElementById('diversityChart'), {
+  type: 'line',
+  data: {
+    labels: ['2', '4', '8', '16'],
+    datasets: [
+      {label: 'Math', data: diversity.math.gap, borderColor: '#3b82f6', tension: 0.2, pointRadius: 5},
+      {label: 'Code', data: diversity.code.gap, borderColor: '#f59e0b', tension: 0.2, pointRadius: 5},
+      {label: 'Logic', data: diversity.logic.gap, borderColor: '#10b981', tension: 0.2, pointRadius: 5},
+      {label: 'Structured', data: diversity.structured.gap, borderColor: '#8b5cf6', tension: 0.2, pointRadius: 5}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {legend: {position: 'top'}, tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(4)}}},
+    scales: {
+      x: {title: {display: true, text: 'k (sample size)'}},
+      y: {title: {display: true, text: 'Oracle Gap (Diff - AR)'}}
+    }
+  }
+});
+
+// Correlation Scatter
+new Chart(document.getElementById('corrChart'), {
+  type: 'scatter',
+  data: {
+    datasets: [{
+      label: 'Domains',
+      data: domains.map((d, i) => ({x: correlation.osSens[i], y: correlation.totalGain[i]})),
+      backgroundColor: domainColors,
+      pointRadius: 10,
+      pointHoverRadius: 12
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {display: false},
+      tooltip: {callbacks: {label: ctx => domains[ctx.dataIndex] + ' (' + ctx.raw.x.toFixed(3) + ', ' + ctx.raw.y.toFixed(4) + ')'}}
+    },
+    scales: {
+      x: {title: {display: true, text: 'Order Sensitivity Ratio'}, min: 0.8, max: 1.02},
+      y: {title: {display: true, text: 'Total Gain'}, min: 0, max: 0.2}
+    }
+  }
+});
+
+// ===== TAB SWITCHING =====
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tabGroup = btn.parentElement;
+    const contentParent = tabGroup.parentElement;
+    tabGroup.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    contentParent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const target = contentParent.querySelector('#' + btn.dataset.tab);
+    if (target) target.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

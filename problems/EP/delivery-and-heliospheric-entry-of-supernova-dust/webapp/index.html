@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supernova Dust Delivery &amp; Heliospheric Entry</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0e27; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, #1a1a4e, #2d1b69); padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.5rem; }
+.header p { color: #aab; font-size: 1rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.stat-card { background: #151837; border-radius: 12px; padding: 1.2rem; border: 1px solid #2a2f5a; }
+.stat-card .label { color: #8890b5; font-size: 0.85rem; margin-bottom: 0.3rem; }
+.stat-card .value { color: #fff; font-size: 1.5rem; font-weight: 700; }
+.stat-card .unit { color: #6670a0; font-size: 0.75rem; }
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; margin: 1.5rem 0; }
+.chart-box { background: #151837; border-radius: 12px; padding: 1.5rem; border: 1px solid #2a2f5a; }
+.chart-box h3 { color: #c0c8f0; margin-bottom: 1rem; font-size: 1.1rem; }
+canvas { max-height: 350px; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Supernova Dust Delivery &amp; Heliospheric Entry</h1>
+<p>Computational analysis of radionuclide transport from nearby supernovae to Earth</p>
+</div>
+<div class="container">
+<div class="stats-grid">
+<div class="stat-card">
+<div class="label">ISM Survival Rate</div>
+<div class="value">0.460</div>
+<div class="unit">fraction of grains surviving ISM traversal</div>
+</div>
+<div class="stat-card">
+<div class="label">Helio Penetration</div>
+<div class="value">0.697</div>
+<div class="unit">mean heliospheric penetration efficiency</div>
+</div>
+<div class="stat-card">
+<div class="label">Total Efficiency</div>
+<div class="value">0.321</div>
+<div class="unit">combined delivery efficiency</div>
+</div>
+<div class="stat-card">
+<div class="label">Optimal Grain Size</div>
+<div class="value">0.391</div>
+<div class="unit">microns</div>
+</div>
+<div class="stat-card">
+<div class="label">Fe-60 Flux</div>
+<div class="value">7.75e15</div>
+<div class="unit">atoms/cm&sup2;/Myr</div>
+</div>
+<div class="stat-card">
+<div class="label">Fe60/Pu244 Ratio</div>
+<div class="value">90.7</div>
+<div class="unit">decay-corrected at Earth</div>
+</div>
+</div>
+
+<div class="charts-grid">
+<div class="chart-box">
+<h3>Grain Size Dependent Efficiency</h3>
+<canvas id="chartEfficiency"></canvas>
+</div>
+<div class="chart-box">
+<h3>Heliosphere Compression Effect</h3>
+<canvas id="chartHelio"></canvas>
+</div>
+<div class="chart-box">
+<h3>Monte Carlo Flux Distribution</h3>
+<canvas id="chartMC"></canvas>
+</div>
+<div class="chart-box">
+<h3>Deposition Flux vs Distance</h3>
+<canvas id="chartDistance"></canvas>
+</div>
+</div>
+</div>
+
+<script>
+Chart.defaults.color = '#aab';
+Chart.defaults.borderColor = '#2a2f5a';
+
+// Grain size efficiency
+const grainSizes = [0.01,0.013,0.017,0.022,0.028,0.036,0.046,0.060,0.077,0.100,
+  0.127,0.164,0.212,0.274,0.354,0.457,0.590,0.762,0.985,1.000];
+const ismSurvival = [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1];
+const helioPen = [0.010,0.010,0.010,0.010,0.010,0.010,0.010,0.010,0.010,0.010,
+  0.495,0.559,0.618,0.671,0.717,0.757,0.790,0.819,0.843,0.848];
+const totalEff = ismSurvival.map((v,i) => v * helioPen[i]);
+
+new Chart(document.getElementById('chartEfficiency'), {
+  type: 'line',
+  data: {
+    labels: grainSizes.map(s => s.toFixed(3)),
+    datasets: [
+      { label: 'ISM Survival', data: ismSurvival, borderColor: '#4488ff', tension: 0.3, pointRadius: 2 },
+      { label: 'Helio Penetration', data: helioPen, borderColor: '#ff6644', tension: 0.3, pointRadius: 2 },
+      { label: 'Total Efficiency', data: totalEff, borderColor: '#44ff88', borderWidth: 3, tension: 0.3, pointRadius: 2 }
+    ]
+  },
+  options: { responsive: true, scales: { y: { min: 0, max: 1.05, title: { display: true, text: 'Efficiency' } },
+    x: { title: { display: true, text: 'Grain Radius (um)' } } } }
+});
+
+// Heliosphere scan
+new Chart(document.getElementById('chartHelio'), {
+  type: 'bar',
+  data: {
+    labels: ['10 AU', '30 AU', '60 AU', '90 AU', '122 AU'],
+    datasets: [{ label: 'Mean Penetration Efficiency',
+      data: [0.495, 0.559, 0.595, 0.615, 0.629],
+      backgroundColor: ['#d62728','#ff7f0e','#2ca02c','#1f77b4','#9467bd'] }]
+  },
+  options: { responsive: true, scales: { y: { min: 0, max: 1.0, title: { display: true, text: 'Efficiency' } } },
+    plugins: { legend: { display: false } } }
+});
+
+// Monte Carlo histogram
+const mcFluxes = [];
+for (let i = 0; i < 100; i++) {
+  const d = 30 + Math.random() * 120;
+  const nH = Math.pow(10, -0.5 + Math.random() * 1.5);
+  const base = 7.75e15 * Math.pow(60/d, 2) * (0.46 * Math.exp(-nH*0.1));
+  mcFluxes.push(Math.log10(Math.max(base, 1)));
+}
+const bins = {};
+mcFluxes.forEach(v => { const b = Math.floor(v); bins[b] = (bins[b]||0)+1; });
+const binLabels = Object.keys(bins).sort((a,b)=>a-b);
+
+new Chart(document.getElementById('chartMC'), {
+  type: 'bar',
+  data: {
+    labels: binLabels.map(b => 'log ' + b),
+    datasets: [{ label: 'Count', data: binLabels.map(b => bins[b]),
+      backgroundColor: '#4488cc' }]
+  },
+  options: { responsive: true, plugins: { legend: { display: false } },
+    scales: { y: { title: { display: true, text: 'Count' } },
+      x: { title: { display: true, text: 'log10 Flux' } } } }
+});
+
+// Distance dependence
+const distances = [20,32.9,45.7,58.6,71.4,84.3,97.1,110,122.9,135.7,148.6,161.4,174.3,187.1,200];
+const fluxes = distances.map(d => 7.75e15 * Math.pow(60/d,2) * 0.321);
+
+new Chart(document.getElementById('chartDistance'), {
+  type: 'line',
+  data: {
+    labels: distances.map(d => d.toFixed(0)),
+    datasets: [{ label: 'Fe-60 Flux', data: fluxes.map(f => f.toExponential(2)),
+      borderColor: '#ff8844', tension: 0.3, fill: true,
+      backgroundColor: 'rgba(255,136,68,0.1)' }]
+  },
+  options: { responsive: true, scales: {
+    y: { type: 'logarithmic', title: { display: true, text: 'Flux (atoms/cm2/Myr)' } },
+    x: { title: { display: true, text: 'Distance (pc)' } } } }
+});
+</script>
+</body>
+</html>

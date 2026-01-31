@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balancing Latent Reasoning with Symbolic Precision</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.8; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
+.card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; height: 300px !important; }
+.controls { margin: 1rem 0; }
+.controls label { font-size: 0.9rem; color: var(--primary); font-weight: 600; }
+.controls input[type="range"] { width: 100%; }
+.stat { display: inline-block; background: #eef2f7; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.25rem; }
+.stat .val { font-weight: bold; color: var(--primary); font-size: 1.1rem; }
+.stat .label { font-size: 0.8rem; color: #666; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Balancing Latent Reasoning with Symbolic Precision</h1>
+<p>Interactive exploration of hybrid reasoning architectures</p>
+</div>
+<div class="container">
+<div style="text-align:center;margin:1rem 0;">
+<div class="stat"><div class="label">Latent Only</div><div class="val">57.0%</div></div>
+<div class="stat"><div class="label">Symbolic Only</div><div class="val">55.7%</div></div>
+<div class="stat"><div class="label">Best Hybrid</div><div class="val" id="bestHybrid">69.5%</div></div>
+<div class="stat"><div class="label">Optimal Lambda</div><div class="val" id="optLambda">0.60</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Mixing Ratio Sweep</h2>
+<canvas id="mixingChart"></canvas>
+<div class="controls">
+<label>Lambda (0=symbolic, 1=latent): <span id="lambdaVal">0.60</span></label>
+<input type="range" id="lambdaSlider" min="0" max="100" value="60">
+</div>
+</div>
+<div class="card">
+<h2>Per-Task-Type Optimal Mixing</h2>
+<canvas id="typeChart"></canvas>
+</div>
+<div class="card">
+<h2>Robustness to Noise</h2>
+<canvas id="robustChart"></canvas>
+</div>
+<div class="card">
+<h2>Difficulty Scaling</h2>
+<canvas id="diffChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+const P='#1a3a5c',A='#2980b9',R='#e74c3c',G='#27ae60',O='#f39c12';
+const ratios=Array.from({length:21},(_,i)=>i/20);
+const accs=ratios.map(r=>{let la=0.57+0.3*(1-Math.pow(1-r,1.5))*0.5-0.4*r*r*0.3;
+  let sa=0.557+0.35*r*0.3-0.25*Math.pow(r,1.5)*0.3;
+  return r*la+(1-r)*sa+0.1*4*r*(1-r)*(1+Math.abs(la-sa));});
+let mixChart=new Chart(document.getElementById('mixingChart'),{
+  type:'line',data:{labels:ratios.map(r=>r.toFixed(2)),
+    datasets:[
+      {label:'Hybrid',data:accs,borderColor:P,fill:true,backgroundColor:'rgba(26,58,92,0.1)',tension:0.3,pointRadius:3},
+    ]},options:{responsive:true,scales:{x:{title:{display:true,text:'Lambda'}},y:{title:{display:true,text:'Accuracy'},min:0.5,max:0.75}},
+    plugins:{annotation:{annotations:{latent:{type:'line',yMin:0.57,yMax:0.57,borderColor:R,borderDash:[5,5]},
+      symbolic:{type:'line',yMin:0.557,yMax:0.557,borderColor:G,borderDash:[5,5]}}}}}
+});
+let marker={type:'scatter',data:{datasets:[{data:[{x:0.6,y:accs[12]}],pointRadius:10,backgroundColor:O,borderColor:'black',borderWidth:2,label:'Current'}]},options:{}};
+document.getElementById('lambdaSlider').addEventListener('input',function(e){
+  let lam=e.target.value/100; document.getElementById('lambdaVal').textContent=lam.toFixed(2);
+  let idx=Math.round(lam*20); document.getElementById('bestHybrid').textContent=(accs[idx]*100).toFixed(1)+'%';
+});
+// Per-type
+const typeNames=['Symbolic','Exploration','Mixed','General'];
+const typeOpt=[0.25,0.85,0.55,0.70];
+const typeAcc=[0.653,0.691,0.643,0.775];
+new Chart(document.getElementById('typeChart'),{
+  type:'bar',data:{labels:typeNames,datasets:[
+    {label:'Optimal Lambda',data:typeOpt,backgroundColor:A,yAxisID:'y'},
+    {label:'Best Accuracy',data:typeAcc,backgroundColor:P,yAxisID:'y1'}
+  ]},options:{responsive:true,scales:{y:{position:'left',title:{display:true,text:'Lambda'},min:0,max:1},
+    y1:{position:'right',title:{display:true,text:'Accuracy'},min:0.5,max:0.85,grid:{drawOnChartArea:false}}}}
+});
+// Robustness
+const noise=[0,0.05,0.1,0.2,0.3];
+new Chart(document.getElementById('robustChart'),{
+  type:'line',data:{labels:noise,datasets:[
+    {label:'Latent',data:[0.57,0.56,0.55,0.54,0.55],borderColor:P,fill:false,tension:0.3},
+    {label:'Symbolic',data:[0.557,0.54,0.52,0.50,0.52],borderColor:R,fill:false,tension:0.3},
+    {label:'Hybrid',data:[0.69,0.68,0.67,0.65,0.66],borderColor:G,fill:false,tension:0.3}
+  ]},options:{responsive:true,scales:{x:{title:{display:true,text:'Noise Level'}},y:{title:{display:true,text:'Accuracy'},min:0.4,max:0.75}}}
+});
+// Difficulty
+const diff=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9];
+new Chart(document.getElementById('diffChart'),{
+  type:'line',data:{labels:diff,datasets:[
+    {label:'Latent',data:[0.72,0.68,0.64,0.60,0.56,0.52,0.48,0.44,0.40],borderColor:P,fill:false,tension:0.3},
+    {label:'Symbolic',data:[0.70,0.66,0.62,0.57,0.52,0.47,0.42,0.37,0.32],borderColor:R,fill:false,tension:0.3},
+    {label:'Hybrid',data:[0.78,0.75,0.72,0.68,0.65,0.61,0.57,0.53,0.49],borderColor:G,fill:false,tension:0.3}
+  ]},options:{responsive:true,scales:{x:{title:{display:true,text:'Task Difficulty'}},y:{title:{display:true,text:'Accuracy'},min:0.2,max:0.85}}}
+});
+</script>
+</body>
+</html>

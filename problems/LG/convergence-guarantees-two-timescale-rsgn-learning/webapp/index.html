@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two-Timescale RSGN Convergence</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#2c3e50;--red:#e74c3c;--green:#27ae60;--purple:#8e44ad;--orange:#e67e22;--gray:#95a5a6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;margin-bottom:.5rem}
+header p{opacity:.85;font-size:.9rem;max-width:700px;margin:0 auto}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.controls{background:var(--card);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;align-items:end}
+.cg{display:flex;flex-direction:column;gap:.3rem}
+.cg label{font-size:.85rem;font-weight:600;color:var(--primary)}
+.cg input[type=range]{width:100%;accent-color:var(--accent)}
+.cg .v{font-size:.8rem;color:var(--gray);text-align:right}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:10px;padding:1.25rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h3{font-size:.95rem;color:var(--primary);margin-bottom:.75rem;border-bottom:2px solid var(--accent);padding-bottom:.4rem}
+canvas{width:100%!important;max-height:310px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.06);border-top:3px solid var(--accent)}
+.stat .n{font-size:1.4rem;font-weight:700;color:var(--primary)}
+.stat .l{font-size:.72rem;color:var(--gray);margin-top:.2rem}
+</style>
+</head>
+<body>
+<header>
+<h1>Convergence of Two-Timescale RSGN Learning</h1>
+<p>Explore how timescale separation, Hebbian strength, and decay rate affect convergence of the coupled gradient descent + Hebbian structural learning system.</p>
+</header>
+<div class="container">
+<div class="controls">
+<div class="cg"><label>Epsilon (timescale ratio)</label><input type="range" id="eps" min="0.001" max="0.5" step="0.005" value="0.01"><div class="v" id="epsV">0.010</div></div>
+<div class="cg"><label>Hebbian Strength</label><input type="range" id="heb" min="0.05" max="1.0" step="0.05" value="0.3"><div class="v" id="hebV">0.30</div></div>
+<div class="cg"><label>Decay Rate</label><input type="range" id="dec" min="0.05" max="1.0" step="0.05" value="0.5"><div class="v" id="decV">0.50</div></div>
+<div class="cg"><label>Init Radius</label><input type="range" id="rad" min="0.1" max="0.92" step="0.05" value="0.5"><div class="v" id="radV">0.50</div></div>
+</div>
+<div class="stats">
+<div class="stat"><div class="n" id="sConv">--</div><div class="l">Converged</div></div>
+<div class="stat"><div class="n" id="sContr">--</div><div class="l">Contraction Rate</div></div>
+<div class="stat"><div class="n" id="sTopo">--</div><div class="l">Topology Changes</div></div>
+<div class="stat"><div class="n" id="sCF">--</div><div class="l">Max Conformal Factor</div></div>
+</div>
+<div class="grid">
+<div class="card"><h3>Loss Trajectory (Fast Lyapunov)</h3><canvas id="c1"></canvas></div>
+<div class="card"><h3>Affinity Lyapunov (Slow)</h3><canvas id="c2"></canvas></div>
+<div class="card"><h3>Contraction Regime Map</h3><canvas id="c3"></canvas></div>
+<div class="card"><h3>Epsilon Sensitivity</h3><canvas id="c4"></canvas></div>
+</div>
+</div>
+<script>
+function rng(s){let m=s;return()=>{m=Math.imul(48271,m)%2147483647;return(m&2147483647)/2147483648}}
+function simTrajectory(eps,heb,dec,rad,steps=150){
+  const r=rng(42),stable=dec>heb*0.8;
+  const loss=[],aff=[],topo=[];let L=0.15+rad*0.05,A=0.3,tc=0;
+  const cf=2/(1-rad*rad);
+  for(let t=0;t<steps;t++){
+    const gradScale=1/(cf*cf);
+    const fastStep=0.005*gradScale;
+    L=Math.max(0.001,L-fastStep*(0.5+r()*0.3)+(stable?0:eps*heb*0.02*r()));
+    const corrMax=0.5+r()*0.2;
+    const contraction=heb*corrMax-dec;
+    A=Math.max(0.01,A+eps*(heb*corrMax*0.1-dec*A*0.3)+r()*0.001);
+    const change=r()<(stable?0.02*Math.exp(-t/30):0.05)?Math.floor(r()*3):0;
+    tc+=change;
+    loss.push(L);aff.push(A);topo.push(tc);
+  }
+  const finalStd=Math.abs(loss[steps-1]-loss[steps-11]);
+  return{loss,aff,topo,converged:stable&&finalStd<0.01,contraction:heb*0.5-dec,topoChanges:tc,cf};
+}
+function simRegimeMap(){
+  const hebs=[],decs=[],data=[];
+  for(let h=0.05;h<=1.0;h+=0.1){
+    for(let d=0.05;d<=1.0;d+=0.1){
+      hebs.push(h);decs.push(d);
+      data.push({x:h,y:d,v:d>h*0.8?1:0});
+    }
+  }
+  return data;
+}
+function simEpsSensitivity(heb,dec){
+  const epsilons=[0.001,0.005,0.01,0.02,0.05,0.1,0.2,0.3,0.5];
+  const losses=[],converged=[];
+  for(const e of epsilons){
+    const s=simTrajectory(e,heb,dec,0.5,100);
+    losses.push(s.loss[99]);
+    converged.push(s.converged?1:0);
+  }
+  return{epsilons:epsilons.map(e=>e.toFixed(3)),losses,converged};
+}
+let charts={};
+function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg)}
+function update(){
+  const eps=+document.getElementById('eps').value;
+  const heb=+document.getElementById('heb').value;
+  const dec=+document.getElementById('dec').value;
+  const rad=+document.getElementById('rad').value;
+  document.getElementById('epsV').textContent=eps.toFixed(3);
+  document.getElementById('hebV').textContent=heb.toFixed(2);
+  document.getElementById('decV').textContent=dec.toFixed(2);
+  document.getElementById('radV').textContent=rad.toFixed(2);
+  const d=simTrajectory(eps,heb,dec,rad);
+  const steps=Array.from({length:150},(_,i)=>i);
+  document.getElementById('sConv').textContent=d.converged?'YES':'NO';
+  document.getElementById('sConv').style.color=d.converged?'var(--green)':'var(--red)';
+  document.getElementById('sContr').textContent=d.contraction.toFixed(3);
+  document.getElementById('sContr').style.color=d.contraction<0?'var(--green)':'var(--red)';
+  document.getElementById('sTopo').textContent=d.topoChanges;
+  document.getElementById('sCF').textContent=d.cf.toFixed(1);
+  mk('c1',{type:'line',data:{labels:steps,datasets:[
+    {label:'Loss',data:d.loss,borderColor:'#2980b9',backgroundColor:'#2980b933',fill:true,tension:.3,pointRadius:0,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Loss'}}}}});
+  mk('c2',{type:'line',data:{labels:steps,datasets:[
+    {label:'||A||_F^2/2',data:d.aff,borderColor:'#8e44ad',backgroundColor:'#8e44ad33',fill:true,tension:.3,pointRadius:0,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Affinity Lyapunov'}}}}});
+  const regime=simRegimeMap();
+  const convPts=regime.filter(p=>p.v===1),divPts=regime.filter(p=>p.v===0);
+  mk('c3',{type:'scatter',data:{datasets:[
+    {label:'Convergent',data:convPts.map(p=>({x:p.x,y:p.y})),backgroundColor:'#27ae6099',pointRadius:6},
+    {label:'Divergent',data:divPts.map(p=>({x:p.x,y:p.y})),backgroundColor:'#e74c3c99',pointRadius:6},
+    {label:'Current',data:[{x:heb,y:dec}],backgroundColor:'#f1c40f',borderColor:'#000',borderWidth:2,pointRadius:10,pointStyle:'star'}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,font:{size:10}}}},scales:{x:{title:{display:true,text:'Hebbian Strength'},min:0,max:1.1},y:{title:{display:true,text:'Decay Rate'},min:0,max:1.1}}}});
+  const ed=simEpsSensitivity(heb,dec);
+  mk('c4',{type:'bar',data:{labels:ed.epsilons,datasets:[
+    {label:'Final Loss',data:ed.losses,backgroundColor:ed.converged.map(c=>c?'#2980b9cc':'#e74c3ccc')}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Epsilon'}},y:{title:{display:true,text:'Final Loss'}}}}});
+}
+document.querySelectorAll('input').forEach(e=>e.addEventListener('input',update));
+update();
+</script>
+</body>
+</html>

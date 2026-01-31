@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tarauaca M~6 Earthquake Impact Assessment</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0a1628;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a2a3e,#0d1b2a);padding:24px;text-align:center;border-bottom:2px solid #1b4332}
+h1{font-size:1.5rem;color:#52b788;margin-bottom:8px}
+.subtitle{color:#a0a0a0;font-size:0.9rem}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
+.card{background:#1a2a3e;border-radius:12px;padding:20px;border:1px solid #1b4332}
+.card h3{color:#52b788;margin-bottom:12px}
+.full-width{grid-column:1/-1}
+.chart-container{position:relative;height:300px}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1b433240}
+.stat-label{color:#a0a0a0;font-size:0.9rem}
+.stat-value{color:#40916c;font-weight:600}
+.verdict{background:#0d1b2a;padding:16px;border-radius:8px;margin-top:12px;border-left:4px solid #d00000}
+.verdict h4{color:#d00000;margin-bottom:8px}
+.slider-group{margin:12px 0}
+.slider-group label{display:block;margin-bottom:4px;font-size:0.9rem}
+.slider-group input{width:100%}
+.highlight{color:#ffd60a;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>M~6 Earthquake Geomorphological Impact: Tarauaca Fault</h1>
+<p class="subtitle">Can deep earthquakes explain observed landscape transformations in Acre, Brazil?</p>
+</div>
+<div class="container">
+<div class="grid">
+<div class="card">
+<h3>Single Event (M6.0, depth=580 km)</h3>
+<div class="stat-row"><span class="stat-label">PGA at 50 km</span><span class="stat-value">0.012 g</span></div>
+<div class="stat-row"><span class="stat-label">MMI Intensity</span><span class="stat-value">3.5 (Weak)</span></div>
+<div class="stat-row"><span class="stat-label">Landslide Displacement</span><span class="stat-value">0.00 cm</span></div>
+<div class="stat-row"><span class="stat-label">Settlement</span><span class="stat-value">0.62 cm</span></div>
+<div class="stat-row"><span class="stat-label">Liquefaction</span><span class="stat-value" style="color:#d00000">Not Triggered</span></div>
+<div class="stat-row"><span class="stat-label">Impact Score</span><span class="stat-value">0.006 / 1.0</span></div>
+<div class="verdict">
+<h4>Conclusion</h4>
+<p>Individual M~6 deep earthquakes are <strong>INSUFFICIENT</strong> to explain observed geomorphological transformations.</p>
+<p style="margin-top:8px;font-size:0.85rem">Min. magnitude for >5cm displacement: <span class="highlight">M 7.4</span></p>
+</div>
+</div>
+<div class="card">
+<h3>Monte Carlo (5,000 simulations)</h3>
+<div class="stat-row"><span class="stat-label">Mean PGA</span><span class="stat-value">0.013 g</span></div>
+<div class="stat-row"><span class="stat-label">Mean Displacement</span><span class="stat-value">0.69 cm</span></div>
+<div class="stat-row"><span class="stat-label">Liquefaction Prob.</span><span class="stat-value">0%</span></div>
+<div class="stat-row"><span class="stat-label">Signif. Impact Prob.</span><span class="stat-value">0%</span></div>
+<div class="stat-row"><span class="stat-label">Cumul. (50 events)</span><span class="stat-value">30.3 cm</span></div>
+<div class="stat-row"><span class="stat-label">Recurrence</span><span class="stat-value">~100 yr</span></div>
+<div class="stat-row"><span class="stat-label">Years for 1m change</span><span class="stat-value">~16,000 yr</span></div>
+</div>
+<div class="card full-width">
+<h3>PGA vs Distance</h3>
+<div class="chart-container"><canvas id="pgaChart"></canvas></div>
+</div>
+<div class="card">
+<h3>PGA vs Magnitude (at 50 km)</h3>
+<div class="chart-container"><canvas id="magChart"></canvas></div>
+</div>
+<div class="card">
+<h3>Interactive: Magnitude Explorer</h3>
+<div class="slider-group">
+<label>Magnitude: <span id="magVal">6.0</span></label>
+<input type="range" id="magSlider" min="4.5" max="8.0" step="0.1" value="6.0">
+</div>
+<div id="dynResults">
+<div class="stat-row"><span class="stat-label">PGA</span><span class="stat-value" id="dynPGA">0.012 g</span></div>
+<div class="stat-row"><span class="stat-label">Displacement</span><span class="stat-value" id="dynDisp">0.62 cm</span></div>
+<div class="stat-row"><span class="stat-label">Geomorphic Impact</span><span class="stat-value" id="dynImpact">Negligible</span></div>
+</div>
+</div>
+</div>
+</div>
+<script>
+const dist=[];for(let i=10;i<=500;i+=5)dist.push(i);
+const pga=dist.map(d=>{const R=Math.sqrt(d*d+580*580);return Math.exp(-2.5+1.2*6-1.7*Math.log(R)+0.003*580)});
+new Chart(document.getElementById('pgaChart'),{type:'line',data:{labels:dist,datasets:[
+{label:'PGA (M6, 580km)',data:pga,borderColor:'#52b788',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+{label:'Landslide threshold',data:dist.map(()=>0.05),borderColor:'#ffd60a',borderWidth:1,borderDash:[5,5],pointRadius:0},
+{label:'Liquefaction threshold',data:dist.map(()=>0.1),borderColor:'#d00000',borderWidth:1,borderDash:[5,5],pointRadius:0}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance [km]',color:'#a0a0a0'},ticks:{color:'#a0a0a0',maxTicksLimit:10},grid:{color:'#1b433230'}},y:{type:'logarithmic',title:{display:true,text:'PGA [g]',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#1b433230'}}},plugins:{legend:{labels:{color:'#e0e0e0'}}}}});
+
+const mags=[];for(let m=4.5;m<=7.5;m+=0.25)mags.push(m);
+const pgaM=mags.map(M=>{const R=Math.sqrt(50*50+580*580);return Math.exp(-2.5+1.2*M-1.7*Math.log(R)+0.003*580)});
+new Chart(document.getElementById('magChart'),{type:'bar',data:{labels:mags.map(m=>m.toFixed(1)),datasets:[{label:'PGA [g]',data:pgaM,backgroundColor:pgaM.map(p=>p>0.05?'#d00000':'#52b788'),borderWidth:1,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{type:'logarithmic',title:{display:true,text:'PGA [g]',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#1b433230'}},x:{title:{display:true,text:'Magnitude',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#1b433230'}}},plugins:{legend:{display:false}}}});
+
+document.getElementById('magSlider').addEventListener('input',function(){
+const M=parseFloat(this.value);
+document.getElementById('magVal').textContent=M.toFixed(1);
+const R=Math.sqrt(50*50+580*580);
+const p=Math.exp(-2.5+1.2*M-1.7*Math.log(R)+0.003*580);
+document.getElementById('dynPGA').textContent=p.toFixed(4)+' g';
+const d=p>0.05?0.5*p*100*(M/6)**2+10:0.5*p*100*(M/6)**2;
+document.getElementById('dynDisp').textContent=d.toFixed(2)+' cm';
+document.getElementById('dynImpact').textContent=d>10?'Significant':d>1?'Minor':'Negligible';
+document.getElementById('dynImpact').style.color=d>10?'#d00000':d>1?'#ffd60a':'#52b788';
+});
+</script>
+</body>
+</html>

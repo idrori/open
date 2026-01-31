@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robustness of Alignment Pretraining Under Advanced Post-Training</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#222;--muted:#666;--border:#dde3ea}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;max-width:900px;margin:0 auto}
+header p{opacity:.85;margin-top:.5rem;font-size:.95rem}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+.card{background:var(--card);border-radius:10px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);border:1px solid var(--border)}
+.card h2{font-size:1.1rem;color:var(--primary);margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+.stat-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--bg);border-radius:8px;padding:1rem 1.25rem;flex:1;min-width:140px;text-align:center}
+.stat .val{font-size:1.6rem;font-weight:700;color:var(--accent)}
+.stat .lbl{font-size:.78rem;color:var(--muted);margin-top:.25rem}
+canvas{max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:.5rem .75rem;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--primary);color:#fff;font-weight:600}
+tr:hover{background:#f0f4f8}
+</style>
+</head>
+<body>
+<header>
+<h1>Robustness of Alignment Pretraining Under Advanced Post-Training</h1>
+<p>Do RLVR, Reasoning, Deliberative, and Constitutional AI methods preserve the safety gap?</p>
+</header>
+<div class="container">
+<div class="stat-row">
+<div class="stat"><div class="val">30</div><div class="lbl">Model Configurations</div></div>
+<div class="stat"><div class="val">76-83%</div><div class="lbl">Gap Retained (7B)</div></div>
+<div class="stat"><div class="val">&lt;1.1%</div><div class="lbl">Alignment Tax</div></div>
+<div class="stat"><div class="val">5</div><div class="lbl">Post-Training Methods</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Safety Scores: AP vs NoAP (7B Scale)</h2>
+<canvas id="safetyChart"></canvas>
+</div>
+<div class="card">
+<h2>Retention Ratios (7B Scale)</h2>
+<canvas id="retentionChart"></canvas>
+</div>
+<div class="card">
+<h2>Safety Gap Across Scales</h2>
+<canvas id="scaleChart"></canvas>
+</div>
+<div class="card">
+<h2>Alignment Tax Across Methods &amp; Scales</h2>
+<canvas id="taxChart"></canvas>
+</div>
+</div>
+<div class="card" style="margin-bottom:1.5rem">
+<h2>Robustness Deltas (7B) -- Gap Reduction vs. SFT+DPO Baseline</h2>
+<canvas id="deltaChart" style="max-height:280px"></canvas>
+</div>
+<div class="card">
+<h2>Method Summary Table (7B Scale)</h2>
+<table>
+<thead><tr><th>Method</th><th>AP Safety</th><th>NoAP Safety</th><th>Safety Gap</th><th>Cap. Gap</th><th>Retention</th></tr></thead>
+<tbody>
+<tr><td>SFT+DPO</td><td>0.7801</td><td>0.5792</td><td>0.2009</td><td>-0.0098</td><td>--</td></tr>
+<tr><td>RLVR</td><td>0.8229</td><td>0.6635</td><td>0.1594</td><td>-0.0096</td><td>0.7934</td></tr>
+<tr><td>Reasoning-PT</td><td>0.8165</td><td>0.6505</td><td>0.1660</td><td>-0.0097</td><td>0.8263</td></tr>
+<tr><td>Deliberative</td><td>0.8404</td><td>0.6869</td><td>0.1535</td><td>-0.0100</td><td>0.7641</td></tr>
+<tr><td>CAI</td><td>0.8492</td><td>0.6965</td><td>0.1527</td><td>-0.0103</td><td>0.7601</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<script>
+const methods=['SFT+DPO','RLVR','Reasoning-PT','Deliberative','CAI'];
+const accent='#2980b9',primary='#1a3a5c';
+new Chart(document.getElementById('safetyChart'),{type:'bar',data:{labels:methods,datasets:[{label:'AP Safety',data:[0.7801,0.8229,0.8165,0.8404,0.8492],backgroundColor:'#2980b9'},{label:'NoAP Safety',data:[0.5792,0.6635,0.6505,0.6869,0.6965],backgroundColor:'#e74c3c'}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:false,min:0.5,max:0.9,title:{display:true,text:'Safety Score'}}}}});
+new Chart(document.getElementById('retentionChart'),{type:'bar',data:{labels:['RLVR','Reasoning-PT','Deliberative','CAI'],datasets:[{label:'Retention Ratio',data:[0.7934,0.8263,0.7641,0.7601],backgroundColor:['#3498db','#2ecc71','#e67e22','#9b59b6'],borderRadius:6}]},options:{responsive:true,indexAxis:'horizontal',plugins:{legend:{display:false}},scales:{y:{min:0.7,max:0.85,title:{display:true,text:'Retention Ratio'}}}}});
+const scales=['1B','7B','13B'];
+new Chart(document.getElementById('scaleChart'),{type:'line',data:{labels:scales,datasets:[{label:'SFT+DPO',data:[0.164,0.2009,0.2158],borderColor:'#1a3a5c',fill:false,tension:.3},{label:'RLVR',data:[0.124,0.1594,0.1765],borderColor:'#2980b9',fill:false,tension:.3},{label:'Reasoning-PT',data:[0.131,0.166,0.1832],borderColor:'#27ae60',fill:false,tension:.3},{label:'Deliberative',data:[0.1177,0.1535,0.1703],borderColor:'#e67e22',fill:false,tension:.3},{label:'CAI',data:[0.117,0.1527,0.1693],borderColor:'#8e44ad',fill:false,tension:.3}]},options:{responsive:true,scales:{y:{title:{display:true,text:'Safety Alignment Gap'}}}}});
+const taxData={labels:scales,datasets:[{label:'SFT+DPO',data:[-0.0082,-0.0098,-0.0108],borderColor:'#1a3a5c',fill:false},{label:'RLVR',data:[-0.0084,-0.0096,-0.0102],borderColor:'#2980b9',fill:false},{label:'Reasoning-PT',data:[-0.007,-0.0097,-0.0095],borderColor:'#27ae60',fill:false},{label:'Deliberative',data:[-0.0087,-0.01,-0.0112],borderColor:'#e67e22',fill:false},{label:'CAI',data:[-0.0082,-0.0103,-0.0107],borderColor:'#8e44ad',fill:false}]};
+new Chart(document.getElementById('taxChart'),{type:'line',data:taxData,options:{responsive:true,scales:{y:{title:{display:true,text:'Alignment Tax (capability cost)'}}}}});
+new Chart(document.getElementById('deltaChart'),{type:'bar',data:{labels:['ToxiGen','TruthfulQA','BBQ','Safety Avg'],datasets:[{label:'RLVR',data:[-0.0428,-0.04,-0.0416,-0.0415],backgroundColor:'#3498db'},{label:'Reasoning-PT',data:[-0.0315,-0.0413,-0.0318,-0.0349],backgroundColor:'#2ecc71'},{label:'Deliberative',data:[-0.0508,-0.0395,-0.0517,-0.0474],backgroundColor:'#e67e22'},{label:'CAI',data:[-0.0516,-0.0415,-0.0513,-0.0482],backgroundColor:'#9b59b6'}]},options:{responsive:true,scales:{y:{title:{display:true,text:'Delta (gap reduction)'}}}}});
+</script>
+</body>
+</html>

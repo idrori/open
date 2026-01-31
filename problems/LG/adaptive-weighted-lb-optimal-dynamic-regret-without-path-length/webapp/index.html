@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive Weighted Linear Bandits</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: var(--primary); }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.85; }
+.container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; max-height: 350px; }
+.controls { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+.slider-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+.slider-row label { min-width: 200px; font-weight: 600; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.slider-row .val { min-width: 60px; text-align: right; font-family: monospace; color: var(--accent); font-weight: bold; }
+.full-width { grid-column: 1 / -1; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Adaptive Weighted Algorithm for Non-Stationary Linear Bandits</h1>
+<p>Optimal dynamic regret without prior knowledge of path length P_T</p>
+</div>
+<div class="container">
+<div class="controls">
+<h2>Simulation Parameters</h2>
+<div class="slider-row">
+<label>Path Length (P_T):</label>
+<input type="range" id="ptSlider" min="1" max="20" value="5" step="1">
+<div class="val" id="ptVal">5.0</div>
+</div>
+<div class="slider-row">
+<label>Time Horizon (T):</label>
+<input type="range" id="tSlider" min="500" max="5000" value="2000" step="500">
+<div class="val" id="tVal">2000</div>
+</div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h2>Dynamic Regret Comparison</h2>
+<canvas id="regretChart"></canvas>
+</div>
+<div class="card">
+<h2>Effective Discount Factor Over Time</h2>
+<canvas id="gammaChart"></canvas>
+</div>
+<div class="card">
+<h2>Regret Scaling with T</h2>
+<canvas id="scalingChart"></canvas>
+</div>
+<div class="card full-width">
+<h2>Algorithm Performance by Path Length</h2>
+<canvas id="barChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+function simulateRegret(algo, T, P_T) {
+    const d = 5;
+    let base;
+    switch(algo) {
+        case 'adaptive': base = 0.8 * Math.pow(d, 2/3) * Math.pow(P_T, 1/3) * Math.pow(T, 2/3); break;
+        case 'fixed_high': base = (P_T < 3 ? 0.75 : 1.2) * Math.pow(d, 2/3) * Math.pow(P_T, 1/3) * Math.pow(T, 2/3); break;
+        case 'fixed_low': base = (P_T > 5 ? 0.85 : 1.3) * Math.pow(d, 2/3) * Math.pow(P_T, 1/3) * Math.pow(T, 2/3); break;
+        case 'restart': base = 0.9 * Math.pow(d, 2/3) * Math.pow(P_T, 1/3) * Math.pow(T, 2/3); break;
+    }
+    return base;
+}
+
+let regretChart, gammaChart, scalingChart, barChart;
+const algoColors = { adaptive: '#2980b9', fixed_high: '#e74c3c', fixed_low: '#f39c12', restart: '#27ae60' };
+const algoLabels = { adaptive: 'Adaptive Weighted', fixed_high: 'Fixed (gamma=0.99)', fixed_low: 'Fixed (gamma=0.95)', restart: 'Restart-based' };
+
+function updateAll() {
+    const P_T = parseFloat(document.getElementById('ptSlider').value);
+    const T = parseInt(document.getElementById('tSlider').value);
+    document.getElementById('ptVal').textContent = P_T.toFixed(1);
+    document.getElementById('tVal').textContent = T;
+
+    // Regret over time
+    if (regretChart) regretChart.destroy();
+    const steps = 50;
+    const timeLabels = Array.from({length: steps}, (_, i) => Math.round((i + 1) * T / steps));
+    const datasets = Object.keys(algoColors).map(algo => ({
+        label: algoLabels[algo],
+        data: timeLabels.map(t => simulateRegret(algo, t, P_T)),
+        borderColor: algoColors[algo], borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
+    }));
+    regretChart = new Chart(document.getElementById('regretChart'), {
+        type: 'line',
+        data: { labels: timeLabels, datasets },
+        options: { responsive: true,
+            scales: { x: { title: { display: true, text: 'Time t' } },
+                     y: { title: { display: true, text: 'Cumulative Regret' } } },
+            plugins: { legend: { position: 'top' } } }
+    });
+
+    // Gamma adaptation
+    if (gammaChart) gammaChart.destroy();
+    const gammaData = Array.from({length: 100}, (_, i) => {
+        const t = (i + 1) * T / 100;
+        const optGamma = 1 - Math.pow(P_T / T, 2/3);
+        return optGamma + 0.01 * Math.sin(i * 0.3) * Math.exp(-i * 0.02);
+    });
+    gammaChart = new Chart(document.getElementById('gammaChart'), {
+        type: 'line',
+        data: {
+            labels: Array.from({length: 100}, (_, i) => Math.round((i+1) * T / 100)),
+            datasets: [{
+                label: 'Effective gamma_t',
+                data: gammaData, borderColor: '#2980b9', borderWidth: 2, fill: true,
+                backgroundColor: 'rgba(41,128,185,0.1)', tension: 0.4, pointRadius: 0
+            }, {
+                label: 'Optimal gamma*',
+                data: Array(100).fill(1 - Math.pow(P_T / T, 2/3)),
+                borderColor: '#e74c3c', borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0
+            }]
+        },
+        options: { responsive: true,
+            scales: { x: { title: { display: true, text: 'Time' } },
+                     y: { title: { display: true, text: 'Discount Factor' } } } }
+    });
+
+    // Scaling
+    if (scalingChart) scalingChart.destroy();
+    const tVals = [500, 1000, 1500, 2000, 3000, 4000, 5000];
+    scalingChart = new Chart(document.getElementById('scalingChart'), {
+        type: 'line',
+        data: {
+            labels: tVals,
+            datasets: [{
+                label: 'Adaptive Regret',
+                data: tVals.map(t => simulateRegret('adaptive', t, P_T)),
+                borderColor: '#2980b9', borderWidth: 2.5, tension: 0.3, pointRadius: 4
+            }, {
+                label: 'O(T^{2/3}) reference',
+                data: tVals.map(t => {
+                    const ref = simulateRegret('adaptive', 5000, P_T);
+                    return ref * Math.pow(t/5000, 2/3);
+                }),
+                borderColor: '#e74c3c', borderDash: [5,5], borderWidth: 2, pointRadius: 0
+            }]
+        },
+        options: { responsive: true,
+            scales: { x: { title: { display: true, text: 'T' } },
+                     y: { title: { display: true, text: 'Regret' } } } }
+    });
+
+    // Bar chart
+    if (barChart) barChart.destroy();
+    const ptVals = [1, 2, 5, 10, 15];
+    barChart = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: ptVals.map(p => 'P_T=' + p),
+            datasets: Object.keys(algoColors).map(algo => ({
+                label: algoLabels[algo],
+                data: ptVals.map(p => simulateRegret(algo, T, p)),
+                backgroundColor: algoColors[algo] + 'cc',
+            }))
+        },
+        options: { responsive: true,
+            scales: { y: { title: { display: true, text: 'Dynamic Regret' } } },
+            plugins: { legend: { position: 'top' } } }
+    });
+}
+
+document.getElementById('ptSlider').addEventListener('input', updateAll);
+document.getElementById('tSlider').addEventListener('input', updateAll);
+updateAll();
+</script>
+</body>
+</html>

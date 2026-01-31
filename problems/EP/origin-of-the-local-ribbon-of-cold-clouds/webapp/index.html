@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Origin of the Local Ribbon of Cold Clouds</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #2980b9;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #2c3e50;
+  --border: #dee2e6;
+  --success: #27ae60;
+  --danger: #e74c3c;
+  --warn: #f39c12;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+header {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: #fff;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.summary-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 1.2rem;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-left: 4px solid var(--accent);
+}
+.summary-card .value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.summary-card .label {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.3rem;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+.chart-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.chart-card h3 {
+  color: var(--primary);
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.5rem;
+}
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-height: 350px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+table th {
+  background: var(--primary);
+  color: #fff;
+  padding: 0.6rem;
+  text-align: left;
+}
+table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+table tr:nth-child(even) { background: #f0f4f8; }
+.best { color: var(--success); font-weight: 600; }
+.rejected { color: var(--danger); font-weight: 600; }
+footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: #888;
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+}
+@media (max-width: 600px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  header h1 { font-size: 1.2rem; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Bayesian Inference of the Origin of the Local Ribbon of Cold Clouds</h1>
+  <p>Testing four formation hypotheses -- supernova shell compression, thermal instability, turbulent fragmentation, and Galactic spiral arm interaction -- using Bayesian model comparison against observed LRCC properties.</p>
+</header>
+
+<div class="container">
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="value">Spiral Arm</div>
+      <div class="label">Best Model (Posterior 0.898)</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">0.92 km/s</div>
+      <div class="label">Observed Velocity Dispersion</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">15.0</div>
+      <div class="label">Thermal Pressure Ratio</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">99.4%</div>
+      <div class="label">MC Robustness (Spiral Arm Best)</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Posterior Probability by Formation Model</h3>
+      <div class="chart-container">
+        <canvas id="posteriorChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Log-Likelihood Comparison</h3>
+      <div class="chart-container">
+        <canvas id="likelihoodChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Velocity Dispersion: Model Predictions vs. Observed</h3>
+      <div class="chart-container">
+        <canvas id="velocityChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Structure Function Ratio (Velocity Field Smoothness)</h3>
+      <div class="chart-container">
+        <canvas id="sfRatioChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Monte Carlo Robustness (2000 Realizations)</h3>
+      <div class="chart-container">
+        <canvas id="monteCarloChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Detailed Model Comparison</h3>
+      <table>
+        <thead>
+          <tr><th>Model</th><th>Log-Likelihood</th><th>Posterior</th><th>Vel. Disp. (km/s)</th><th>SF Ratio</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Spiral Arm</td><td>-4.25</td><td>0.898</td><td>1.10</td><td>2.93</td>
+            <td class="best">Best Model</td>
+          </tr>
+          <tr>
+            <td>Thermal Instability</td><td>-6.42</td><td>0.102</td><td>0.33</td><td>0.25</td>
+            <td>Viable</td>
+          </tr>
+          <tr>
+            <td>Turbulent Frag.</td><td>-5,879</td><td>~0</td><td>1.33</td><td>4.48</td>
+            <td class="rejected">Rejected</td>
+          </tr>
+          <tr>
+            <td>Supernova Shell</td><td>-63,374</td><td>~0</td><td>5.52</td><td>64.7</td>
+            <td class="rejected">Rejected</td>
+          </tr>
+        </tbody>
+      </table>
+      <br>
+      <table>
+        <thead>
+          <tr><th>Combined Model</th><th>Posterior</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Spiral Arm (alone)</td><td>0.895</td><td>Best overall model</td></tr>
+          <tr><td>Arm + TI</td><td>0.002</td><td>Spiral arm compression triggers TI</td></tr>
+          <tr><td>SN + TI</td><td>~0</td><td>SN compression triggers TI</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Bayesian model comparison with Monte Carlo robustness testing (N=2000). LRCC observed: n_H=3000 cm^-3, T=20 K, smooth velocity field.
+</footer>
+
+<script>
+const PRIMARY = '#1a3a5c';
+const ACCENT = '#2980b9';
+const SUCCESS = '#27ae60';
+const DANGER = '#e74c3c';
+const WARN = '#f39c12';
+const PURPLE = '#8e44ad';
+
+// --- Posterior Probability ---
+new Chart(document.getElementById('posteriorChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Spiral Arm (0.898)', 'Thermal Instability (0.102)', 'Turbulent Frag. (~0)', 'Supernova Shell (~0)'],
+    datasets: [{
+      data: [0.898, 0.102, 0.0001, 0.0001],
+      backgroundColor: [SUCCESS, ACCENT, WARN, DANGER],
+      borderWidth: 2,
+      borderColor: '#fff'
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 11 } } },
+      tooltip: {
+        callbacks: {
+          label: ctx => `${ctx.label}: ${(ctx.raw * 100).toFixed(1)}%`
+        }
+      }
+    }
+  }
+});
+
+// --- Log-Likelihood (showing only viable models for readability) ---
+new Chart(document.getElementById('likelihoodChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Spiral Arm', 'Thermal Instability', 'Turbulent Frag.', 'Supernova Shell'],
+    datasets: [{
+      label: 'Log-Likelihood',
+      data: [-4.25, -6.42, -5879, -63374],
+      backgroundColor: [SUCCESS, ACCENT, WARN, DANGER],
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `Log-L: ${ctx.raw.toLocaleString()}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'logarithmic',
+        title: { display: true, text: '|Log-Likelihood| (log scale)' },
+        reverse: false,
+        ticks: {
+          callback: (val) => {
+            if (val === 1 || val === 10 || val === 100 || val === 1000 || val === 10000 || val === 100000) return val;
+            return '';
+          }
+        }
+      }
+    }
+  }
+});
+
+// Redraw the likelihood chart with absolute values for log scale
+document.getElementById('likelihoodChart').getContext('2d');
+Chart.getChart('likelihoodChart').destroy();
+new Chart(document.getElementById('likelihoodChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Spiral Arm', 'Thermal Instability', 'Turbulent Frag.', 'Supernova Shell'],
+    datasets: [{
+      label: '|Log-Likelihood|',
+      data: [4.25, 6.42, 5879, 63374],
+      backgroundColor: [SUCCESS, ACCENT, WARN, DANGER],
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `Log-Likelihood: -${ctx.raw.toLocaleString()}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'logarithmic',
+        title: { display: true, text: '|Log-Likelihood| (lower is better, log scale)' }
+      }
+    }
+  }
+});
+
+// --- Velocity Dispersion ---
+new Chart(document.getElementById('velocityChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Observed', 'Thermal Instability', 'Spiral Arm', 'Turbulent Frag.', 'Supernova Shell'],
+    datasets: [{
+      label: 'Velocity Dispersion (km/s)',
+      data: [0.92, 0.33, 1.10, 1.33, 5.52],
+      backgroundColor: ['#34495e', ACCENT, SUCCESS, WARN, DANGER],
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `${ctx.raw} km/s`
+        }
+      }
+    },
+    scales: {
+      y: {
+        title: { display: true, text: 'Velocity Dispersion (km/s)' },
+        beginAtZero: true
+      }
+    }
+  }
+});
+
+// --- Structure Function Ratio ---
+new Chart(document.getElementById('sfRatioChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Thermal Instability', 'Observed', 'Spiral Arm', 'Turbulent Frag.', 'Supernova Shell'],
+    datasets: [{
+      label: 'Structure Function Ratio',
+      data: [0.25, 1.0, 2.93, 4.48, 64.7],
+      backgroundColor: [ACCENT, '#34495e', SUCCESS, WARN, DANGER],
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `SF Ratio: ${ctx.raw} (1.0 = observed)`
+        }
+      }
+    },
+    scales: {
+      y: {
+        type: 'logarithmic',
+        title: { display: true, text: 'Structure Function Ratio (log scale)' }
+      }
+    }
+  }
+});
+
+// --- Monte Carlo Robustness ---
+new Chart(document.getElementById('monteCarloChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Spiral Arm', 'Supernova Shell', 'Thermal Instability', 'Turbulent Frag.'],
+    datasets: [{
+      label: 'Fraction Best Model (2000 MC trials)',
+      data: [0.9935, 0.0065, 0.0, 0.0],
+      backgroundColor: [SUCCESS, DANGER, ACCENT, WARN],
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: ctx => `Fraction best: ${(ctx.raw * 100).toFixed(1)}%`
+        }
+      }
+    },
+    scales: {
+      y: {
+        min: 0,
+        max: 1.05,
+        title: { display: true, text: 'Fraction Ranked Best' }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

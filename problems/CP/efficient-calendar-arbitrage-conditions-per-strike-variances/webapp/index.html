@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendar Arbitrage Conditions for Per-Strike Variances</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --orange: #f59e0b;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  header {
+    text-align: center;
+    padding: 40px 20px 30px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 30px;
+  }
+  header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #f8fafc;
+  }
+  header p { color: var(--muted); font-size: 0.95rem; max-width: 800px; margin: 0 auto; }
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 8px 4px 0;
+  }
+  .tag-cp { background: #1e3a5f; color: #60a5fa; }
+  .tag-kdd { background: #3b1f5e; color: #c084fc; }
+
+  .grid { display: grid; gap: 20px; margin-bottom: 24px; }
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #f1f5f9;
+  }
+  .chart-container { position: relative; height: 320px; }
+
+  .metric {
+    text-align: center;
+    padding: 16px 12px;
+  }
+  .metric .value {
+    font-size: 2rem;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .metric .label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .metric .sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+  td:first-child, th:first-child { text-align: left; }
+  tr:hover td { background: rgba(59, 130, 246, 0.05); }
+
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pill {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+  .pill.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .pill:hover { border-color: var(--accent); }
+
+  .section-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 30px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    color: #f1f5f9;
+  }
+
+  .highlight-green { color: var(--green); }
+  .highlight-red { color: var(--red); }
+  .highlight-orange { color: var(--orange); }
+  .highlight-blue { color: var(--accent); }
+  .highlight-purple { color: var(--purple); }
+
+  footer {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Efficient Calendar Arbitrage Conditions for Per-Strike Variances</h1>
+  <p>Computational investigation of three candidate conditions (PVO, EDC, SDC) for ensuring absence of calendar arbitrage in generalized strike-wise option surface interpolation models.</p>
+  <div>
+    <span class="tag tag-cp">q-fin.CP</span>
+    <span class="tag tag-kdd">KDD 2026</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Key Metrics -->
+  <div class="grid grid-4">
+    <div class="card metric">
+      <span class="value highlight-blue">2500</span>
+      <span class="label">Surfaces Evaluated</span>
+      <span class="sub">500 per noise level</span>
+    </div>
+    <div class="card metric">
+      <span class="value highlight-green">1.0000</span>
+      <span class="label">SDC Avg Sufficiency</span>
+      <span class="sub">Perfect guarantee</span>
+    </div>
+    <div class="card metric">
+      <span class="value highlight-orange">0.8895</span>
+      <span class="label">Avg Extrap Risk Increase</span>
+      <span class="sub">Beyond quoted strikes</span>
+    </div>
+    <div class="card metric">
+      <span class="value highlight-purple">0.0232</span>
+      <span class="label">EDC Avg Restrictiveness</span>
+      <span class="sub">Lowest among conditions</span>
+    </div>
+  </div>
+
+  <!-- Condition Effectiveness -->
+  <h2 class="section-title">Condition Effectiveness</h2>
+
+  <div class="pill-row" id="metric-pills">
+    <div class="pill active" data-metric="sufficiency_rate" onclick="switchMetric(this)">Sufficiency</div>
+    <div class="pill" data-metric="necessity_rate" onclick="switchMetric(this)">Necessity</div>
+    <div class="pill" data-metric="restrictiveness" onclick="switchMetric(this)">Restrictiveness</div>
+    <div class="pill" data-metric="false_positive_rate" onclick="switchMetric(this)">False Positive</div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Condition Performance vs. Noise Level</h3>
+      <div class="chart-container">
+        <canvas id="chartEffectiveness"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Detailed Effectiveness Table</h3>
+      <div id="tableEffectivenessContainer" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Aggregate Comparison -->
+  <h2 class="section-title">Aggregate Comparison</h2>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Average Performance Across All Noise Levels</h3>
+      <div class="chart-container">
+        <canvas id="chartAggregate"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Computational Cost vs. Sufficiency</h3>
+      <div class="chart-container">
+        <canvas id="chartCostSuff"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Extrapolation Risk -->
+  <h2 class="section-title">Extrapolation Risk Analysis</h2>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Arbitrage Rates by Strike Region</h3>
+      <div class="chart-container">
+        <canvas id="chartExtrap"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Extrapolation Risk Details</h3>
+      <div id="tableExtrapContainer" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Violation Severity -->
+  <h2 class="section-title">Violation Severity</h2>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Violation Magnitude Distribution</h3>
+      <div class="chart-container">
+        <canvas id="chartSeverity"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Severity Statistics</h3>
+      <div id="tableSeverityContainer" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Computational Cost -->
+  <h2 class="section-title">Computational Cost</h2>
+
+  <div class="grid grid-3">
+    <div class="card metric">
+      <span class="value highlight-red">44</span>
+      <span class="label">PVO Total Ops</span>
+      <span class="sub">O(n) -- cheapest</span>
+    </div>
+    <div class="card metric">
+      <span class="value highlight-blue">352</span>
+      <span class="label">SDC Total Ops</span>
+      <span class="sub">O(n log n) -- balanced</span>
+    </div>
+    <div class="card metric">
+      <span class="value highlight-green">8844</span>
+      <span class="label">EDC Total Ops</span>
+      <span class="sub">O(n_eval * n) -- thorough</span>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <p>Based on open problem from <a href="https://arxiv.org/abs/2601.11209">Buehler et al., arXiv:2601.11209</a> (Jan 2026).
+  Monte Carlo study: 2500 synthetic surfaces, seed 42. KDD 2026 Computational Finance Track.</p>
+</footer>
+
+<script>
+// ====================== DATA ======================
+const conditionEffectiveness = {
+  "0.005": {
+    "pvo": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0},
+    "edc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0},
+    "sdc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0}
+  },
+  "0.01": {
+    "pvo": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0},
+    "edc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0},
+    "sdc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0}
+  },
+  "0.02": {
+    "pvo": {"sufficiency_rate":1.0,"necessity_rate":0.938,"false_positive_rate":0.0,"restrictiveness":0.062,"n_cond_satisfied":469,"n_total":500,"arbitrage_rate":0.0},
+    "edc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0},
+    "sdc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.0,"n_cond_satisfied":500,"n_total":500,"arbitrage_rate":0.0}
+  },
+  "0.05": {
+    "pvo": {"sufficiency_rate":0.0,"necessity_rate":0.0,"false_positive_rate":0.0,"restrictiveness":1.0,"n_cond_satisfied":0,"n_total":500,"arbitrage_rate":0.008},
+    "edc": {"sufficiency_rate":0.997988,"necessity_rate":1.0,"false_positive_rate":0.002012,"restrictiveness":0.006,"n_cond_satisfied":497,"n_total":500,"arbitrage_rate":0.008},
+    "sdc": {"sufficiency_rate":1.0,"necessity_rate":0.701613,"false_positive_rate":0.0,"restrictiveness":0.304,"n_cond_satisfied":348,"n_total":500,"arbitrage_rate":0.008}
+  },
+  "0.1": {
+    "pvo": {"sufficiency_rate":0.0,"necessity_rate":0.0,"false_positive_rate":0.0,"restrictiveness":1.0,"n_cond_satisfied":0,"n_total":500,"arbitrage_rate":0.11},
+    "edc": {"sufficiency_rate":1.0,"necessity_rate":1.0,"false_positive_rate":0.0,"restrictiveness":0.11,"n_cond_satisfied":445,"n_total":500,"arbitrage_rate":0.11},
+    "sdc": {"sufficiency_rate":1.0,"necessity_rate":0.053933,"false_positive_rate":0.0,"restrictiveness":0.952,"n_cond_satisfied":24,"n_total":500,"arbitrage_rate":0.11}
+  }
+};
+
+const extrapolationRisk = {
+  "0.005": {"arb_rate_inner":0.0,"arb_rate_outer":0.0,"arb_rate_full":0.0,"arb_only_extrap":0.0,"extrap_risk_increase":0.0},
+  "0.01":  {"arb_rate_inner":0.0,"arb_rate_outer":0.0,"arb_rate_full":0.0,"arb_only_extrap":0.0,"extrap_risk_increase":0.0},
+  "0.02":  {"arb_rate_inner":0.0,"arb_rate_outer":0.0,"arb_rate_full":0.0,"arb_only_extrap":0.0,"extrap_risk_increase":0.0},
+  "0.05":  {"arb_rate_inner":0.0,"arb_rate_outer":0.008,"arb_rate_full":0.008,"arb_only_extrap":0.008,"extrap_risk_increase":4.0},
+  "0.1":   {"arb_rate_inner":0.076,"arb_rate_outer":0.074,"arb_rate_full":0.11,"arb_only_extrap":0.034,"extrap_risk_increase":0.4474}
+};
+
+const violationSeverity = {
+  "0.005": {"mean_max_violation":0.0,"median_max_violation":0.0,"p95_max_violation":0.0,"max_max_violation":0.0,"mean_fraction_violated":0.0,"n_surfaces_with_arb":0},
+  "0.01":  {"mean_max_violation":0.0,"median_max_violation":0.0,"p95_max_violation":0.0,"max_max_violation":0.0,"mean_fraction_violated":0.0,"n_surfaces_with_arb":0},
+  "0.02":  {"mean_max_violation":0.0,"median_max_violation":0.0,"p95_max_violation":0.0,"max_max_violation":0.0,"mean_fraction_violated":0.0,"n_surfaces_with_arb":0},
+  "0.05":  {"mean_max_violation":0.00217853,"median_max_violation":0.00125984,"p95_max_violation":0.00563573,"max_max_violation":0.00619443,"mean_fraction_violated":0.057836,"n_surfaces_with_arb":4},
+  "0.1":   {"mean_max_violation":0.27927072,"median_max_violation":0.10837511,"p95_max_violation":0.92053912,"max_max_violation":2.868777,"mean_fraction_violated":0.099638,"n_surfaces_with_arb":55}
+};
+
+const aggregateMetrics = {
+  "pvo": {"avg_sufficiency":0.6,"avg_necessity":0.5876,"avg_false_positive":0.0,"avg_restrictiveness":0.4124},
+  "edc": {"avg_sufficiency":0.9996,"avg_necessity":1.0,"avg_false_positive":0.0004,"avg_restrictiveness":0.0232},
+  "sdc": {"avg_sufficiency":1.0,"avg_necessity":0.7511,"avg_false_positive":0.0,"avg_restrictiveness":0.2512}
+};
+
+const computationalCost = {
+  "PVO": {"per_pair_ops":11,"total_ops":44,"complexity":"O(n)"},
+  "EDC": {"per_pair_ops":2211,"total_ops":8844,"complexity":"O(n_eval * n)"},
+  "SDC": {"per_pair_ops":88,"total_ops":352,"complexity":"O(n log n)"}
+};
+
+const noiseLabels = ["0.005","0.01","0.02","0.05","0.1"];
+const condColors = { pvo: '#ef4444', edc: '#22c55e', sdc: '#3b82f6' };
+const condNames = { pvo: 'PVO', edc: 'EDC', sdc: 'SDC' };
+
+// ====================== CHARTS ======================
+let chartEffectiveness = null;
+
+function buildEffectivenessChart(metric) {
+  const ctx = document.getElementById('chartEffectiveness').getContext('2d');
+  const datasets = ['pvo','edc','sdc'].map(function(c) {
+    return {
+      label: condNames[c],
+      data: noiseLabels.map(function(nl) { return conditionEffectiveness[nl][c][metric]; }),
+      borderColor: condColors[c],
+      backgroundColor: condColors[c] + '33',
+      pointRadius: 6,
+      pointHoverRadius: 8,
+      borderWidth: 2.5,
+      tension: 0.2,
+      fill: false
+    };
+  });
+  var metricNames = {
+    sufficiency_rate: 'Sufficiency Rate',
+    necessity_rate: 'Necessity Rate',
+    restrictiveness: 'Restrictiveness',
+    false_positive_rate: 'False Positive Rate'
+  };
+  if (chartEffectiveness) chartEffectiveness.destroy();
+  chartEffectiveness = new Chart(ctx, {
+    type: 'line',
+    data: { labels: noiseLabels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8' } } },
+      scales: {
+        x: { title: { display: true, text: 'Noise Level', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { title: { display: true, text: metricNames[metric], color: '#94a3b8' }, min: -0.05, max: 1.1, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+
+function switchMetric(el) {
+  document.querySelectorAll('#metric-pills .pill').forEach(function(p) { p.classList.remove('active'); });
+  el.classList.add('active');
+  buildEffectivenessChart(el.dataset.metric);
+}
+
+// Build tables with safe DOM methods
+function buildEffectivenessTable() {
+  var container = document.getElementById('tableEffectivenessContainer');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  ['Noise','Cond.','Suff.','Nec.','FP','Restrict.','Arb Rate'].forEach(function(h) {
+    var th = document.createElement('th');
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  noiseLabels.forEach(function(nl) {
+    ['pvo','edc','sdc'].forEach(function(c, i) {
+      var d = conditionEffectiveness[nl][c];
+      var row = document.createElement('tr');
+      var cells = [
+        i === 0 ? nl : '',
+        condNames[c],
+        d.sufficiency_rate.toFixed(4),
+        d.necessity_rate.toFixed(4),
+        d.false_positive_rate.toFixed(4),
+        d.restrictiveness.toFixed(4),
+        d.arbitrage_rate.toFixed(4)
+      ];
+      cells.forEach(function(val, ci) {
+        var td = document.createElement('td');
+        td.textContent = val;
+        if (ci === 1) { td.style.color = condColors[c]; td.style.fontWeight = '600'; }
+        row.appendChild(td);
+      });
+      tbody.appendChild(row);
+    });
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function buildAggregateChart() {
+  var ctx = document.getElementById('chartAggregate').getContext('2d');
+  var metrics = ['avg_sufficiency','avg_necessity','avg_false_positive','avg_restrictiveness'];
+  var metricLabels = ['Sufficiency','Necessity','False Positive','Restrictiveness'];
+  new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: metricLabels,
+      datasets: ['pvo','edc','sdc'].map(function(c) {
+        return {
+          label: condNames[c],
+          data: metrics.map(function(m) { return aggregateMetrics[c][m]; }),
+          borderColor: condColors[c],
+          backgroundColor: condColors[c] + '22',
+          pointBackgroundColor: condColors[c],
+          borderWidth: 2
+        };
+      })
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8' } } },
+      scales: {
+        r: {
+          min: 0, max: 1.1,
+          ticks: { color: '#64748b', backdropColor: 'transparent' },
+          grid: { color: '#334155' },
+          pointLabels: { color: '#94a3b8', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+function buildCostSuffChart() {
+  var ctx = document.getElementById('chartCostSuff').getContext('2d');
+  var conds = ['PVO','SDC','EDC'];
+  var mapping = { PVO:'pvo', SDC:'sdc', EDC:'edc' };
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: conds.map(function(c) {
+        return {
+          label: c,
+          data: [{ x: computationalCost[c].total_ops, y: aggregateMetrics[mapping[c]].avg_sufficiency }],
+          backgroundColor: condColors[mapping[c]],
+          pointRadius: 12,
+          pointHoverRadius: 15,
+          borderColor: '#fff',
+          borderWidth: 2
+        };
+      })
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8' } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return ctx.dataset.label + ': ' + ctx.raw.x + ' ops, suff=' + ctx.raw.y.toFixed(4); }
+          }
+        }
+      },
+      scales: {
+        x: { type: 'logarithmic', title: { display: true, text: 'Total Operations (log)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { title: { display: true, text: 'Avg Sufficiency', color: '#94a3b8' }, min: 0.5, max: 1.05, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+
+function buildExtrapChart() {
+  var ctx = document.getElementById('chartExtrap').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: noiseLabels,
+      datasets: [
+        { label: 'Inner (quoted)', data: noiseLabels.map(function(nl) { return extrapolationRisk[nl].arb_rate_inner; }), backgroundColor: '#3b82f6cc' },
+        { label: 'Outer (extrapolated)', data: noiseLabels.map(function(nl) { return extrapolationRisk[nl].arb_rate_outer; }), backgroundColor: '#ef4444cc' },
+        { label: 'Full domain', data: noiseLabels.map(function(nl) { return extrapolationRisk[nl].arb_rate_full; }), backgroundColor: '#1e293bcc', borderColor: '#94a3b8', borderWidth: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8' } } },
+      scales: {
+        x: { title: { display: true, text: 'Noise Level', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { title: { display: true, text: 'Arbitrage Rate', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+
+function buildExtrapTable() {
+  var container = document.getElementById('tableExtrapContainer');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  ['Noise','Inner','Outer','Full','Extrap-only','Risk Incr.'].forEach(function(h) {
+    var th = document.createElement('th');
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  noiseLabels.forEach(function(nl) {
+    var d = extrapolationRisk[nl];
+    var row = document.createElement('tr');
+    [nl, d.arb_rate_inner.toFixed(4), d.arb_rate_outer.toFixed(4), d.arb_rate_full.toFixed(4), d.arb_only_extrap.toFixed(4), d.extrap_risk_increase.toFixed(4)].forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      row.appendChild(td);
+    });
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function buildSeverityChart() {
+  var ctx = document.getElementById('chartSeverity').getContext('2d');
+  var activeNLs = noiseLabels.filter(function(nl) { return violationSeverity[nl].n_surfaces_with_arb > 0; });
+  if (activeNLs.length === 0) return;
+  var metrics = ['mean_max_violation','median_max_violation','p95_max_violation','max_max_violation'];
+  var labels_m = ['Mean','Median','P95','Max'];
+  var colors_m = ['#3b82f6','#22c55e','#f59e0b','#ef4444'];
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: activeNLs,
+      datasets: metrics.map(function(m, i) {
+        return {
+          label: labels_m[i],
+          data: activeNLs.map(function(nl) { return violationSeverity[nl][m]; }),
+          backgroundColor: colors_m[i] + 'cc'
+        };
+      })
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8' } } },
+      scales: {
+        x: { title: { display: true, text: 'Noise Level', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { title: { display: true, text: 'Violation Magnitude', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+
+function buildSeverityTable() {
+  var container = document.getElementById('tableSeverityContainer');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  ['Noise','Mean','Median','P95','Max','# Surfaces'].forEach(function(h) {
+    var th = document.createElement('th');
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  noiseLabels.forEach(function(nl) {
+    var d = violationSeverity[nl];
+    var row = document.createElement('tr');
+    [nl, d.mean_max_violation.toFixed(6), d.median_max_violation.toFixed(6), d.p95_max_violation.toFixed(6), d.max_max_violation.toFixed(6), d.n_surfaces_with_arb.toString()].forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      row.appendChild(td);
+    });
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+// ====================== INIT ======================
+document.addEventListener('DOMContentLoaded', function() {
+  buildEffectivenessChart('sufficiency_rate');
+  buildEffectivenessTable();
+  buildAggregateChart();
+  buildCostSuffChart();
+  buildExtrapChart();
+  buildExtrapTable();
+  buildSeverityChart();
+  buildSeverityTable();
+});
+</script>
+</body>
+</html>

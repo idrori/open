@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scaling Long CoT to Online RL Settings</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --accent: #2980b9;
+    --success: #27ae60;
+    --danger: #e74c3c;
+    --muted: #7f8c8d;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --border: #dce1e6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .hero { background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color: white; padding: 48px 24px 36px; text-align: center; }
+  .hero h1 { font-size: 1.8em; font-weight: 700; margin-bottom: 10px; max-width: 800px; margin-left: auto; margin-right: auto; }
+  .hero p { font-size: 1.05em; opacity: 0.9; max-width: 700px; margin: 0 auto 16px; }
+  .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 0.82em; font-weight: 600; background: rgba(255,255,255,0.2); color: white; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+  .tabs { display: flex; gap: 4px; background: var(--card); border-radius: 12px; padding: 6px; margin: -24px auto 24px; max-width: 700px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); position: relative; z-index: 10; }
+  .tab { flex: 1; padding: 10px 8px; text-align: center; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.82em; transition: all 0.2s; color: var(--muted); }
+  .tab:hover { background: #f0f4f8; }
+  .tab.active { background: var(--accent); color: white; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .card h3 { margin-bottom: 12px; color: var(--primary); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .metric-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .metric { flex: 1; min-width: 120px; text-align: center; background: var(--bg); border-radius: 10px; padding: 14px 8px; }
+  .metric .val { font-size: 1.6em; font-weight: 700; color: var(--accent); }
+  .metric .lbl { font-size: 0.82em; color: var(--muted); margin-top: 2px; }
+  canvas { max-height: 400px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--bg); font-weight: 600; color: var(--primary); }
+  .best { font-weight: 700; color: var(--success); }
+  @media(max-width:768px) { .grid2 { grid-template-columns: 1fr; } .tabs { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Scaling Long CoT Molecular-Structure Learning to Online RL Settings</h1>
+  <p>Evaluating how well Long Chain-of-Thought approaches scale from offline distillation to interactive reinforcement learning</p>
+  <div class="badges">
+    <span class="badge">cs.CL</span>
+    <span class="badge">Chen et al. 2026</span>
+    <span class="badge">arXiv: 2601.06002</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="showTab(0)">Overview</div>
+    <div class="tab" onclick="showTab(1)">Learning Curves</div>
+    <div class="tab" onclick="showTab(2)">Efficiency</div>
+    <div class="tab" onclick="showTab(3)">Structure</div>
+    <div class="tab" onclick="showTab(4)">Scaling</div>
+    <div class="tab" onclick="showTab(5)">Robustness</div>
+  </div>
+
+  <!-- Panel 0: Overview -->
+  <div class="panel active" id="panel0">
+    <div class="metric-row">
+      <div class="metric"><div class="val">0.913</div><div class="lbl">GRPO Final Perf</div></div>
+      <div class="metric"><div class="val">0.683</div><div class="lbl">SFT Final Perf</div></div>
+      <div class="metric"><div class="val">+33.7%</div><div class="lbl">Relative Gain</div></div>
+      <div class="metric"><div class="val">0.857</div><div class="lbl">GRPO Bond Pres.</div></div>
+    </div>
+    <div class="card">
+      <h3>Key Findings</h3>
+      <table>
+        <tr><th>Paradigm</th><th>Final Perf (1.3B)</th><th>Steps to 0.7</th><th>Bond Pres.</th><th>Shift Drop (0.3)</th></tr>
+        <tr><td>SFT</td><td>0.683</td><td>5,008</td><td class="best">0.897</td><td>0.193</td></tr>
+        <tr><td>REINFORCE</td><td>0.691</td><td>7,692</td><td>0.767</td><td>0.118</td></tr>
+        <tr><td>PPO</td><td>0.846</td><td>4,320</td><td>0.827</td><td>0.088</td></tr>
+        <tr><td>GRPO</td><td class="best">0.913</td><td class="best">3,408</td><td>0.857</td><td class="best">0.067</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Summary</h3>
+      <p>Online RL methods, particularly GRPO, substantially outperform offline SFT for Long CoT molecular-structure learning. GRPO achieves 33.7% higher task performance while maintaining 95.5% of SFT's structural integrity. The advantage widens with model scale and under distributional shift.</p>
+    </div>
+  </div>
+
+  <!-- Panel 1: Learning Curves -->
+  <div class="panel" id="panel1">
+    <div class="card"><h3>Training Paradigm Comparison (1.3B)</h3><canvas id="chartCurves"></canvas></div>
+  </div>
+
+  <!-- Panel 2: Sample Efficiency -->
+  <div class="panel" id="panel2">
+    <div class="card"><h3>Steps to Performance Thresholds</h3><canvas id="chartEfficiency"></canvas></div>
+  </div>
+
+  <!-- Panel 3: Structural Integrity -->
+  <div class="panel" id="panel3">
+    <div class="grid2">
+      <div class="card"><h3>Bond Preservation</h3><canvas id="chartBond"></canvas></div>
+      <div class="card"><h3>Topology Score</h3><canvas id="chartTopo"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Panel 4: Model Scaling -->
+  <div class="panel" id="panel4">
+    <div class="card"><h3>Performance vs Model Size</h3><canvas id="chartScale"></canvas></div>
+  </div>
+
+  <!-- Panel 5: Robustness -->
+  <div class="panel" id="panel5">
+    <div class="grid2">
+      <div class="card"><h3>Performance Drop vs Shift</h3><canvas id="chartDrop"></canvas></div>
+      <div class="card"><h3>Recovery Steps vs Shift</h3><canvas id="chartRecovery"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = {SFT:'#7f8c8d', REINFORCE:'#e74c3c', PPO:'#2980b9', GRPO:'#27ae60'};
+const PARADIGMS = ['SFT','REINFORCE','PPO','GRPO'];
+
+function showTab(i) {
+  document.querySelectorAll('.tab').forEach((t,j) => t.classList.toggle('active', j===i));
+  document.querySelectorAll('.panel').forEach((p,j) => p.classList.toggle('active', j===i));
+}
+
+// Data from experiments
+const curvesData = {
+  steps: Array.from({length:51}, (_,i)=>i*200),
+  SFT: [0,0.052,0.101,0.147,0.189,0.229,0.266,0.300,0.332,0.362,0.389,0.414,0.437,0.458,0.478,0.496,0.512,0.527,0.541,0.554,0.565,0.576,0.585,0.594,0.602,0.609,0.615,0.621,0.627,0.632,0.636,0.640,0.644,0.648,0.651,0.654,0.656,0.659,0.661,0.663,0.665,0.666,0.668,0.669,0.670,0.672,0.673,0.674,0.674,0.675,0.683],
+  REINFORCE: [0,0.028,0.054,0.080,0.104,0.128,0.151,0.173,0.195,0.215,0.235,0.254,0.272,0.290,0.307,0.323,0.339,0.354,0.369,0.383,0.396,0.409,0.422,0.434,0.445,0.456,0.467,0.477,0.487,0.496,0.506,0.514,0.523,0.531,0.539,0.546,0.553,0.560,0.567,0.573,0.580,0.586,0.591,0.597,0.602,0.607,0.612,0.617,0.622,0.626,0.691],
+  PPO: [0,0.044,0.086,0.127,0.166,0.203,0.238,0.272,0.304,0.335,0.364,0.391,0.418,0.443,0.467,0.489,0.510,0.531,0.550,0.568,0.585,0.601,0.617,0.631,0.645,0.658,0.670,0.681,0.692,0.702,0.712,0.721,0.729,0.737,0.745,0.752,0.759,0.765,0.771,0.776,0.781,0.786,0.791,0.795,0.799,0.803,0.807,0.810,0.813,0.816,0.846],
+  GRPO: [0,0.052,0.102,0.149,0.195,0.239,0.281,0.321,0.359,0.395,0.430,0.463,0.494,0.524,0.552,0.579,0.604,0.628,0.651,0.672,0.692,0.711,0.729,0.746,0.762,0.776,0.790,0.803,0.815,0.826,0.836,0.846,0.855,0.863,0.871,0.878,0.884,0.890,0.896,0.901,0.905,0.910,0.914,0.917,0.921,0.924,0.927,0.929,0.932,0.934,0.913]
+};
+
+const effData = {SFT:[2405,3382,5008], REINFORCE:[4115,5590,7692], PPO:[2438,3248,4320], GRPO:[1966,2597,3408]};
+const scaleData = {
+  sizes: ['125M','350M','1.3B','2.7B','6.7B','13B'],
+  SFT: [0.600,0.630,0.683,0.710,0.725,0.740],
+  REINFORCE: [0.620,0.650,0.691,0.720,0.738,0.756],
+  PPO: [0.710,0.750,0.846,0.875,0.896,0.916],
+  GRPO: [0.740,0.780,0.913,0.920,0.928,0.935]
+};
+const shiftMags = [0.1,0.2,0.3,0.4,0.5];
+const dropData = {SFT:[0.064,0.129,0.193,0.258,0.322], REINFORCE:[0.039,0.079,0.118,0.158,0.197], PPO:[0.029,0.059,0.088,0.118,0.147], GRPO:[0.022,0.045,0.067,0.089,0.112]};
+const recovData = {SFT:[105,210,315,420,525], REINFORCE:[67,135,202,270,337], PPO:[52,105,157,210,262], GRPO:[42,84,126,168,210]};
+
+function makeDS(label, data, color) { return {label, data, borderColor:color, backgroundColor:color+'33', borderWidth:2, pointRadius:2, tension:0.3, fill:false}; }
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Learning curves
+  new Chart(document.getElementById('chartCurves'), {
+    type:'line',
+    data:{labels:curvesData.steps, datasets:PARADIGMS.map(p=>makeDS(p, curvesData[p], COLORS[p]))},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'Training Steps'}}, y:{title:{display:true,text:'Performance'},min:0,max:1}}}
+  });
+
+  // Sample efficiency
+  new Chart(document.getElementById('chartEfficiency'), {
+    type:'bar',
+    data:{labels:['P=0.5','P=0.6','P=0.7'], datasets:PARADIGMS.map(p=>({label:p, data:effData[p], backgroundColor:COLORS[p]+'cc'}))},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{title:{display:true,text:'Steps to Threshold'}}}}
+  });
+
+  // Bond preservation
+  const bondFinal = {SFT:0.897, REINFORCE:0.767, PPO:0.827, GRPO:0.857};
+  new Chart(document.getElementById('chartBond'), {
+    type:'bar',
+    data:{labels:PARADIGMS, datasets:[{label:'Bond Preservation', data:PARADIGMS.map(p=>bondFinal[p]), backgroundColor:PARADIGMS.map(p=>COLORS[p]+'cc')}]},
+    options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{min:0.6,max:1,title:{display:true,text:'Score'}}}}
+  });
+
+  // Topology score
+  const topoFinal = {SFT:0.889, REINFORCE:0.749, PPO:0.829, GRPO:0.859};
+  new Chart(document.getElementById('chartTopo'), {
+    type:'bar',
+    data:{labels:PARADIGMS, datasets:[{label:'Topology Score', data:PARADIGMS.map(p=>topoFinal[p]), backgroundColor:PARADIGMS.map(p=>COLORS[p]+'cc')}]},
+    options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{min:0.6,max:1,title:{display:true,text:'Score'}}}}
+  });
+
+  // Model scaling
+  new Chart(document.getElementById('chartScale'), {
+    type:'line',
+    data:{labels:scaleData.sizes, datasets:PARADIGMS.map(p=>makeDS(p, scaleData[p], COLORS[p]))},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{title:{display:true,text:'Final Performance'},min:0.5,max:1}}}
+  });
+
+  // Drop
+  new Chart(document.getElementById('chartDrop'), {
+    type:'line',
+    data:{labels:shiftMags, datasets:PARADIGMS.map(p=>makeDS(p, dropData[p], COLORS[p]))},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'Shift Magnitude'}}, y:{title:{display:true,text:'Performance Drop'}}}}
+  });
+
+  // Recovery
+  new Chart(document.getElementById('chartRecovery'), {
+    type:'line',
+    data:{labels:shiftMags, datasets:PARADIGMS.map(p=>makeDS(p, recovData[p], COLORS[p]))},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'Shift Magnitude'}}, y:{title:{display:true,text:'Recovery Steps'}}}}
+  });
+});
+</script>
+</body>
+</html>

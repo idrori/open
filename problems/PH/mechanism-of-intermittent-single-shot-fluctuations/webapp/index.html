@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intermittent Single-Shot Fluctuations: Spectral Diffusion vs Ionization</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f5f7fa;--card:#fff;--text:#333;--border:#e0e0e0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.hero{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:3rem 2rem;text-align:center}
+.hero h1{font-size:1.6rem;margin-bottom:0.5rem}
+.hero p{font-size:0.95rem;opacity:0.9;max-width:800px;margin:0 auto 1.5rem}
+.stats{display:flex;justify-content:center;gap:2rem;flex-wrap:wrap}
+.stat{background:rgba(255,255,255,0.15);border-radius:8px;padding:1rem 1.5rem;min-width:130px}
+.stat .val{font-size:1.4rem;font-weight:700}.stat .lbl{font-size:0.75rem;opacity:0.85}
+.container{max-width:1200px;margin:0 auto;padding:2rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:1.5rem}
+.card{background:var(--card);border-radius:10px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:1px solid var(--border)}
+.card h3{color:var(--primary);margin-bottom:1rem;font-size:1.05rem}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th{background:var(--primary);color:#fff;padding:6px 10px;text-align:left}
+td{padding:6px 10px;border-bottom:1px solid var(--border)}
+tr:hover td{background:#f0f4f8}
+.chart-container{position:relative;height:320px}
+.footer{text-align:center;padding:2rem;color:#888;font-size:0.85rem}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.hero h1{font-size:1.2rem}}
+</style>
+</head>
+<body>
+<div class="hero">
+<h1>Mechanism of Intermittent Single-Shot Fluctuations</h1>
+<p>Distinguishing spectral diffusion from charge-state ionization in cavity-coupled SiV centers</p>
+<div class="stats">
+<div class="stat"><div class="val">0.627</div><div class="lbl">SD Stretch Exp beta</div></div>
+<div class="stat"><div class="val">0.990</div><div class="lbl">Ion. Stretch Exp beta</div></div>
+<div class="stat"><div class="val">-637</div><div class="lbl">Log Bayes (SD bright)</div></div>
+<div class="stat"><div class="val">43.2%</div><div class="lbl">HMM Accuracy (SD)</div></div>
+</div>
+</div>
+<div class="container">
+<div class="grid">
+<div class="card">
+<h3>Temperature Dependence of Bright Duty Cycle</h3>
+<div class="chart-container"><canvas id="dutyChart"></canvas></div>
+</div>
+<div class="card">
+<h3>RMS Detuning vs Temperature</h3>
+<div class="chart-container"><canvas id="detuningChart"></canvas></div>
+</div>
+<div class="card">
+<h3>HMM Classification Accuracy</h3>
+<div class="chart-container"><canvas id="hmmChart"></canvas></div>
+</div>
+<div class="card">
+<h3>Coefficient of Variation Comparison</h3>
+<div class="chart-container"><canvas id="cvChart"></canvas></div>
+</div>
+<div class="card">
+<h3>Dwell-Time Distribution Parameters</h3>
+<table>
+<tr><th>Mechanism</th><th>State</th><th>beta</th><th>tau [s]</th><th>log BF</th></tr>
+<tr><td>Spectral Diff.</td><td>Bright</td><td>0.627</td><td>0.831</td><td>-637</td></tr>
+<tr><td>Spectral Diff.</td><td>Dark</td><td>0.818</td><td>0.263</td><td>-118</td></tr>
+<tr><td>Ionization</td><td>Bright</td><td>0.990</td><td>3.308</td><td>+0.66</td></tr>
+<tr><td>Ionization</td><td>Dark</td><td>1.158</td><td>0.518</td><td>-13.2</td></tr>
+</table>
+</div>
+<div class="card">
+<h3>Discrimination Metrics</h3>
+<table>
+<tr><th>Metric</th><th>Spectral Diffusion</th><th>Ionization</th></tr>
+<tr><td>CV (bright)</td><td>1.639</td><td>0.990</td></tr>
+<tr><td>CV (dark)</td><td>1.627</td><td>0.880</td></tr>
+<tr><td>Skewness (bright)</td><td>2.916</td><td>1.932</td></tr>
+<tr><td>Kurtosis (bright)</td><td>11.32</td><td>4.935</td></tr>
+<tr><td>N bright dwells</td><td>3181</td><td>1249</td></tr>
+<tr><td>N dark dwells</td><td>3142</td><td>1219</td></tr>
+<tr><td>HMM accuracy</td><td>43.2%</td><td>41.3%</td></tr>
+<tr><td>HMM log-likelihood</td><td>-3109</td><td>-3187</td></tr>
+</table>
+</div>
+</div>
+</div>
+<div class="footer">Data from stochastic simulation of SiV cavity QED | Reference: Yama et al., arXiv:2601.04733 (2026)</div>
+<script>
+const T=[1.5,2,3,4,5,6,8,10,15,20];
+const duty=[1.0,1.0,0.965,0.832,0.634,0.498,0.388,0.260,0.144,0.095];
+const rms=[2.38,3.22,8.67,13.81,21.0,26.5,38.9,59.4,108.5,161.9];
+const mkC=(id,cfg)=>new Chart(document.getElementById(id),cfg);
+mkC('dutyChart',{type:'line',data:{labels:T,datasets:[{label:'Bright Duty Cycle',data:duty,borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.1)',fill:true,tension:0.3,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Temperature [K]'}},y:{title:{display:true,text:'Duty Cycle'},min:0,max:1.1}}}});
+mkC('detuningChart',{type:'line',data:{labels:T,datasets:[{label:'RMS Detuning [GHz]',data:rms,borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',fill:true,tension:0.3,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Temperature [K]'}},y:{title:{display:true,text:'RMS Detuning [GHz]'},type:'logarithmic'}}}});
+const sdAcc=[0.46,0.39,0.37,0.46,0.47,0.43,0.41,0.43,0.46,0.43,0.37,0.48,0.47,0.40,0.44,0.47,0.43,0.44,0.35,0.40,0.47,0.43,0.39,0.52,0.42,0.38,0.52,0.38,0.48,0.43];
+const csAcc=[0.35,0.40,0.48,0.45,0.48,0.45,0.38,0.45,0.40,0.39,0.47,0.37,0.50,0.41,0.46,0.35,0.30,0.40,0.35,0.41,0.42,0.39,0.38,0.33,0.35,0.36,0.50,0.40,0.51,0.53];
+const idx=Array.from({length:30},(_,i)=>i+1);
+mkC('hmmChart',{type:'scatter',data:{datasets:[{label:'Spectral Diffusion',data:idx.map((x,i)=>({x:x,y:sdAcc[i]})),backgroundColor:'rgba(41,128,185,0.7)',pointRadius:4},{label:'Ionization',data:idx.map((x,i)=>({x:x,y:csAcc[i]})),backgroundColor:'rgba(231,76,60,0.7)',pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Trace Index'}},y:{title:{display:true,text:'HMM Accuracy'},min:0.25,max:0.6}}}});
+mkC('cvChart',{type:'bar',data:{labels:['Bright','Dark'],datasets:[{label:'Spectral Diffusion',data:[1.639,1.627],backgroundColor:'rgba(41,128,185,0.7)'},{label:'Ionization',data:[0.990,0.880],backgroundColor:'rgba(231,76,60,0.7)'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Coefficient of Variation'},min:0}},plugins:{annotation:{annotations:{exp:{type:'line',yMin:1.0,yMax:1.0,borderColor:'green',borderDash:[5,5]}}}}}});
+</script>
+</body>
+</html>

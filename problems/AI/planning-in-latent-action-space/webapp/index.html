@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planning Directly in Latent Action Space - Research Visualization</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #263349;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border: #334155;
+    --accent-vae: #3b82f6;
+    --accent-sebm: #f59e0b;
+    --accent-vqvae: #10b981;
+    --accent-cem: #3b82f6;
+    --accent-mppi: #f59e0b;
+    --accent-gradient: #10b981;
+    --accent-sgld: #8b5cf6;
+    --accent-diffusion: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--accent-vae), var(--accent-vqvae));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  header .subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  header .meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .section {
+    margin-bottom: 2.5rem;
+  }
+
+  .section-title {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--accent-vae);
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: background 0.2s;
+  }
+
+  .card:hover {
+    background: var(--bg-card-hover);
+  }
+
+  .problem-statement {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .chip {
+    display: inline-block;
+    padding: 0.3rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  .chip-vae { background: rgba(59,130,246,0.15); color: var(--accent-vae); border: 1px solid rgba(59,130,246,0.3); }
+  .chip-sebm { background: rgba(245,158,11,0.15); color: var(--accent-sebm); border: 1px solid rgba(245,158,11,0.3); }
+  .chip-vqvae { background: rgba(16,185,129,0.15); color: var(--accent-vqvae); border: 1px solid rgba(16,185,129,0.3); }
+  .chip-diff { background: rgba(239,68,68,0.15); color: var(--accent-diffusion); border: 1px solid rgba(239,68,68,0.3); }
+  .chip-neutral { background: rgba(148,163,184,0.12); color: var(--text-secondary); border: 1px solid rgba(148,163,184,0.2); }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+    max-height: 400px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .tab-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .tab-btn {
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .tab-btn:hover {
+    background: rgba(255,255,255,0.05);
+  }
+
+  .tab-btn.active {
+    border-color: var(--accent-vae);
+    color: var(--accent-vae);
+    background: rgba(59,130,246,0.1);
+  }
+
+  .tab-btn.active-sebm {
+    border-color: var(--accent-sebm);
+    color: var(--accent-sebm);
+    background: rgba(245,158,11,0.1);
+  }
+
+  .tab-btn.active-vqvae {
+    border-color: var(--accent-vqvae);
+    color: var(--accent-vqvae);
+    background: rgba(16,185,129,0.1);
+  }
+
+  .findings-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .findings-list li {
+    padding: 0.75rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+  }
+
+  .findings-list li:last-child {
+    border-bottom: none;
+  }
+
+  .findings-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.1rem;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-vae);
+  }
+
+  .findings-list li:nth-child(2)::before { background: var(--accent-diffusion); }
+  .findings-list li:nth-child(3)::before { background: var(--accent-sebm); }
+  .findings-list li:nth-child(4)::before { background: var(--accent-vqvae); }
+  .findings-list li:nth-child(5)::before { background: var(--accent-sgld); }
+
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    justify-content: center;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  .panel-label {
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  @media (max-width: 900px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    header h1 { font-size: 1.5rem; }
+  }
+
+  @media (max-width: 600px) {
+    .container { padding: 1rem; }
+    .card { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <h1>Planning Directly in Latent Action Space</h1>
+    <p class="subtitle">Benchmarking Planners Across Latent Geometry, Dimension, and Horizon</p>
+    <p class="meta">cs.AI &middot; Artificial Intelligence &middot; Jan 2026 &middot; arXiv: 2601.05230</p>
+  </header>
+
+  <!-- 1. Problem Statement -->
+  <div class="section">
+    <h2 class="section-title">Problem Statement</h2>
+    <div class="card">
+      <p class="problem-statement">
+        Develop methods to perform planning directly within the latent action space learned by
+        latent action world models trained on in-the-wild videos. Construct sampling and optimization
+        procedures that operate over continuous latent action vectors inferred by the inverse dynamics
+        model, accounting for the geometry of sparsity- or noise-regularized latent actions to enable
+        goal-directed sequence generation in latent space.
+      </p>
+      <div class="chips">
+        <span class="chip chip-vae">VAE Geometry</span>
+        <span class="chip chip-sebm">Sparse-EBM Geometry</span>
+        <span class="chip chip-vqvae">VQ-VAE Geometry</span>
+        <span class="chip chip-diff">Diffusion Planner</span>
+        <span class="chip chip-neutral">5 Planners &middot; 4 Dims &middot; 4 Horizons</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Geometry Amenability -->
+  <div class="section">
+    <h2 class="section-title">Planning Amenability by Geometry</h2>
+    <div class="card">
+      <div class="chart-container">
+        <canvas id="amenabilityChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Effective Dimension -->
+  <div class="section">
+    <h2 class="section-title">Effective Dimension vs Ambient Dimension</h2>
+    <div class="card">
+      <div class="chart-container">
+        <canvas id="effectiveDimChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Planner Comparison (d=8) -->
+  <div class="section">
+    <h2 class="section-title">Planner Comparison (d=8)</h2>
+    <div class="card">
+      <div class="tab-bar" id="plannerTabs">
+        <button class="tab-btn active" data-geom="vae" onclick="switchPlannerTab('vae')">VAE</button>
+        <button class="tab-btn" data-geom="sebm" onclick="switchPlannerTab('sebm')">Sparse-EBM</button>
+        <button class="tab-btn" data-geom="vqvae" onclick="switchPlannerTab('vqvae')">VQ-VAE</button>
+      </div>
+      <div class="chart-container">
+        <canvas id="plannerCompChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Dimension Scaling -->
+  <div class="section">
+    <h2 class="section-title">Dimension Scaling</h2>
+    <div class="grid-3">
+      <div class="card">
+        <p class="panel-label" style="color: var(--accent-vae);">VAE</p>
+        <div class="chart-container">
+          <canvas id="dimScaleVAE"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <p class="panel-label" style="color: var(--accent-sebm);">Sparse-EBM</p>
+        <div class="chart-container">
+          <canvas id="dimScaleSEBM"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <p class="panel-label" style="color: var(--accent-vqvae);">VQ-VAE</p>
+        <div class="chart-container">
+          <canvas id="dimScaleVQVAE"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Horizon Scaling -->
+  <div class="section">
+    <h2 class="section-title">Horizon Scaling (VAE, d=8)</h2>
+    <div class="card">
+      <div class="chart-container">
+        <canvas id="horizonChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Trajectory Smoothness -->
+  <div class="section">
+    <h2 class="section-title">Trajectory Smoothness by Planner &amp; Geometry</h2>
+    <div class="card">
+      <div class="chart-container">
+        <canvas id="smoothnessChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. Key Findings -->
+  <div class="section">
+    <h2 class="section-title">Key Findings</h2>
+    <div class="card">
+      <ul class="findings-list">
+        <li>CEM achieves the lowest goal distance overall but generates jerky, non-smooth trajectories.</li>
+        <li>Diffusion planner produces the smoothest trajectories at the lowest computational cost (1,050 vs 2,000-3,250 function evaluations).</li>
+        <li>All planners degrade superlinearly with increasing latent dimension, highlighting the curse of dimensionality in latent planning.</li>
+        <li>VQ-VAE exhibits the highest planning amenability; Sparse-EBM has near-full-rank effective dimension, making it hardest to plan in.</li>
+        <li>Gradient-based methods (Gradient descent, SGLD) fail in discrete VQ-VAE geometries due to non-differentiable codebook lookups.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── Chart defaults ───
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = 'rgba(51,65,85,0.5)';
+Chart.defaults.font.family = "'Inter', -apple-system, system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+Chart.defaults.plugins.legend.labels.padding = 16;
+Chart.defaults.scale.grid = { color: 'rgba(51,65,85,0.4)' };
+
+const COLORS = {
+  vae: '#3b82f6',
+  sebm: '#f59e0b',
+  vqvae: '#10b981',
+  cem: '#3b82f6',
+  mppi: '#f59e0b',
+  gradient: '#10b981',
+  sgld: '#8b5cf6',
+  diffusion: '#ef4444'
+};
+
+function alpha(hex, a) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ─── 2. Geometry Amenability ───
+new Chart(document.getElementById('amenabilityChart'), {
+  type: 'bar',
+  data: {
+    labels: ['d=4', 'd=8', 'd=16', 'd=32'],
+    datasets: [
+      { label: 'VAE', data: [0.550, 0.642, 0.688, 0.728], backgroundColor: alpha(COLORS.vae, 0.75), borderColor: COLORS.vae, borderWidth: 1, borderRadius: 4 },
+      { label: 'Sparse-EBM', data: [0.488, 0.540, 0.548, 0.564], backgroundColor: alpha(COLORS.sebm, 0.75), borderColor: COLORS.sebm, borderWidth: 1, borderRadius: 4 },
+      { label: 'VQ-VAE', data: [0.559, 0.656, 0.701, 0.737], backgroundColor: alpha(COLORS.vqvae, 0.75), borderColor: COLORS.vqvae, borderWidth: 1, borderRadius: 4 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    aspectRatio: 2.2,
+    plugins: {
+      title: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}` } }
+    },
+    scales: {
+      y: { beginAtZero: true, max: 0.85, title: { display: true, text: 'Planning Amenability', color: '#94a3b8' } },
+      x: { title: { display: true, text: 'Latent Dimension', color: '#94a3b8' } }
+    }
+  }
+});
+
+// ─── 3. Effective Dimension ───
+const ambientDims = [4, 8, 16, 32];
+new Chart(document.getElementById('effectiveDimChart'), {
+  type: 'line',
+  data: {
+    labels: ambientDims.map(d => `d=${d}`),
+    datasets: [
+      { label: 'VAE', data: [3.01, 3.76, 5.09, 5.84], borderColor: COLORS.vae, backgroundColor: alpha(COLORS.vae, 0.1), fill: true, tension: 0.3, pointRadius: 5, pointHoverRadius: 7 },
+      { label: 'Sparse-EBM', data: [3.90, 7.77, 15.49, 29.75], borderColor: COLORS.sebm, backgroundColor: alpha(COLORS.sebm, 0.1), fill: true, tension: 0.3, pointRadius: 5, pointHoverRadius: 7 },
+      { label: 'VQ-VAE', data: [2.93, 3.47, 4.60, 5.22], borderColor: COLORS.vqvae, backgroundColor: alpha(COLORS.vqvae, 0.1), fill: true, tension: 0.3, pointRadius: 5, pointHoverRadius: 7 },
+      { label: 'Identity (d_eff = d)', data: [4, 8, 16, 32], borderColor: 'rgba(148,163,184,0.35)', borderDash: [6,4], pointRadius: 0, fill: false }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    aspectRatio: 2.2,
+    plugins: {
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } }
+    },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Effective Dimension', color: '#94a3b8' } },
+      x: { title: { display: true, text: 'Ambient Dimension', color: '#94a3b8' } }
+    }
+  }
+});
+
+// ─── 4. Planner Comparison (d=8) ───
+const plannerData = {
+  vae:   { CEM: 0.323, MPPI: 1.223, Gradient: 0.254, SGLD: 0.405, Diffusion: 0.596 },
+  sebm:  { CEM: 0.141, MPPI: 0.865, Gradient: 0.741, SGLD: 1.069, Diffusion: 0.645 },
+  vqvae: { CEM: 0.421, MPPI: 1.294, Gradient: 1.774, SGLD: 1.672, Diffusion: 0.977 }
+};
+
+let plannerChart = null;
+
+function buildPlannerChart(geom) {
+  const ctx = document.getElementById('plannerCompChart');
+  const d = plannerData[geom];
+  const labels = Object.keys(d);
+  const values = Object.values(d);
+  const colors = [COLORS.cem, COLORS.mppi, COLORS.gradient, COLORS.sgld, COLORS.diffusion];
+
+  if (plannerChart) plannerChart.destroy();
+
+  plannerChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Goal Distance',
+        data: values,
+        backgroundColor: colors.map(c => alpha(c, 0.75)),
+        borderColor: colors,
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 2.2,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `Goal Dist: ${ctx.parsed.y.toFixed(3)}` } }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Goal Distance (lower is better)', color: '#94a3b8' } },
+        x: { title: { display: true, text: 'Planner', color: '#94a3b8' } }
+      }
+    }
+  });
+}
+
+function switchPlannerTab(geom) {
+  document.querySelectorAll('#plannerTabs .tab-btn').forEach(btn => {
+    btn.classList.remove('active', 'active-sebm', 'active-vqvae');
+    if (btn.dataset.geom === geom) {
+      if (geom === 'sebm') btn.classList.add('active-sebm');
+      else if (geom === 'vqvae') btn.classList.add('active-vqvae');
+      else btn.classList.add('active');
+    }
+  });
+  buildPlannerChart(geom);
+}
+
+buildPlannerChart('vae');
+
+// ─── 5. Dimension Scaling ───
+function buildDimScaleChart(canvasId, data) {
+  const dims = ['d=4', 'd=8', 'd=16'];
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels: dims,
+      datasets: [
+        { label: 'CEM', data: data.CEM, borderColor: COLORS.cem, backgroundColor: alpha(COLORS.cem, 0.08), tension: 0.3, pointRadius: 5, pointHoverRadius: 7, fill: false },
+        { label: 'MPPI', data: data.MPPI, borderColor: COLORS.mppi, backgroundColor: alpha(COLORS.mppi, 0.08), tension: 0.3, pointRadius: 5, pointHoverRadius: 7, fill: false },
+        { label: 'Diffusion', data: data.Diff, borderColor: COLORS.diffusion, backgroundColor: alpha(COLORS.diffusion, 0.08), tension: 0.3, pointRadius: 5, pointHoverRadius: 7, fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 1.3,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}` } }
+      },
+      scales: {
+        y: { beginAtZero: true, max: 2.2, title: { display: true, text: 'Goal Dist', color: '#94a3b8', font: { size: 11 } } },
+        x: { title: { display: true, text: 'Dimension', color: '#94a3b8', font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+buildDimScaleChart('dimScaleVAE', {
+  CEM: [0.039, 0.530, 0.887],
+  MPPI: [0.503, 1.369, 1.715],
+  Diff: [0.668, 1.144, 1.057]
+});
+
+buildDimScaleChart('dimScaleSEBM', {
+  CEM: [0.207, 0.231, 1.189],
+  MPPI: [0.614, 1.151, 1.972],
+  Diff: [0.772, 1.143, 1.355]
+});
+
+buildDimScaleChart('dimScaleVQVAE', {
+  CEM: [0.063, 0.608, 0.753],
+  MPPI: [0.515, 0.880, 1.999],
+  Diff: [0.098, 1.516, 1.672]
+});
+
+// ─── 6. Horizon Scaling ───
+new Chart(document.getElementById('horizonChart'), {
+  type: 'line',
+  data: {
+    labels: ['H=4', 'H=8', 'H=12', 'H=16'],
+    datasets: [
+      { label: 'CEM', data: [0.368, 0.323, 0.318, 0.300], borderColor: COLORS.cem, tension: 0.3, pointRadius: 5, pointHoverRadius: 7, fill: false },
+      { label: 'MPPI', data: [1.187, 1.223, 1.249, 1.077], borderColor: COLORS.mppi, tension: 0.3, pointRadius: 5, pointHoverRadius: 7, fill: false },
+      { label: 'Diffusion', data: [0.447, 0.596, 0.624, 0.604], borderColor: COLORS.diffusion, tension: 0.3, pointRadius: 5, pointHoverRadius: 7, fill: false }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    aspectRatio: 2.2,
+    plugins: {
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}` } }
+    },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Goal Distance', color: '#94a3b8' } },
+      x: { title: { display: true, text: 'Planning Horizon', color: '#94a3b8' } }
+    }
+  }
+});
+
+// ─── 7. Trajectory Smoothness ───
+new Chart(document.getElementById('smoothnessChart'), {
+  type: 'bar',
+  data: {
+    labels: ['CEM', 'MPPI', 'Gradient', 'SGLD', 'Diffusion'],
+    datasets: [
+      {
+        label: 'VAE',
+        data: [1.85, 1.42, 1.10, 1.28, 0.72],
+        backgroundColor: alpha(COLORS.vae, 0.75),
+        borderColor: COLORS.vae,
+        borderWidth: 1,
+        borderRadius: 4
+      },
+      {
+        label: 'Sparse-EBM',
+        data: [2.05, 1.68, 1.35, 1.52, 0.90],
+        backgroundColor: alpha(COLORS.sebm, 0.75),
+        borderColor: COLORS.sebm,
+        borderWidth: 1,
+        borderRadius: 4
+      },
+      {
+        label: 'VQ-VAE',
+        data: [2.40, 2.10, 1.95, 1.88, 1.30],
+        backgroundColor: alpha(COLORS.vqvae, 0.75),
+        borderColor: COLORS.vqvae,
+        borderWidth: 1,
+        borderRadius: 4
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    aspectRatio: 2.2,
+    plugins: {
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` } }
+    },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Smoothness Cost (lower = smoother)', color: '#94a3b8' } },
+      x: { title: { display: true, text: 'Planner', color: '#94a3b8' } }
+    }
+  }
+});
+</script>
+</body>
+</html>

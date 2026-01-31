@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scalability in Memory-Augmented LLMs</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .full-width { grid-column: 1 / -1; }
+  .chart-container { position: relative; height: 350px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-box { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .metric-box .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+  .metric-box .delta { font-size: 0.85rem; color: var(--success); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Scalability in Memory-Augmented LLMs</h1>
+  <p>Comparing memory management strategies for external memory banks storing per-document modulation parameters in memory-augmented large language models.</p>
+</div>
+<div class="container">
+  <div class="metric-grid">
+    <div class="metric-box"><div class="value">4x</div><div class="label">Quantization Compression</div><div class="delta">Error: only 0.005</div></div>
+    <div class="metric-box"><div class="value">8.6x</div><div class="label">Clustering Compression</div><div class="delta">Best storage reduction</div></div>
+    <div class="metric-box"><div class="value">0.005</div><div class="label">Quantization Error</div><div class="delta">Near-lossless</div></div>
+    <div class="metric-box"><div class="value">128 KB</div><div class="label">LRU Bounded Memory</div><div class="delta">vs 1.28 MB full storage</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Storage Scaling by Strategy</h2>
+      <div class="chart-container"><canvas id="chartStorage"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Reconstruction Error by Strategy</h2>
+      <div class="chart-container"><canvas id="chartQuality"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Compression-Quality Trade-off</h2>
+      <div class="chart-container"><canvas id="chartTradeoff"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Streaming Memory Growth</h2>
+      <div class="chart-container"><canvas id="chartStreaming"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Strategy Comparison at 1,000 Documents</h2>
+      <table>
+        <thead><tr><th>Strategy</th><th>Storage (KB)</th><th>Compression</th><th>Recon. Error</th><th>Throughput (docs/s)</th></tr></thead>
+        <tbody>
+          <tr><td>Full Storage</td><td>256.0</td><td>1.0x</td><td>0.000</td><td>201,205</td></tr>
+          <tr><td>PCA Compression</td><td>256.0</td><td>1.0x</td><td>0.000</td><td>265,103</td></tr>
+          <tr><td>Random Eviction</td><td>128.0</td><td>2.0x</td><td>0.513</td><td>3,385</td></tr>
+          <tr><td>LRU Eviction</td><td>128.0</td><td>2.0x</td><td>0.500</td><td>196,032</td></tr>
+          <tr style="background:#e8f5e9"><td>Quantization</td><td>64.0</td><td>4.0x</td><td>0.005</td><td>59,518</td></tr>
+          <tr><td>Clustering</td><td>29.6</td><td>8.6x</td><td>1.000</td><td>202,873</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const nDocs = ['100','500','1000'];
+const strategies = {
+  full: {mem:[25600,128000,256000], qual:[0,0,0], color:'#2980b9'},
+  random_eviction: {mem:[12800,64000,128000], qual:[0.513,0.527,0.513], color:'#e74c3c'},
+  lru_eviction: {mem:[12800,64000,128000], qual:[0.500,0.500,0.500], color:'#27ae60'},
+  clustering: {mem:[2960,14800,29600], qual:[1.0,1.0,1.0], color:'#f39c12'},
+  quantization: {mem:[6400,32000,64000], qual:[0.005,0.005,0.005], color:'#1abc9c'}
+};
+const labels = {full:'Full Storage', random_eviction:'Random Eviction', lru_eviction:'LRU Eviction', clustering:'Clustering', quantization:'Quantization'};
+
+new Chart(document.getElementById('chartStorage'), {
+  type:'line',
+  data:{labels:nDocs, datasets:Object.keys(strategies).map(s=>({
+    label:labels[s], data:strategies[s].mem.map(v=>v/1024), borderColor:strategies[s].color, tension:0.3, pointRadius:5, borderWidth:2
+  }))},
+  options:{responsive:true, maintainAspectRatio:false, scales:{
+    y:{title:{display:true, text:'Storage (KB)'}, type:'logarithmic'},
+    x:{title:{display:true, text:'Number of Documents'}}
+  }}
+});
+
+new Chart(document.getElementById('chartQuality'), {
+  type:'bar',
+  data:{labels:['Full','Random\nEviction','LRU\nEviction','Clustering','Quantization'],
+    datasets:[{label:'Reconstruction Error', data:[0, 0.513, 0.500, 1.000, 0.005],
+      backgroundColor:['#2980b9','#e74c3c','#27ae60','#f39c12','#1abc9c']}]},
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{y:{title:{display:true, text:'Reconstruction Error (lower = better)'}}}}
+});
+
+const ratios = ['10%','25%','50%','75%','100%'];
+new Chart(document.getElementById('chartTradeoff'), {
+  type:'line',
+  data:{labels:ratios, datasets:[
+    {label:'Quantization', data:[0.005,0.005,0.005,0.005,0.005], borderColor:'#1abc9c', tension:0.3, pointRadius:5, borderWidth:2},
+    {label:'LRU Eviction', data:[0.900,0.760,0.500,0.260,0.000], borderColor:'#e74c3c', tension:0.3, pointRadius:5, borderWidth:2}
+  ]},
+  options:{responsive:true, maintainAspectRatio:false, scales:{
+    y:{title:{display:true, text:'Reconstruction Error'}, min:0, max:1},
+    x:{title:{display:true, text:'Retention Ratio'}}
+  }}
+});
+
+const checkpoints = ['500','1000','1500','2000','2500','3000','3500','4000','4500','5000'];
+const memFull = [128,256,384,512,640,768,896,1024,1152,1280];
+const memLRU = [128,128,128,128,128,128,128,128,128,128];
+const memCluster = [14.8,29.6,44.4,59.2,74.0,88.8,103.6,118.4,133.2,148.0];
+
+new Chart(document.getElementById('chartStreaming'), {
+  type:'line',
+  data:{labels:checkpoints, datasets:[
+    {label:'Full Storage', data:memFull, borderColor:'#2980b9', tension:0.3, pointRadius:4, borderWidth:2},
+    {label:'LRU Eviction', data:memLRU, borderColor:'#e74c3c', tension:0.3, pointRadius:4, borderWidth:2},
+    {label:'Clustering', data:memCluster, borderColor:'#f39c12', tension:0.3, pointRadius:4, borderWidth:2}
+  ]},
+  options:{responsive:true, maintainAspectRatio:false, scales:{
+    y:{title:{display:true, text:'Memory (KB)'}},
+    x:{title:{display:true, text:'Documents Processed'}}
+  }}
+});
+</script>
+</body>
+</html>

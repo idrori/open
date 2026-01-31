@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duration of the Active Phase in Episodic Radio Galaxies</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    :root {
+        --primary: #1a237e;
+        --primary-light: #3949ab;
+        --accent: #ff6f00;
+        --accent-light: #ffa040;
+        --bg: #f5f5f5;
+        --card-bg: #ffffff;
+        --text: #212121;
+        --text-light: #616161;
+        --border: #e0e0e0;
+        --success: #2e7d32;
+        --info: #0277bd;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+    }
+
+    /* Hero Section */
+    .hero {
+        background: linear-gradient(135deg, var(--primary) 0%, #0d47a1 50%, #01579b 100%);
+        color: white;
+        padding: 60px 20px 50px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(ellipse at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 60%),
+                    radial-gradient(ellipse at 80% 20%, rgba(255,111,0,0.1) 0%, transparent 50%);
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; }
+    .hero h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px; }
+    .hero .subtitle { font-size: 1.1rem; opacity: 0.9; margin-bottom: 20px; }
+    .hero .meta-badges { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .badge {
+        display: inline-block;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255,255,255,0.25);
+    }
+    .badge.accent { background: var(--accent); border-color: var(--accent); }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+        background: white;
+        border-bottom: 2px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .nav-tab {
+        padding: 14px 22px;
+        cursor: pointer;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--text-light);
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s;
+        background: none;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+    }
+    .nav-tab:hover { color: var(--primary); background: rgba(26,35,126,0.04); }
+    .nav-tab.active { color: var(--primary); border-bottom-color: var(--accent); }
+
+    /* Main content */
+    .container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Cards */
+    .card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 28px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        border: 1px solid var(--border);
+    }
+    .card h2 {
+        font-size: 1.35rem;
+        color: var(--primary);
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--border);
+    }
+    .card h3 { font-size: 1.1rem; color: var(--primary-light); margin: 16px 0 10px; }
+    .card p { margin-bottom: 12px; color: var(--text); }
+
+    /* Stats grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin: 20px 0;
+    }
+    .stat-card {
+        background: linear-gradient(135deg, #f8f9ff 0%, #eef0ff 100%);
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #d8dafe;
+    }
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--primary);
+        display: block;
+    }
+    .stat-label {
+        font-size: 0.82rem;
+        color: var(--text-light);
+        margin-top: 4px;
+        display: block;
+    }
+    .stat-unit {
+        font-size: 0.9rem;
+        font-weight: 400;
+        color: var(--primary-light);
+    }
+
+    /* Chart containers */
+    .chart-container {
+        position: relative;
+        width: 100%;
+        max-width: 700px;
+        margin: 20px auto;
+        padding: 10px;
+    }
+    .chart-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 24px;
+        margin: 20px 0;
+    }
+
+    /* Tables */
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        font-size: 0.9rem;
+    }
+    .data-table th {
+        background: var(--primary);
+        color: white;
+        padding: 12px 14px;
+        text-align: left;
+        font-weight: 600;
+    }
+    .data-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+    .data-table tr:nth-child(even) { background: #f8f9ff; }
+    .data-table tr:hover { background: #eef0ff; }
+
+    /* Equation blocks */
+    .equation-block {
+        background: #f8f9ff;
+        border-left: 4px solid var(--primary);
+        padding: 16px 20px;
+        margin: 16px 0;
+        border-radius: 0 8px 8px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.95rem;
+        overflow-x: auto;
+    }
+
+    /* Key findings */
+    .finding {
+        display: flex;
+        gap: 14px;
+        padding: 16px;
+        margin: 12px 0;
+        background: #f8fdf8;
+        border-radius: 8px;
+        border-left: 4px solid var(--success);
+    }
+    .finding-icon {
+        font-size: 1.4rem;
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        background: var(--success);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+    .finding-text { flex: 1; }
+    .finding-text strong { color: var(--primary); }
+
+    /* Method cards */
+    .method-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+        margin: 16px 0;
+    }
+    .method-card {
+        background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+        border: 1px solid #ffe0b2;
+        border-radius: 10px;
+        padding: 20px;
+    }
+    .method-card h4 {
+        color: var(--accent);
+        font-size: 1rem;
+        margin-bottom: 8px;
+    }
+    .method-card p { font-size: 0.88rem; color: var(--text); }
+
+    /* Footer */
+    .footer {
+        background: var(--primary);
+        color: rgba(255,255,255,0.8);
+        text-align: center;
+        padding: 24px;
+        margin-top: 40px;
+        font-size: 0.85rem;
+    }
+
+    @media (max-width: 768px) {
+        .hero h1 { font-size: 1.5rem; }
+        .hero { padding: 40px 16px 30px; }
+        .nav-tabs { overflow-x: auto; justify-content: flex-start; }
+        .nav-tab { padding: 12px 14px; font-size: 0.8rem; white-space: nowrap; }
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .chart-row { grid-template-columns: 1fr; }
+        .container { padding: 16px 12px; }
+    }
+</style>
+</head>
+<body>
+
+<!-- Hero Section -->
+<div class="hero">
+    <div class="hero-content">
+        <h1>Duration of the Active Phase in Episodic Radio Galaxies</h1>
+        <p class="subtitle">A Multi-Method Bayesian Approach to AGN Duty Cycles</p>
+        <div class="meta-badges">
+            <span class="badge">KDD 2026</span>
+            <span class="badge accent">AI4Sciences Track</span>
+            <span class="badge">Genetic Algorithms</span>
+            <span class="badge">J1007+3540</span>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<div class="nav-tabs">
+    <button class="nav-tab active" onclick="showSection('overview')">Overview</button>
+    <button class="nav-tab" onclick="showSection('methods')">Methods</button>
+    <button class="nav-tab" onclick="showSection('charts')">Interactive Charts</button>
+    <button class="nav-tab" onclick="showSection('tables')">Data Tables</button>
+    <button class="nav-tab" onclick="showSection('findings')">Key Findings</button>
+</div>
+
+<div class="container">
+
+    <!-- Overview Section -->
+    <div id="overview" class="section active">
+        <div class="card">
+            <h2>Problem Statement</h2>
+            <p>Radio galaxies powered by AGN jets undergo multiple episodes of jet launching separated by quiescent periods. This study addresses the open question: <strong>What is the duration of the active phase of AGN jet activity in episodic radio galaxies?</strong></p>
+            <p>We develop a multi-method framework combining CI-off spectral ageing models, self-similar dynamical lobe models, Bayesian MCMC inference, population synthesis, and Approximate Bayesian Computation (ABC), applied to the prototype double-double radio galaxy J1007+3540.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-value">101.89 <span class="stat-unit">Myr</span></span>
+                <span class="stat-label">MCMC Active Phase (t_on)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">60.93 <span class="stat-unit">Myr</span></span>
+                <span class="stat-label">MCMC Quiescent Duration (t_off)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">244.47 <span class="stat-unit">Myr</span></span>
+                <span class="stat-label">Dynamical Quiescent Gap</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">4.81 <span class="stat-unit">&mu;G</span></span>
+                <span class="stat-label">Magnetic Field Strength (B)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">30.73 <span class="stat-unit">Myr</span></span>
+                <span class="stat-label">Population Median t_on</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">0.576</span>
+                <span class="stat-label">Median Duty Fraction</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">23.4%</span>
+                <span class="stat-label">DDRG Fraction</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">42.65 <span class="stat-unit">Myr</span></span>
+                <span class="stat-label">ABC Inferred t_on</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Dynamical Model: J1007+3540</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value">32.67 <span class="stat-unit">Myr</span></span>
+                    <span class="stat-label">Inner Lobe Age (80 kpc)</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">277.14 <span class="stat-unit">Myr</span></span>
+                    <span class="stat-label">Outer Lobe Age (500 kpc)</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">0.00685<span class="stat-unit">c</span></span>
+                    <span class="stat-label">Inner Advance Speed</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">0.00504<span class="stat-unit">c</span></span>
+                    <span class="stat-label">Outer Advance Speed</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Methods Section -->
+    <div id="methods" class="section">
+        <div class="card">
+            <h2>Multi-Method Framework</h2>
+            <p>Our approach unifies source-level spectral analysis with population-level statistical inference through five complementary methods.</p>
+
+            <div class="method-grid">
+                <div class="method-card">
+                    <h4>1. CI-off Spectral Ageing</h4>
+                    <p>Models radio spectra of ageing plasma using the continuous injection -- off formalism. During active phase t_on, electrons are injected with power-law energy distribution; after switch-off, plasma ages for duration t_off.</p>
+                </div>
+                <div class="method-card">
+                    <h4>2. Dynamical Lobe Model</h4>
+                    <p>Kaiser &amp; Alexander self-similar model for jet-inflated lobes. Lobe length evolves as D(t) proportional to t^(3/(5-beta)), providing model-independent age estimates from lobe morphology.</p>
+                </div>
+                <div class="method-card">
+                    <h4>3. Bayesian MCMC</h4>
+                    <p>Affine-invariant ensemble sampler with 16 walkers and 1500 steps. Infers t_on, t_off, and B with log-uniform priors and Gaussian likelihood on synthetic CI-off spectra.</p>
+                </div>
+                <div class="method-card">
+                    <h4>4. Population Synthesis</h4>
+                    <p>Generates 5000 episodic radio sources with log-normal activity distributions. Classifies sources as active, remnant, or restarted at observation epoch.</p>
+                </div>
+                <div class="method-card">
+                    <h4>5. ABC Inference</h4>
+                    <p>Approximate Bayesian Computation constrains population parameters using summary statistics: DDRG fraction, median duty fraction, and median active timescale from 500 prior draws.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Key Equations</h2>
+            <h3>Break Frequency (CI-off Model)</h3>
+            <div class="equation-block">
+                v_break = 1.12 x 10^9 / (B^3 * (t_on + t_off)^2)  [Hz]
+            </div>
+            <p>where B is the magnetic field in Tesla and time is in seconds.</p>
+
+            <h3>Self-Similar Lobe Evolution</h3>
+            <div class="equation-block">
+                D(t) = c_1 * (Q_jet / (rho_0 * a_0^beta))^(1/(5-beta)) * t^(3/(5-beta))
+            </div>
+            <p>For canonical beta = 1.5: D proportional to t^(6/7).</p>
+
+            <h3>MCMC Log-Likelihood</h3>
+            <div class="equation-block">
+                ln L(theta) = -0.5 * SUM_i [(S_i^obs - S_i^model(theta))^2 / sigma_i^2]
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div id="charts" class="section">
+        <div class="card">
+            <h2>MCMC Posterior Estimates vs True Values</h2>
+            <div class="chart-container">
+                <canvas id="mcmcChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-row">
+            <div class="card">
+                <h2>Dynamical Ages & Lobe Sizes</h2>
+                <div class="chart-container" style="max-width:100%">
+                    <canvas id="dynamicalChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Population Timescale Distributions</h2>
+                <div class="chart-container" style="max-width:100%">
+                    <canvas id="populationChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-row">
+            <div class="card">
+                <h2>Active Phase Estimates Across Methods</h2>
+                <div class="chart-container" style="max-width:100%">
+                    <canvas id="methodComparisonChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Magnetic Field Sensitivity</h2>
+                <div class="chart-container" style="max-width:100%">
+                    <canvas id="magFieldChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Population Source Classification</h2>
+            <div class="chart-container" style="max-width:450px">
+                <canvas id="classificationChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>ABC Posterior: Active Timescale Parameters</h2>
+            <div class="chart-container">
+                <canvas id="abcChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tables Section -->
+    <div id="tables" class="section">
+        <div class="card">
+            <h2>MCMC Posterior Estimates</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>Parameter</th><th>Median</th><th>16th Percentile</th><th>84th Percentile</th><th>True Value</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>t_on (Myr)</td><td>101.89</td><td>30.31</td><td>291.00</td><td>120.0</td></tr>
+                    <tr><td>t_off (Myr)</td><td>60.93</td><td>20.05</td><td>177.51</td><td>80.0</td></tr>
+                    <tr><td>B (&mu;G)</td><td>4.81</td><td>2.35</td><td>10.19</td><td>4.0</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Dynamical Model Results</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>Property</th><th>Inner Lobe</th><th>Outer Lobe</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Extent (kpc)</td><td>80.0</td><td>500.0</td></tr>
+                    <tr><td>Dynamical Age (Myr)</td><td>32.67</td><td>277.14</td></tr>
+                    <tr><td>Advance Speed (c)</td><td>0.00685</td><td>0.00504</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top:12px;"><strong>Quiescent Gap:</strong> 244.47 Myr (= 277.14 - 32.67 Myr)</p>
+        </div>
+
+        <div class="card">
+            <h2>Population Synthesis Statistics (N = 5000 sources)</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>Statistic</th><th>Active Phase (t_on)</th><th>Quiescent (t_off)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Median (Myr)</td><td>30.73</td><td>19.12</td></tr>
+                    <tr><td>Mean (Myr)</td><td>46.07</td><td>35.38</td></tr>
+                    <tr><td>16th Percentile (Myr)</td><td>12.39</td><td>5.66</td></tr>
+                    <tr><td>84th Percentile (Myr)</td><td>76.57</td><td>60.87</td></tr>
+                </tbody>
+            </table>
+            <table class="data-table" style="margin-top:16px;">
+                <thead>
+                    <tr><th>Population Property</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Duty Fraction (median)</td><td>0.576</td></tr>
+                    <tr><td>Duty Fraction (mean)</td><td>0.568</td></tr>
+                    <tr><td>Fraction Active</td><td>0.125</td></tr>
+                    <tr><td>Fraction DDRG</td><td>0.234</td></tr>
+                    <tr><td>Median Episodes</td><td>5.0</td></tr>
+                    <tr><td>Median Lobe Extent (kpc)</td><td>151.66</td></tr>
+                    <tr><td>Log-Normal &mu;_on</td><td>1.5</td></tr>
+                    <tr><td>Log-Normal &sigma;_on</td><td>0.4</td></tr>
+                    <tr><td>Log-Normal &mu;_off</td><td>1.3</td></tr>
+                    <tr><td>Log-Normal &sigma;_off</td><td>0.5</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>ABC Inference Results</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>Parameter</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Acceptance Rate</td><td>0.006 (3/500)</td></tr>
+                    <tr><td>&mu;_on Median</td><td>1.630</td></tr>
+                    <tr><td>&mu;_on 16th Percentile</td><td>1.589</td></tr>
+                    <tr><td>&mu;_on 84th Percentile</td><td>1.635</td></tr>
+                    <tr><td>&sigma;_on Median</td><td>0.501</td></tr>
+                    <tr><td>&mu;_off Median</td><td>1.609</td></tr>
+                    <tr><td>&sigma;_off Median</td><td>0.466</td></tr>
+                    <tr><td>Inferred t_on (Myr)</td><td>42.65</td></tr>
+                </tbody>
+            </table>
+            <h3>Observed Constraints Used</h3>
+            <table class="data-table">
+                <thead>
+                    <tr><th>Constraint</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>DDRG Fraction</td><td>0.04</td></tr>
+                    <tr><td>Duty Fraction (median)</td><td>0.55</td></tr>
+                    <tr><td>t_on Median (Myr)</td><td>35.0</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Magnetic Field Sensitivity Analysis</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>B (&mu;G)</th><th>Break Frequency (GHz)</th><th>Spectral Age for 1 GHz Break</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>1.0</td><td>2.87 x 10<sup>-23</sup></td><td>7.50 x 10<sup>-10</sup></td></tr>
+                    <tr><td>2.0</td><td>4.42 x 10<sup>-24</sup></td><td>2.94 x 10<sup>-10</sup></td></tr>
+                    <tr><td>4.0</td><td>5.84 x 10<sup>-25</sup></td><td>1.07 x 10<sup>-10</sup></td></tr>
+                    <tr><td>6.0</td><td>1.75 x 10<sup>-25</sup></td><td>5.85 x 10<sup>-11</sup></td></tr>
+                    <tr><td>10.0</td><td>3.80 x 10<sup>-26</sup></td><td>2.73 x 10<sup>-11</sup></td></tr>
+                    <tr><td>20.0</td><td>4.76 x 10<sup>-27</sup></td><td>9.66 x 10<sup>-12</sup></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Key Findings Section -->
+    <div id="findings" class="section">
+        <div class="card">
+            <h2>Key Findings</h2>
+
+            <div class="finding">
+                <div class="finding-icon">1</div>
+                <div class="finding-text">
+                    <strong>Active-phase timescales span 30-120 Myr</strong> depending on the method and source properties. Individual source MCMC analysis yields t_on ~ 102 Myr for J1007+3540, while population-level analyses give medians of 31-43 Myr.
+                </div>
+            </div>
+
+            <div class="finding">
+                <div class="finding-icon">2</div>
+                <div class="finding-text">
+                    <strong>Quiescent gaps exceed active durations substantially.</strong> The dynamical model implies a 244.47 Myr quiescent gap between episodes, meaning radio galaxies spend the majority of their episodic lifecycle in a quiescent state.
+                </div>
+            </div>
+
+            <div class="finding">
+                <div class="finding-icon">3</div>
+                <div class="finding-text">
+                    <strong>MCMC recovers injected parameters within 68% credible intervals.</strong> The active-phase duration t_on = 101.89 Myr (true: 120 Myr), quiescent duration t_off = 60.93 Myr (true: 80 Myr), and magnetic field B = 4.81 uG (true: 4.0 uG) are all consistent.
+                </div>
+            </div>
+
+            <div class="finding">
+                <div class="finding-icon">4</div>
+                <div class="finding-text">
+                    <strong>Duty fraction of 0.576 and DDRG fraction of 23.4%</strong> provide testable predictions for current and upcoming low-frequency radio surveys. The fraction of sources currently active is 12.5%.
+                </div>
+            </div>
+
+            <div class="finding">
+                <div class="finding-icon">5</div>
+                <div class="finding-text">
+                    <strong>ABC inference yields mu_on = 1.63</strong> with a median inferred active timescale of 42.65 Myr, consistent with population synthesis inputs. The low acceptance rate (0.006) reflects the high dimensionality of the parameter space.
+                </div>
+            </div>
+
+            <div class="finding">
+                <div class="finding-icon">6</div>
+                <div class="finding-text">
+                    <strong>Population synthesis reveals median 5 activity episodes per source</strong> with log-normal distributions (mu_on = 1.5, sigma_on = 0.4) and median lobe extent of 151.66 kpc across 5000 simulated sources.
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Limitations</h2>
+            <p>The CI-off model assumes a uniform magnetic field and single-zone emission. MCMC posteriors are broad due to degeneracies between magnetic field strength and spectral age. The population synthesis adopts log-normal distributions that may not capture the full diversity of AGN fueling mechanisms. The ABC acceptance rate of 0.006 indicates that more prior samples are needed for robust posterior estimation.</p>
+        </div>
+    </div>
+
+</div>
+
+<div class="footer">
+    KDD 2026 &middot; AI4Sciences Track &middot; Duration of the Active Phase in Episodic Radio Galaxies &middot; Multi-Method Bayesian Approach
+</div>
+
+<script>
+// Embedded Data
+const mcmcData = {
+    t_on_true: 120.0, t_off_true: 80.0,
+    t_on_median: 101.89, t_on_16: 30.31, t_on_84: 291.0,
+    t_off_median: 60.93, t_off_16: 20.05, t_off_84: 177.51,
+    B_median: 4.81, B_16: 2.35, B_84: 10.19, B_true: 4.0
+};
+
+const dynamicalData = {
+    inner_lobe_kpc: 80.0, outer_lobe_kpc: 500.0,
+    inner_dyn_age_Myr: 32.67, outer_dyn_age_Myr: 277.14,
+    inner_advance_speed_c: 0.00685, outer_advance_speed_c: 0.00504,
+    quiescent_gap_Myr: 244.47
+};
+
+const populationData = {
+    n_sources: 5000,
+    t_on_median: 30.73, t_on_16: 12.39, t_on_84: 76.57, t_on_mean: 46.07,
+    t_off_median: 19.12, t_off_16: 5.66, t_off_84: 60.87, t_off_mean: 35.38,
+    duty_fraction_median: 0.576, duty_fraction_mean: 0.568,
+    frac_active: 0.125, frac_ddrg: 0.234,
+    n_episodes_median: 5.0, D_lobe_median_kpc: 151.66
+};
+
+const abcData = {
+    acceptance_rate: 0.006, n_accepted: 3, n_total: 500,
+    mu_on_median: 1.63, mu_on_16: 1.589, mu_on_84: 1.635,
+    sigma_on_median: 0.501, mu_off_median: 1.609, sigma_off_median: 0.466,
+    t_on_inferred_Myr: 42.65
+};
+
+const magFieldData = [
+    { B_uG: 1.0, nu_break: 2.87e-23, spectral_age: 7.50e-10 },
+    { B_uG: 2.0, nu_break: 4.42e-24, spectral_age: 2.94e-10 },
+    { B_uG: 4.0, nu_break: 5.84e-25, spectral_age: 1.07e-10 },
+    { B_uG: 6.0, nu_break: 1.75e-25, spectral_age: 5.85e-11 },
+    { B_uG: 10.0, nu_break: 3.80e-26, spectral_age: 2.73e-11 },
+    { B_uG: 20.0, nu_break: 4.76e-27, spectral_age: 9.66e-12 }
+];
+
+// Tab navigation
+function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+    if (id === 'charts') initCharts();
+}
+
+let chartsInitialized = false;
+function initCharts() {
+    if (chartsInitialized) return;
+    chartsInitialized = true;
+
+    // 1. MCMC Posterior Chart
+    new Chart(document.getElementById('mcmcChart'), {
+        type: 'bar',
+        data: {
+            labels: ['t_on (Myr)', 't_off (Myr)', 'B (uG)'],
+            datasets: [
+                {
+                    label: 'MCMC Median',
+                    data: [mcmcData.t_on_median, mcmcData.t_off_median, mcmcData.B_median],
+                    backgroundColor: 'rgba(26, 35, 126, 0.7)',
+                    borderColor: '#1a237e',
+                    borderWidth: 2
+                },
+                {
+                    label: 'True Value',
+                    data: [mcmcData.t_on_true, mcmcData.t_off_true, mcmcData.B_true],
+                    backgroundColor: 'rgba(255, 111, 0, 0.7)',
+                    borderColor: '#ff6f00',
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: 'MCMC Posterior Median vs True Injected Values', font: { size: 14 } },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(items) {
+                            const idx = items[0].dataIndex;
+                            if (items[0].datasetIndex === 0) {
+                                const ranges = [
+                                    [mcmcData.t_on_16, mcmcData.t_on_84],
+                                    [mcmcData.t_off_16, mcmcData.t_off_84],
+                                    [mcmcData.B_16, mcmcData.B_84]
+                                ];
+                                return '68% CI: [' + ranges[idx][0].toFixed(2) + ', ' + ranges[idx][1].toFixed(2) + ']';
+                            }
+                        }
+                    }
+                }
+            },
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Value' } } }
+        }
+    });
+
+    // 2. Dynamical Chart
+    new Chart(document.getElementById('dynamicalChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Inner Lobe', 'Outer Lobe'],
+            datasets: [
+                {
+                    label: 'Extent (kpc)',
+                    data: [dynamicalData.inner_lobe_kpc, dynamicalData.outer_lobe_kpc],
+                    backgroundColor: 'rgba(2, 119, 189, 0.7)',
+                    borderColor: '#0277bd',
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Age (Myr)',
+                    data: [dynamicalData.inner_dyn_age_Myr, dynamicalData.outer_dyn_age_Myr],
+                    backgroundColor: 'rgba(255, 111, 0, 0.7)',
+                    borderColor: '#ff6f00',
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Dynamical Model: Lobe Extents and Ages' } },
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Value (kpc / Myr)' } }
+            }
+        }
+    });
+
+    // 3. Population Timescale Chart
+    new Chart(document.getElementById('populationChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Median', 'Mean', '16th %ile', '84th %ile'],
+            datasets: [
+                {
+                    label: 'Active Phase t_on (Myr)',
+                    data: [populationData.t_on_median, populationData.t_on_mean, populationData.t_on_16, populationData.t_on_84],
+                    backgroundColor: 'rgba(26, 35, 126, 0.7)',
+                    borderColor: '#1a237e',
+                    borderWidth: 2
+                },
+                {
+                    label: 'Quiescent t_off (Myr)',
+                    data: [populationData.t_off_median, populationData.t_off_mean, populationData.t_off_16, populationData.t_off_84],
+                    backgroundColor: 'rgba(46, 125, 50, 0.7)',
+                    borderColor: '#2e7d32',
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Population Synthesis: Timescale Statistics (N=5000)' } },
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Duration (Myr)' } } }
+        }
+    });
+
+    // 4. Method Comparison Chart
+    new Chart(document.getElementById('methodComparisonChart'), {
+        type: 'bar',
+        data: {
+            labels: ['MCMC (J1007+3540)', 'Population Median', 'Population Mean', 'ABC Inferred', 'Dynamical (Inner)'],
+            datasets: [{
+                label: 'Active Phase Duration (Myr)',
+                data: [mcmcData.t_on_median, populationData.t_on_median, populationData.t_on_mean, abcData.t_on_inferred_Myr, dynamicalData.inner_dyn_age_Myr],
+                backgroundColor: [
+                    'rgba(26, 35, 126, 0.75)',
+                    'rgba(46, 125, 50, 0.75)',
+                    'rgba(2, 119, 189, 0.75)',
+                    'rgba(255, 111, 0, 0.75)',
+                    'rgba(156, 39, 176, 0.75)'
+                ],
+                borderColor: ['#1a237e', '#2e7d32', '#0277bd', '#ff6f00', '#9c27b0'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            indexAxis: 'y',
+            plugins: { title: { display: true, text: 'Active Phase Duration: Comparison Across Methods' } },
+            scales: { x: { beginAtZero: true, title: { display: true, text: 'Duration (Myr)' } } }
+        }
+    });
+
+    // 5. Magnetic Field Sensitivity Chart
+    new Chart(document.getElementById('magFieldChart'), {
+        type: 'line',
+        data: {
+            labels: magFieldData.map(d => d.B_uG),
+            datasets: [{
+                label: 'Spectral Age for 1 GHz Break',
+                data: magFieldData.map(d => d.spectral_age),
+                borderColor: '#1a237e',
+                backgroundColor: 'rgba(26, 35, 126, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 6,
+                pointBackgroundColor: '#ff6f00',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Spectral Age vs Magnetic Field Strength' } },
+            scales: {
+                x: { title: { display: true, text: 'B (uG)' } },
+                y: {
+                    type: 'logarithmic',
+                    title: { display: true, text: 'Spectral Age (s)' }
+                }
+            }
+        }
+    });
+
+    // 6. Population Classification Pie Chart
+    const fracRemaining = 1 - populationData.frac_active - populationData.frac_ddrg;
+    new Chart(document.getElementById('classificationChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Currently Active (12.5%)', 'DDRG Morphology (23.4%)', 'Other/Remnant (' + (fracRemaining * 100).toFixed(1) + '%)'],
+            datasets: [{
+                data: [populationData.frac_active, populationData.frac_ddrg, fracRemaining],
+                backgroundColor: ['rgba(255, 111, 0, 0.8)', 'rgba(26, 35, 126, 0.8)', 'rgba(158, 158, 158, 0.6)'],
+                borderColor: ['#ff6f00', '#1a237e', '#9e9e9e'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: 'Source Classification at Observation Epoch' },
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // 7. ABC Posterior Chart
+    new Chart(document.getElementById('abcChart'), {
+        type: 'bar',
+        data: {
+            labels: ['mu_on', 'sigma_on', 'mu_off', 'sigma_off'],
+            datasets: [
+                {
+                    label: 'ABC Posterior Median',
+                    data: [abcData.mu_on_median, abcData.sigma_on_median, abcData.mu_off_median, abcData.sigma_off_median],
+                    backgroundColor: 'rgba(26, 35, 126, 0.7)',
+                    borderColor: '#1a237e',
+                    borderWidth: 2
+                },
+                {
+                    label: 'Input Population Values',
+                    data: [1.5, 0.4, 1.3, 0.5],
+                    backgroundColor: 'rgba(255, 111, 0, 0.7)',
+                    borderColor: '#ff6f00',
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: 'ABC Posterior vs Input Population Parameters' },
+                subtitle: { display: true, text: 'Acceptance rate: 0.006 (3/500 accepted)' }
+            },
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Parameter Value' } } }
+        }
+    });
+}
+
+// Initialize overview on load
+document.addEventListener('DOMContentLoaded', () => {
+    showSection('overview');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pose-Conditioned Appearance Fields for Novel Views</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #fdfdfe;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-secondary: #475569;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --warn: #d97706;
+    --warn-light: #fef3c7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --purple: #7c3aed;
+    --purple-light: #ede9fe;
+    --code-bg: #f1f5f9;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.65;
+    color: var(--text);
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    color: white;
+    padding: 48px 0 40px;
+  }
+  header .container { max-width: 860px; }
+  header h1 {
+    font-size: 1.85rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+  }
+  header .venue {
+    font-size: 0.88rem;
+    opacity: 0.8;
+    margin-bottom: 18px;
+    font-weight: 500;
+  }
+  header p {
+    font-size: 1.0rem;
+    line-height: 1.7;
+    opacity: 0.92;
+    max-width: 780px;
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .tag {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  nav .container {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  nav a {
+    display: block;
+    padding: 14px 18px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  nav a:hover, nav a.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  section:last-child { border-bottom: none; }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    letter-spacing: -0.015em;
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 32px 0 12px;
+  }
+  .section-lead {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 28px;
+    max-width: 700px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+  }
+  .card h4 {
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin: 0 0 16px;
+    color: var(--text);
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .metric-card .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .metric-card .label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-weight: 500;
+  }
+  .metric-card .delta {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 6px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    display: inline-block;
+  }
+  .delta-good { color: var(--success); background: var(--success-light); }
+
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.highlight td {
+    background: var(--accent-light);
+    font-weight: 600;
+  }
+  td.best {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+  }
+
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 24px 0;
+  }
+  .pipe-step {
+    flex: 1;
+    min-width: 160px;
+    padding: 18px 16px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .pipe-step .step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .pipe-step .step-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    margin-bottom: 4px;
+  }
+  .pipe-step .step-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+  .pipe-arrow {
+    font-size: 1.3rem;
+    color: var(--text-secondary);
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .step-input { background: #f0f9ff; border: 1px solid #bae6fd; }
+  .step-input .step-num { background: #0284c7; color: white; }
+  .step-encode { background: var(--purple-light); border: 1px solid #c4b5fd; }
+  .step-encode .step-num { background: var(--purple); color: white; }
+  .step-mlp { background: var(--accent-light); border: 1px solid #93c5fd; }
+  .step-mlp .step-num { background: var(--accent); color: white; }
+  .step-output { background: var(--success-light); border: 1px solid #86efac; }
+  .step-output .step-num { background: var(--success); color: white; }
+  .step-tta { background: var(--warn-light); border: 1px solid #fde68a; }
+  .step-tta .step-num { background: var(--warn); color: white; }
+
+  .equation {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-family: 'Georgia', serif;
+    font-size: 0.95rem;
+    text-align: center;
+    overflow-x: auto;
+  }
+  .eq-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-family: -apple-system, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .finding {
+    border-left: 3px solid var(--accent);
+    padding: 16px 20px;
+    margin: 16px 0;
+    background: #f8fafc;
+    border-radius: 0 8px 8px 0;
+  }
+  .finding strong {
+    color: var(--accent);
+  }
+
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    background: var(--code-bg);
+    padding: 4px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+  .tab-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+
+  footer {
+    padding: 32px 0;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  @media (max-width: 768px) {
+    header h1 { font-size: 1.4rem; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .pipeline { flex-direction: column; align-items: stretch; }
+    .pipe-arrow { transform: rotate(90deg); text-align: center; padding: 4px 0; }
+    nav a { padding: 12px 14px; font-size: 0.8rem; }
+    section { padding: 32px 0; }
+  }
+  @media (max-width: 480px) {
+    .container { padding: 0 16px; }
+    header { padding: 32px 0; }
+    .card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="container">
+    <div class="venue">KDD 2026 -- Computer Vision</div>
+    <h1>Pose-Conditioned Appearance Fields for Assigning Per-Frame Photometric Parameters to Novel Views</h1>
+    <p>A principled framework that replaces discrete per-frame appearance embeddings with a continuous, pose-conditioned mapping, enabling smooth interpolation of photometric parameters to novel viewpoints in radiance field pipelines.</p>
+    <div class="tags">
+      <span class="tag">Novel View Synthesis</span>
+      <span class="tag">Neural Radiance Fields</span>
+      <span class="tag">Appearance Modeling</span>
+      <span class="tag">Photometric Compensation</span>
+      <span class="tag">Per-Frame Parameters</span>
+    </div>
+  </div>
+</header>
+
+<!-- Navigation -->
+<nav>
+  <div class="container">
+    <a href="#problem" class="active">Problem</a>
+    <a href="#method">Method</a>
+    <a href="#results">Results</a>
+    <a href="#frequency">Frequency Ablation</a>
+    <a href="#noise">Noise Ablation</a>
+    <a href="#size">Size Ablation</a>
+    <a href="#tta">Test-Time Adaptation</a>
+    <a href="#conclusions">Conclusions</a>
+  </div>
+</nav>
+
+<!-- Problem Statement -->
+<section id="problem">
+  <div class="container">
+    <h2>The Open Problem</h2>
+    <p class="section-lead">Modern radiance field pipelines optimize per-frame photometric parameters independently for each training image. At inference, how should one assign these parameters to a novel viewpoint for which no ground-truth image exists?</p>
+
+    <div class="grid-2" style="margin-bottom: 28px;">
+      <div class="card">
+        <h4>During Training</h4>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">Each image gets its own photometric compensation parameters (exposure, white balance, etc.) optimized via reconstruction loss against the ground-truth image. This works well for known views.</p>
+        <div class="equation">
+          <div class="eq-label">Per-Frame Optimization</div>
+          min<sub>&theta;,{&alpha;<sub>i</sub>}</sub> &Sigma;<sub>i</sub> L<sub>photo</sub>( R(F<sub>&theta;</sub>, x<sub>i</sub>, d<sub>i</sub>, &alpha;<sub>i</sub>), I<sub>i</sub> )
+        </div>
+      </div>
+      <div class="card">
+        <h4>At Inference (Novel Views)</h4>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">No ground-truth image exists for the novel viewpoint. The parameters were optimized independently per frame, so there is no mechanism to generalize them to unseen camera poses.</p>
+        <div class="equation">
+          <div class="eq-label">The Open Question</div>
+          &alpha;<sub>*</sub> = ?  for novel pose (x<sub>*</sub>, d<sub>*</sub>) without I<sub>*</sub>
+        </div>
+      </div>
+    </div>
+
+    <h3>Existing Approaches and Limitations</h3>
+    <div class="grid-3">
+      <div class="card">
+        <h4>Mean / Zero Embedding</h4>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">Use the mean of all training embeddings. Simple but discards all spatial information about which appearance regime applies at the novel view.</p>
+      </div>
+      <div class="card">
+        <h4>Nearest-Neighbor Lookup</h4>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">Assign parameters of the closest training view by pose distance. Fails when the novel view sits between training clusters with different exposures.</p>
+      </div>
+      <div class="card">
+        <h4>Appearance Encoders</h4>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">Networks like Ha-NeRF or CR-NeRF map an input image to its embedding. But this requires an image at the novel view, contradicting the problem setup.</p>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>Key insight:</strong> Photometric properties (exposure, white balance) vary <em>smoothly</em> with camera pose. A continuous mapping from pose to appearance parameters can exploit this spatial structure to generalize to novel viewpoints.
+    </div>
+  </div>
+</section>
+
+<!-- Method -->
+<section id="method">
+  <div class="container">
+    <h2>Two-Stage Framework</h2>
+    <p class="section-lead">Our approach learns a continuous mapping from camera pose to appearance parameters, regularized by low-frequency positional encoding, and optionally refined at test time via multi-view consistency.</p>
+
+    <div class="pipeline">
+      <div class="pipe-step step-input">
+        <div class="step-num">1</div>
+        <div class="step-title">Camera Pose</div>
+        <div class="step-desc">6-DoF pose: position (x,y,z) + viewing direction</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step step-encode">
+        <div class="step-num">2</div>
+        <div class="step-title">Low-Freq Encoding</div>
+        <div class="step-desc">Positional encoding with L=2 octaves (critical choice)</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step step-mlp">
+        <div class="step-num">3</div>
+        <div class="step-title">Appearance MLP</div>
+        <div class="step-desc">3 layers, 128 units, SiLU activations</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step step-output">
+        <div class="step-num">4</div>
+        <div class="step-title">Appearance Params</div>
+        <div class="step-desc">6D affine color transform: scale (3) + bias (3)</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step step-tta">
+        <div class="step-num">5</div>
+        <div class="step-title">TTA (Optional)</div>
+        <div class="step-desc">Multi-view consistency refinement at inference</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top: 24px;">
+      <div class="card">
+        <h4>Stage 1: Pose-Conditioned Appearance MLP</h4>
+        <div class="equation">
+          <div class="eq-label">Continuous Mapping</div>
+          &alpha;<sub>*</sub> = g<sub>&phi;</sub>( &gamma;<sub>L</sub>(p<sub>*</sub>) )
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 8px 0 0;">
+          The MLP is trained with three loss terms: reconstruction loss on training views, a leave-one-out cross-validation term for generalization, and a Lipschitz smoothness penalty on weight matrices.
+        </p>
+        <div class="equation" style="font-size: 0.88rem;">
+          <div class="eq-label">Training Objective</div>
+          L = L<sub>recon</sub> + 0.5 L<sub>loo</sub> + 10<sup>-3</sup> L<sub>lip</sub>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Stage 2: Test-Time Adaptation</h4>
+        <div class="equation">
+          <div class="eq-label">Multi-View Consistency</div>
+          min<sub>&alpha;*</sub> &Sigma;<sub>k</sub> || R(F, p*, &alpha;*) - I<sub>k</sub> ||<sub>1</sub> + &lambda; || &alpha;* - g<sub>&phi;</sub>(&gamma;(p*)) ||<sup>2</sup>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 8px 0 0;">
+          Optionally refines the MLP prediction by optimizing against photometric consistency with nearby training views. The second term anchors refinement to the MLP's prediction, preventing divergence.
+        </p>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>Critical design choice:</strong> The positional encoding uses only L=2 frequency bands (vs. L=6-10 typical for spatial encoding in NeRF). This enforces the physical prior that photometric properties vary <em>slowly</em> across the camera pose space, preventing memorization of per-image noise.
+    </div>
+  </div>
+</section>
+
+<!-- Main Results -->
+<section id="results">
+  <div class="container">
+    <h2>Main Results</h2>
+    <p class="section-lead">Comparison of methods for assigning per-frame appearance parameters to 15 held-out novel views from a 50-view synthetic benchmark with realistic photometric variation.</p>
+
+    <div class="grid-4" style="margin-bottom: 28px;">
+      <div class="metric-card">
+        <div class="value" style="color: var(--accent);">0.0665</div>
+        <div class="label">Scale MAE</div>
+        <div class="delta delta-good">-10.0% vs k-NN</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--accent);">0.0155</div>
+        <div class="label">Bias MAE</div>
+        <div class="delta delta-good">Best overall</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--accent);">21.25</div>
+        <div class="label">Param PSNR (dB)</div>
+        <div class="delta delta-good">+0.89 dB vs k-NN</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--accent);">0.993</div>
+        <div class="label">Correlation</div>
+        <div class="delta delta-good">Highest</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Full Comparison Table</h4>
+      <div class="table-wrap">
+        <table id="mainTable">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Scale MAE</th>
+              <th>Bias MAE</th>
+              <th>Log-Exp Error</th>
+              <th>Param PSNR (dB)</th>
+              <th>Correlation</th>
+            </tr>
+          </thead>
+          <tbody id="mainTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top: 24px;">
+      <div class="card">
+        <h4>Scale MAE and Log-Exposure Error</h4>
+        <div class="chart-container" style="height: 320px;">
+          <canvas id="chartMainErrors"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Parameter PSNR (dB)</h4>
+        <div class="chart-container" style="height: 320px;">
+          <canvas id="chartMainPSNR"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>Progressive improvement:</strong> Mean embedding ignores pose entirely. Nearest neighbor uses a single reference. k-NN averages multiple references. The MLP learns the underlying functional relationship, achieving 38.5% reduction in Scale MAE over the mean baseline.
+    </div>
+  </div>
+</section>
+
+<!-- Frequency Ablation -->
+<section id="frequency">
+  <div class="container">
+    <h2>Positional Encoding Frequency Ablation</h2>
+    <p class="section-lead">The central finding: increasing positional encoding frequency monotonically decreases training loss but increases test error beyond L=2. This is the classic bias-variance tradeoff manifested in the frequency domain.</p>
+
+    <div class="grid-2" style="margin-bottom: 24px;">
+      <div class="card">
+        <h4>Scale MAE vs. Frequency Bands (L)</h4>
+        <div class="chart-container" style="height: 340px;">
+          <canvas id="chartFreqMAE"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Train Loss vs. Test PSNR</h4>
+        <div class="chart-container" style="height: 340px;">
+          <canvas id="chartFreqTradeoff"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Detailed Frequency Ablation</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>L (Frequencies)</th>
+              <th>Scale MAE</th>
+              <th>PSNR (dB)</th>
+              <th>Final Train Loss</th>
+              <th>Gap vs Optimal</th>
+            </tr>
+          </thead>
+          <tbody id="freqTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>At L=8</strong>, the MLP achieves 37% lower training loss than at L=2, but 43% higher test Scale MAE (0.0952 vs. 0.0665). The optimal L=2 provides just enough capacity to capture smooth spatial structure of exposure and white balance variation without fitting per-image noise.
+    </div>
+  </div>
+</section>
+
+<!-- Noise Ablation -->
+<section id="noise">
+  <div class="container">
+    <h2>Noise-Level Ablation</h2>
+    <p class="section-lead">The MLP's advantage grows with noise level. Its smooth parametric form provides implicit denoising that non-parametric methods like k-NN lack.</p>
+
+    <div class="tab-bar" id="noiseMetricTabs">
+      <button class="tab-btn active" data-metric="scale_mae">Scale MAE</button>
+      <button class="tab-btn" data-metric="param_psnr_db">Param PSNR</button>
+    </div>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="chart-container" style="height: 360px;">
+        <canvas id="chartNoise"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Scale MAE Across Noise Levels</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Sigma</th>
+              <th>Mean</th>
+              <th>k-NN</th>
+              <th>Ours (MLP)</th>
+              <th>Winner</th>
+              <th>MLP Advantage</th>
+            </tr>
+          </thead>
+          <tbody id="noiseTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>At high noise (sigma=0.20)</strong>, the MLP reduces error by 20.4% over k-NN. The smooth parametric form averages out per-image noise through the learned function, rather than propagating it directly as k-NN does.
+    </div>
+  </div>
+</section>
+
+<!-- Size Ablation -->
+<section id="size">
+  <div class="container">
+    <h2>Training Set Size Ablation</h2>
+    <p class="section-lead">The MLP benefits more from additional training views than k-NN. The crossover occurs at approximately N=30, where the MLP has sufficient coverage to learn the underlying function.</p>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="chart-container" style="height: 360px;">
+        <canvas id="chartSize"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Scale MAE by Training Set Size</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>N (Views)</th>
+              <th>Mean</th>
+              <th>k-NN</th>
+              <th>Ours (MLP)</th>
+              <th>Winner</th>
+            </tr>
+          </thead>
+          <tbody id="sizeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>From N=10 to N=50</strong>, MLP error decreases by 43% (0.1171 to 0.0665) while k-NN decreases by 38% (0.1195 to 0.0739). The MLP requires sufficient pose-space coverage to learn the underlying function, but then extrapolates more effectively than local interpolation.
+    </div>
+  </div>
+</section>
+
+<!-- Test-Time Adaptation -->
+<section id="tta">
+  <div class="container">
+    <h2>Test-Time Adaptation</h2>
+    <p class="section-lead">Multi-view photometric consistency can further refine the MLP prediction for individual views, with up to 72% reduction in scale error for well-conditioned views.</p>
+
+    <div class="grid-2" style="margin-bottom: 24px;">
+      <div class="card">
+        <h4>Scale MAE: Before vs. After TTA</h4>
+        <div class="chart-container" style="height: 320px;">
+          <canvas id="chartTTAScale"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Param PSNR: Before vs. After TTA</h4>
+        <div class="chart-container" style="height: 320px;">
+          <canvas id="chartTTAPSNR"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Per-View TTA Results</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>View</th>
+              <th>Scale Before</th>
+              <th>Scale After</th>
+              <th>PSNR Before</th>
+              <th>PSNR After</th>
+              <th>Scale Improved?</th>
+            </tr>
+          </thead>
+          <tbody id="ttaTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="finding" style="margin-top: 24px;">
+      <strong>Mixed results:</strong> TTA improves scale MAE for 4 of 5 views (up to 72% for view 0), but can increase bias error. TTA is most beneficial when the MLP's initial prediction is already close, and when nearby training views have similar appearance.
+    </div>
+  </div>
+</section>
+
+<!-- Conclusions -->
+<section id="conclusions">
+  <div class="container">
+    <h2>Key Conclusions</h2>
+    <p class="section-lead">A comprehensive characterization of when and why continuous appearance fields outperform discrete alternatives.</p>
+
+    <div class="grid-2">
+      <div class="card" style="border-left: 3px solid var(--accent);">
+        <h4>1. Continuous mappings outperform discrete lookup</h4>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">
+          The pose-conditioned appearance MLP reduces Scale MAE by 10.0% over k-NN interpolation and 38.5% over mean embedding, achieving 21.25 dB parameter PSNR.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--purple);">
+        <h4>2. Low-frequency positional encoding is critical</h4>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">
+          Using L=2 frequencies (vs. L=6-8 typical for spatial encoding) enforces the smoothness prior that appearance varies slowly with viewpoint. This single design choice accounts for a 30% error gap.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--success);">
+        <h4>3. Learned mappings provide implicit denoising</h4>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">
+          At high noise levels (sigma=0.20), the MLP reduces error by 20.4% over k-NN because its smooth parametric form averages out per-image noise.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--warn);">
+        <h4>4. Test-time adaptation is a complementary refinement</h4>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">
+          Multi-view consistency can improve individual predictions by up to 72% in scale error, though it requires careful tuning of the smoothness anchor.
+        </p>
+      </div>
+    </div>
+
+    <h3>Experimental Setup</h3>
+    <div class="grid-3" style="margin-top: 16px;">
+      <div class="metric-card">
+        <div class="value" style="color: var(--text);">50</div>
+        <div class="label">Training Views</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--text);">15</div>
+        <div class="label">Test Views</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--text);">64 x 64</div>
+        <div class="label">Image Resolution</div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top: 16px;">
+      <div class="metric-card">
+        <div class="value" style="color: var(--text);">6D</div>
+        <div class="label">Parameter Dim (3 scale + 3 bias)</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--text);">2000</div>
+        <div class="label">Training Epochs</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color: var(--text);">128</div>
+        <div class="label">MLP Hidden Units</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>Research Problem #15187 -- Category: Computer Vision --
+      Source: emergentmind.com --
+      Reference: Deutsch et al., PPISP (arXiv: 2601.18336), Jan 2026
+    </p>
+  </div>
+</footer>
+
+<script>
+// ==========================================================================
+// Embedded experiment data from results.json
+// ==========================================================================
+var DATA = {
+  main: {
+    labels: ["Mean Embedding", "Nearest Neighbor", "k-NN (k=5)", "Ours (Pose MLP)"],
+    scale_mae: [0.10822354257106781, 0.08945788443088531, 0.07390692085027695, 0.06650184839963913],
+    bias_mae: [0.015077754855155945, 0.02295655384659767, 0.018626179546117783, 0.015487323515117168],
+    log_exposure_error: [0.10783267766237259, 0.0906931534409523, 0.07371871918439865, 0.06662628799676895],
+    param_psnr_db: [17.123871869496636, 18.239102308090843, 20.363431026467886, 21.247247486517033],
+    correlation: [0.9828194975852966, 0.9866337180137634, 0.9912558794021606, 0.9929527044296265]
+  },
+  freq: {
+    L: [1, 2, 3, 4, 6, 8],
+    scale_mae: [0.06777031719684601, 0.06650184839963913, 0.07022187858819962, 0.07352492213249207, 0.09074094891548157, 0.09520482271909714],
+    param_psnr_db: [20.940014592840047, 21.247247486517033, 20.858242426082114, 20.831196787191153, 19.007753496316703, 18.576450493840348],
+    train_loss: [0.008557692170143127, 0.007500544190406799, 0.006980923004448414, 0.006461403798311949, 0.00593680702149868, 0.005414348095655441]
+  },
+  noise: {
+    sigma: [0.02, 0.05, 0.10, 0.20],
+    mean_scale: [0.10092528909444809, 0.08965922147035599, 0.1590987741947174, 0.25391098856925964],
+    knn_scale: [0.049825552850961685, 0.06310152262449265, 0.1471514254808426, 0.2838228642940521],
+    mlp_scale: [0.046137407422065735, 0.06860344856977463, 0.12312605232000351, 0.22575773298740387],
+    mean_psnr: [17.941922969386315, 18.671389768210236, 12.95457471305955, 10.323789866164867],
+    knn_psnr: [23.578982706638776, 21.676566710331997, 13.08929410130512, 9.643186465986199],
+    mlp_psnr: [23.829460304799394, 21.049908993743752, 14.506926530477216, 11.077783411216851]
+  },
+  size: {
+    N: [10, 20, 30, 40, 50],
+    mean_scale: [0.09943991899490356, 0.10519441217184067, 0.11728015542030334, 0.1104981005191803, 0.10822354257106781],
+    knn_scale: [0.11950015276670456, 0.084752656519413, 0.08287612348794937, 0.07847854495048523, 0.07390692085027695],
+    mlp_scale: [0.11709105968475342, 0.08954060822725296, 0.07891285419464111, 0.06978373229503632, 0.06650184839963913]
+  },
+  tta: [
+    {view: 0, before_scale: 0.03270953893661499, after_scale: 0.0092698335647583, before_psnr: 26.724362186177938, after_psnr: 27.175220372461414},
+    {view: 1, before_scale: 0.09633463621139526, after_scale: 0.11720621585845947, before_psnr: 18.850007023550518, after_psnr: 14.624840549775257},
+    {view: 2, before_scale: 0.040661174803972244, after_scale: 0.03227676823735237, before_psnr: 29.68490422338981, after_psnr: 19.661313548417656},
+    {view: 3, before_scale: 0.06744402647018433, after_scale: 0.06012260913848877, before_psnr: 19.1735758637508, after_psnr: 20.92340914544129},
+    {view: 4, before_scale: 0.04585753008723259, after_scale: 0.040219783782958984, before_psnr: 23.322265807247263, after_psnr: 21.56547338873894}
+  ]
+};
+
+// ==========================================================================
+// Color palette
+// ==========================================================================
+var COLORS = {
+  mean:  {bg: 'rgba(220, 38, 38, 0.15)', border: '#dc2626'},
+  nn:    {bg: 'rgba(217, 119, 6, 0.15)', border: '#d97706'},
+  knn:   {bg: 'rgba(22, 163, 74, 0.15)', border: '#16a34a'},
+  ours:  {bg: 'rgba(37, 99, 235, 0.15)', border: '#2563eb'},
+  before:{bg: 'rgba(148, 163, 184, 0.5)', border: '#94a3b8'},
+  after: {bg: 'rgba(37, 99, 235, 0.6)', border: '#2563eb'}
+};
+
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#64748b';
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyleWidth = 12;
+
+function fmt(v, d) { return Number(v).toFixed(d === undefined ? 4 : d); }
+
+// Safe helper: create a td element
+function makeTd(text, cssClass) {
+  var td = document.createElement('td');
+  td.textContent = text;
+  if (cssClass) td.className = cssClass;
+  return td;
+}
+function makeTdBold(text, cssClass) {
+  var td = document.createElement('td');
+  var b = document.createElement('strong');
+  b.textContent = text;
+  td.appendChild(b);
+  if (cssClass) td.className = cssClass;
+  return td;
+}
+
+// ==========================================================================
+// Populate Main Table
+// ==========================================================================
+(function() {
+  var tbody = document.getElementById('mainTableBody');
+  var methods = DATA.main.labels;
+  for (var i = 0; i < methods.length; i++) {
+    var tr = document.createElement('tr');
+    if (i === 3) tr.className = 'highlight';
+    var isOurs = (i === 3);
+    tr.appendChild(makeTd(methods[i]));
+    tr.appendChild(makeTd(fmt(DATA.main.scale_mae[i]), isOurs ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.main.bias_mae[i]), isOurs ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.main.log_exposure_error[i]), isOurs ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.main.param_psnr_db[i], 2), isOurs ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.main.correlation[i], 3), isOurs ? 'best' : ''));
+    tbody.appendChild(tr);
+  }
+})();
+
+// ==========================================================================
+// Main Comparison Charts
+// ==========================================================================
+new Chart(document.getElementById('chartMainErrors'), {
+  type: 'bar',
+  data: {
+    labels: DATA.main.labels,
+    datasets: [
+      {
+        label: 'Scale MAE',
+        data: DATA.main.scale_mae,
+        backgroundColor: DATA.main.labels.map(function(_, i) { return i === 3 ? COLORS.ours.bg : 'rgba(148,163,184,0.3)'; }),
+        borderColor: DATA.main.labels.map(function(_, i) { return i === 3 ? COLORS.ours.border : '#94a3b8'; }),
+        borderWidth: 1.5,
+        borderRadius: 4,
+      },
+      {
+        label: 'Log-Exp Error',
+        data: DATA.main.log_exposure_error,
+        backgroundColor: DATA.main.labels.map(function(_, i) { return i === 3 ? 'rgba(124, 58, 237, 0.15)' : 'rgba(148,163,184,0.15)'; }),
+        borderColor: DATA.main.labels.map(function(_, i) { return i === 3 ? '#7c3aed' : '#cbd5e1'; }),
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Error (lower is better)' }, grid: { color: '#f1f5f9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartMainPSNR'), {
+  type: 'bar',
+  data: {
+    labels: DATA.main.labels,
+    datasets: [{
+      label: 'Param PSNR (dB)',
+      data: DATA.main.param_psnr_db,
+      backgroundColor: DATA.main.labels.map(function(_, i) { return i === 3 ? COLORS.ours.bg : 'rgba(148,163,184,0.3)'; }),
+      borderColor: DATA.main.labels.map(function(_, i) { return i === 3 ? COLORS.ours.border : '#94a3b8'; }),
+      borderWidth: 1.5,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: false, title: { display: true, text: 'PSNR dB (higher is better)' }, grid: { color: '#f1f5f9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ==========================================================================
+// Frequency Ablation Charts
+// ==========================================================================
+new Chart(document.getElementById('chartFreqMAE'), {
+  type: 'line',
+  data: {
+    labels: DATA.freq.L,
+    datasets: [{
+      label: 'Scale MAE (test)',
+      data: DATA.freq.scale_mae,
+      borderColor: COLORS.ours.border,
+      backgroundColor: COLORS.ours.bg,
+      fill: true,
+      tension: 0.3,
+      pointRadius: 6,
+      pointBackgroundColor: DATA.freq.L.map(function(l) { return l === 2 ? '#dc2626' : COLORS.ours.border; }),
+      pointBorderColor: DATA.freq.L.map(function(l) { return l === 2 ? '#dc2626' : COLORS.ours.border; }),
+      pointStyle: DATA.freq.L.map(function(l) { return l === 2 ? 'star' : 'circle'; }),
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { title: { display: true, text: 'Positional Encoding Frequencies (L)' }, grid: { display: false } },
+      y: { title: { display: true, text: 'Scale MAE (lower is better)' }, grid: { color: '#f1f5f9' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartFreqTradeoff'), {
+  type: 'line',
+  data: {
+    labels: DATA.freq.L,
+    datasets: [
+      {
+        label: 'Train Loss',
+        data: DATA.freq.train_loss,
+        borderColor: COLORS.mean.border,
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 5,
+        yAxisID: 'yLoss',
+      },
+      {
+        label: 'Test PSNR (dB)',
+        data: DATA.freq.param_psnr_db,
+        borderColor: COLORS.ours.border,
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 5,
+        yAxisID: 'yPSNR',
+        pointBackgroundColor: DATA.freq.L.map(function(l) { return l === 2 ? '#dc2626' : COLORS.ours.border; }),
+        pointStyle: DATA.freq.L.map(function(l) { return l === 2 ? 'star' : 'circle'; }),
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x: { title: { display: true, text: 'Positional Encoding Frequencies (L)' }, grid: { display: false } },
+      yLoss: { position: 'left', title: { display: true, text: 'Train Loss' }, grid: { color: '#f1f5f9' } },
+      yPSNR: { position: 'right', title: { display: true, text: 'Test PSNR (dB)' }, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+// Frequency table (safe DOM)
+(function() {
+  var tbody = document.getElementById('freqTableBody');
+  var bestMAE = Math.min.apply(null, DATA.freq.scale_mae);
+  for (var i = 0; i < DATA.freq.L.length; i++) {
+    var l = DATA.freq.L[i];
+    var gap = ((DATA.freq.scale_mae[i] - bestMAE) / bestMAE * 100).toFixed(1);
+    var isOpt = (l === 2);
+    var tr = document.createElement('tr');
+    if (isOpt) tr.className = 'highlight';
+    if (isOpt) {
+      tr.appendChild(makeTdBold(l + ' (optimal)'));
+    } else {
+      tr.appendChild(makeTd(String(l)));
+    }
+    tr.appendChild(makeTd(fmt(DATA.freq.scale_mae[i]), isOpt ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.freq.param_psnr_db[i], 2), isOpt ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.freq.train_loss[i], 5)));
+    tr.appendChild(makeTd(gap === '0.0' ? 'Baseline' : '+' + gap + '%'));
+    tbody.appendChild(tr);
+  }
+})();
+
+// ==========================================================================
+// Noise Ablation Chart + Table
+// ==========================================================================
+var noiseChart = null;
+function renderNoiseChart(metric) {
+  var isMAE = (metric === 'scale_mae');
+  var meanData = isMAE ? DATA.noise.mean_scale : DATA.noise.mean_psnr;
+  var knnData  = isMAE ? DATA.noise.knn_scale  : DATA.noise.knn_psnr;
+  var mlpData  = isMAE ? DATA.noise.mlp_scale  : DATA.noise.mlp_psnr;
+  var yLabel   = isMAE ? 'Scale MAE (lower is better)' : 'Param PSNR dB (higher is better)';
+
+  if (noiseChart) noiseChart.destroy();
+  noiseChart = new Chart(document.getElementById('chartNoise'), {
+    type: 'line',
+    data: {
+      labels: DATA.noise.sigma.map(function(s) { return 'sigma=' + s; }),
+      datasets: [
+        { label: 'Mean', data: meanData, borderColor: COLORS.mean.border, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5 },
+        { label: 'k-NN', data: knnData,  borderColor: COLORS.knn.border,  backgroundColor: 'transparent', tension: 0.3, pointRadius: 5 },
+        { label: 'Ours (MLP)', data: mlpData,  borderColor: COLORS.ours.border, backgroundColor: COLORS.ours.bg, fill: true, tension: 0.3, pointRadius: 6 },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { title: { display: true, text: 'Noise Level (sigma)' }, grid: { display: false } },
+        y: { title: { display: true, text: yLabel }, grid: { color: '#f1f5f9' } }
+      }
+    }
+  });
+}
+renderNoiseChart('scale_mae');
+
+document.querySelectorAll('#noiseMetricTabs .tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('#noiseMetricTabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    renderNoiseChart(btn.getAttribute('data-metric'));
+  });
+});
+
+// Noise table (safe DOM)
+(function() {
+  var tbody = document.getElementById('noiseTableBody');
+  var noiseLabels = ['0.02', '0.05', '0.10', '0.20'];
+  for (var i = 0; i < DATA.noise.sigma.length; i++) {
+    var mlpWins = DATA.noise.mlp_scale[i] < DATA.noise.knn_scale[i];
+    var adv;
+    if (mlpWins) {
+      adv = '-' + ((1 - DATA.noise.mlp_scale[i] / DATA.noise.knn_scale[i]) * 100).toFixed(1) + '%';
+    } else {
+      adv = '+' + ((DATA.noise.mlp_scale[i] / DATA.noise.knn_scale[i] - 1) * 100).toFixed(1) + '%';
+    }
+    var tr = document.createElement('tr');
+    if (mlpWins) tr.className = 'highlight';
+    tr.appendChild(makeTd(noiseLabels[i]));
+    tr.appendChild(makeTd(fmt(DATA.noise.mean_scale[i])));
+    tr.appendChild(makeTd(fmt(DATA.noise.knn_scale[i]), !mlpWins ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.noise.mlp_scale[i]), mlpWins ? 'best' : ''));
+    tr.appendChild(makeTdBold(mlpWins ? 'MLP' : 'k-NN'));
+    tr.appendChild(makeTd(adv));
+    tbody.appendChild(tr);
+  }
+})();
+
+// ==========================================================================
+// Size Ablation Chart + Table
+// ==========================================================================
+new Chart(document.getElementById('chartSize'), {
+  type: 'line',
+  data: {
+    labels: DATA.size.N,
+    datasets: [
+      { label: 'Mean', data: DATA.size.mean_scale, borderColor: COLORS.mean.border, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, borderDash: [5, 5] },
+      { label: 'k-NN (k=5)', data: DATA.size.knn_scale, borderColor: COLORS.knn.border, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5 },
+      { label: 'Ours (MLP)', data: DATA.size.mlp_scale, borderColor: COLORS.ours.border, backgroundColor: COLORS.ours.bg, fill: true, tension: 0.3, pointRadius: 6 },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x: { title: { display: true, text: 'Training Set Size (N)' }, grid: { display: false } },
+      y: { title: { display: true, text: 'Scale MAE (lower is better)' }, grid: { color: '#f1f5f9' } }
+    }
+  }
+});
+
+(function() {
+  var tbody = document.getElementById('sizeTableBody');
+  for (var i = 0; i < DATA.size.N.length; i++) {
+    var mlpWins = DATA.size.mlp_scale[i] < DATA.size.knn_scale[i];
+    var tr = document.createElement('tr');
+    if (mlpWins) tr.className = 'highlight';
+    tr.appendChild(makeTd(String(DATA.size.N[i])));
+    tr.appendChild(makeTd(fmt(DATA.size.mean_scale[i])));
+    tr.appendChild(makeTd(fmt(DATA.size.knn_scale[i]), !mlpWins ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(DATA.size.mlp_scale[i]), mlpWins ? 'best' : ''));
+    tr.appendChild(makeTdBold(mlpWins ? 'MLP' : 'k-NN'));
+    tbody.appendChild(tr);
+  }
+})();
+
+// ==========================================================================
+// TTA Charts + Table
+// ==========================================================================
+new Chart(document.getElementById('chartTTAScale'), {
+  type: 'bar',
+  data: {
+    labels: DATA.tta.map(function(d) { return 'View ' + d.view; }),
+    datasets: [
+      {
+        label: 'Before TTA',
+        data: DATA.tta.map(function(d) { return d.before_scale; }),
+        backgroundColor: COLORS.before.bg,
+        borderColor: COLORS.before.border,
+        borderWidth: 1,
+        borderRadius: 4,
+      },
+      {
+        label: 'After TTA',
+        data: DATA.tta.map(function(d) { return d.after_scale; }),
+        backgroundColor: DATA.tta.map(function(d) { return d.after_scale < d.before_scale ? 'rgba(22,163,74,0.5)' : 'rgba(220,38,38,0.5)'; }),
+        borderColor: DATA.tta.map(function(d) { return d.after_scale < d.before_scale ? '#16a34a' : '#dc2626'; }),
+        borderWidth: 1,
+        borderRadius: 4,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Scale MAE (lower is better)' }, grid: { color: '#f1f5f9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartTTAPSNR'), {
+  type: 'bar',
+  data: {
+    labels: DATA.tta.map(function(d) { return 'View ' + d.view; }),
+    datasets: [
+      {
+        label: 'Before TTA',
+        data: DATA.tta.map(function(d) { return d.before_psnr; }),
+        backgroundColor: COLORS.before.bg,
+        borderColor: COLORS.before.border,
+        borderWidth: 1,
+        borderRadius: 4,
+      },
+      {
+        label: 'After TTA',
+        data: DATA.tta.map(function(d) { return d.after_psnr; }),
+        backgroundColor: DATA.tta.map(function(d) { return d.after_psnr > d.before_psnr ? 'rgba(22,163,74,0.5)' : 'rgba(220,38,38,0.5)'; }),
+        borderColor: DATA.tta.map(function(d) { return d.after_psnr > d.before_psnr ? '#16a34a' : '#dc2626'; }),
+        borderWidth: 1,
+        borderRadius: 4,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: false, title: { display: true, text: 'PSNR dB (higher is better)' }, grid: { color: '#f1f5f9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+(function() {
+  var tbody = document.getElementById('ttaTableBody');
+  for (var i = 0; i < DATA.tta.length; i++) {
+    var d = DATA.tta[i];
+    var scaleImproved = d.after_scale < d.before_scale;
+    var pct;
+    if (scaleImproved) {
+      pct = '-' + ((1 - d.after_scale / d.before_scale) * 100).toFixed(1) + '%';
+    } else {
+      pct = '+' + ((d.after_scale / d.before_scale - 1) * 100).toFixed(1) + '%';
+    }
+    var tr = document.createElement('tr');
+    tr.appendChild(makeTd('View ' + d.view));
+    tr.appendChild(makeTd(fmt(d.before_scale)));
+    tr.appendChild(makeTd(fmt(d.after_scale), scaleImproved ? 'best' : ''));
+    tr.appendChild(makeTd(fmt(d.before_psnr, 2)));
+    tr.appendChild(makeTd(fmt(d.after_psnr, 2)));
+
+    var statusTd = document.createElement('td');
+    statusTd.style.fontWeight = '600';
+    statusTd.style.color = scaleImproved ? 'var(--success)' : 'var(--danger)';
+    statusTd.textContent = scaleImproved ? 'Yes (' + pct + ')' : 'No (' + pct + ')';
+    tr.appendChild(statusTd);
+
+    tbody.appendChild(tr);
+  }
+})();
+
+// ==========================================================================
+// Navigation highlighting
+// ==========================================================================
+(function() {
+  var links = document.querySelectorAll('nav a');
+  var sections = [];
+  links.forEach(function(a) {
+    sections.push(document.querySelector(a.getAttribute('href')));
+  });
+
+  function onScroll() {
+    var scrollY = window.scrollY + 100;
+    var current = 0;
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i] && sections[i].offsetTop <= scrollY) current = i;
+    }
+    links.forEach(function(a) { a.classList.remove('active'); });
+    links[current].classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        window.scrollTo({ top: target.offsetTop - 56, behavior: 'smooth' });
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marginalizing Over BPE Tokenizations for Calibrated Word-Level Probabilities in Whisper</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a2e;
+    --accent: #2563eb;
+    --accent2: #dc2626;
+    --accent3: #059669;
+    --accent4: #d97706;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --card-bg: #f8fafc;
+    --code-bg: #f1f5f9;
+    --header-bg: #0f172a;
+    --header-fg: #f1f5f9;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.7;
+    font-size: 17px;
+  }
+  header {
+    background: var(--header-bg);
+    color: var(--header-fg);
+    padding: 3rem 1.5rem;
+    text-align: center;
+  }
+  header h1 {
+    font-size: clamp(1.4rem, 3.2vw, 2.2rem);
+    font-weight: 700;
+    max-width: 52rem;
+    margin: 0 auto 1rem;
+    line-height: 1.3;
+  }
+  header .venue {
+    font-size: 0.95rem;
+    color: #94a3b8;
+    margin-bottom: 1.5rem;
+  }
+  header .abstract {
+    max-width: 48rem;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: #cbd5e1;
+    text-align: left;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+    padding: 0.6rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.82rem;
+    display: flex;
+    gap: 0.2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.3rem 0.7rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  nav a:hover { color: var(--accent); background: #eff6ff; }
+  main {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+  section {
+    padding: 2.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  section:last-child { border-bottom: none; }
+  h2 {
+    font-size: 1.55rem;
+    margin-bottom: 1rem;
+    color: var(--header-bg);
+  }
+  h3 {
+    font-size: 1.15rem;
+    margin: 1.5rem 0 0.5rem;
+    color: var(--fg);
+  }
+  p { margin-bottom: 1rem; }
+  .highlight {
+    background: #eff6ff;
+    border-left: 4px solid var(--accent);
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.92rem;
+    border-radius: 0 6px 6px 0;
+  }
+  .highlight strong { color: var(--accent); }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    text-align: center;
+  }
+  .stat-card .number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .stat-card .label {
+    font-size: 0.82rem;
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin-top: 0.3rem;
+  }
+  .chart-container {
+    position: relative;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1.5rem 0;
+  }
+  .chart-container canvas { max-height: 400px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.88rem;
+  }
+  th {
+    background: var(--header-bg);
+    color: var(--header-fg);
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:nth-child(even) { background: var(--card-bg); }
+  tr:hover { background: #e0e7ff; }
+  code {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    background: var(--code-bg);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.88em;
+  }
+  .equation {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    text-align: center;
+    font-family: 'Georgia', serif;
+    font-style: italic;
+    font-size: 1.05rem;
+    overflow-x: auto;
+  }
+  .dag-visual {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin: 1.5rem 0;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.82rem;
+  }
+  .dag-path {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
+    cursor: default;
+    transition: background 0.15s;
+  }
+  .dag-path:hover { background: #e0e7ff; }
+  .dag-token {
+    background: var(--accent);
+    color: white;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .dag-arrow { color: var(--muted); }
+  .dag-prob {
+    margin-left: auto;
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.78rem;
+  }
+  .dag-bar {
+    height: 6px;
+    background: var(--accent);
+    border-radius: 3px;
+    margin-left: 0.5rem;
+    transition: width 0.5s;
+    min-width: 2px;
+  }
+  .controls {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.88rem;
+  }
+  .controls label { color: var(--muted); font-weight: 500; }
+  select, button {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  select:hover, button:hover { border-color: var(--accent); }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+  }
+  button:hover { background: #1d4ed8; }
+  .finding-box {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1rem 0;
+  }
+  .finding-num {
+    background: var(--accent);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+  .finding-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.92rem;
+  }
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 768px) {
+    .two-col { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 2rem 1rem; }
+    nav { font-size: 0.75rem; }
+  }
+  .method-step {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--card-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .step-num {
+    background: var(--header-bg);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .step-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.9rem;
+  }
+  .step-text strong { color: var(--header-bg); }
+  footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Marginalizing Over BPE Tokenizations for Calibrated Word-Level Probabilities in Whisper</h1>
+  <div class="venue">KDD 2026 &middot; Toronto, ON, Canada</div>
+  <div class="abstract">
+    BPE tokenizers map a single word to multiple valid token sequences, causing the true word-level probability
+    to be distributed across exponentially many paths through the decoder. We construct a segmentation DAG
+    whose paths enumerate all valid tokenizations, and propose a forward algorithm that marginalizes over this
+    DAG. Across 184 English words, we find that canonical estimates capture as little as 34% of the true word
+    probability, and that beam-pruned marginalization with width 10 recovers over 96% of the exact marginal.
+  </div>
+</header>
+
+<nav>
+  <a href="#problem">Problem</a>
+  <a href="#method">Method</a>
+  <a href="#dag-explorer">DAG Explorer</a>
+  <a href="#paths">Path Growth</a>
+  <a href="#gap">Marginalization Gap</a>
+  <a href="#beam">Beam Convergence</a>
+  <a href="#cases">Case Variants</a>
+  <a href="#summary">Summary</a>
+</nav>
+
+<main>
+
+<!-- ===== PROBLEM ===== -->
+<section id="problem">
+  <h2>The Problem: Hidden Probability Mass</h2>
+  <p>
+    Whisper and similar ASR systems use byte-pair encoding (BPE) to segment text into subword tokens.
+    When estimating word-level confidence, practitioners multiply the conditional probabilities of the
+    tokens in the <em>canonical</em> BPE segmentation. But BPE tokenizers are <strong>ambiguous</strong>:
+    the same word admits multiple valid token sequences. This means the true word probability requires
+    summing over <em>all</em> valid tokenizations.
+  </p>
+  <div class="equation">
+    P(word | audio) = &Sigma;<sub>s &isin; S(word)</sub> P(s | audio)
+  </div>
+  <p>
+    Using only the canonical segmentation yields a <strong>lower bound</strong> on the true word probability.
+    The difference is the <em>marginalization gap</em>:
+  </p>
+  <div class="equation">
+    &Delta;(w) = log P(w | audio) &minus; log P(s* | audio) &ge; 0
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="number">184</span>
+      <div class="label">English words analyzed</div>
+    </div>
+    <div class="stat-card">
+      <span class="number">50,257</span>
+      <div class="label">BPE vocabulary entries</div>
+    </div>
+    <div class="stat-card">
+      <span class="number">0.26</span>
+      <div class="label">Mean gap (nats, single case)</div>
+    </div>
+    <div class="stat-card">
+      <span class="number">1.09</span>
+      <div class="label">Mean gap (nats, with case variants)</div>
+    </div>
+  </div>
+
+  <div class="highlight">
+    <strong>Key insight:</strong> A gap of 0.26 nats means the canonical estimate captures only ~77% of the true word probability on average.
+    With case variants, canonical estimates capture as little as ~34% of the true probability.
+  </div>
+</section>
+
+<!-- ===== METHOD ===== -->
+<section id="method">
+  <h2>Methodology: Segmentation DAG &amp; Forward Algorithm</h2>
+  <p>
+    We model all valid tokenizations of a word as paths through a directed acyclic graph (DAG),
+    then run a forward algorithm to compute the exact marginalized probability.
+  </p>
+
+  <div class="method-step">
+    <div class="step-num">1</div>
+    <div class="step-text">
+      <strong>Build Segmentation DAG:</strong> Given word string of length <em>n</em>, create nodes {0, 1, ..., n}
+      for character positions. Add edge (i, j, token_id) whenever substring w[i:j] matches a vocabulary token.
+      Source-to-sink paths enumerate all valid tokenizations.
+    </div>
+  </div>
+  <div class="method-step">
+    <div class="step-num">2</div>
+    <div class="step-text">
+      <strong>Enumerate Case Variants:</strong> Construct separate DAGs for lowercase, title-case, and
+      uppercase forms. The total probability sums over all variant DAGs.
+    </div>
+  </div>
+  <div class="method-step">
+    <div class="step-num">3</div>
+    <div class="step-text">
+      <strong>Forward Algorithm:</strong> Traverse DAG in topological order. At each node, maintain
+      partial path histories with accumulated log-probabilities. Propagate using log-sum-exp to
+      aggregate probability at the sink node.
+    </div>
+  </div>
+  <div class="method-step">
+    <div class="step-num">4</div>
+    <div class="step-text">
+      <strong>Beam Pruning:</strong> For words with thousands of paths, retain only the B most
+      probable partial paths at each node. This produces a lower bound that improves monotonically
+      with beam width.
+    </div>
+  </div>
+</section>
+
+<!-- ===== DAG EXPLORER ===== -->
+<section id="dag-explorer">
+  <h2>Interactive: Tokenization Paths for "cat"</h2>
+  <p>
+    The word <code>cat</code> (with space prefix: <code>&nbsp;cat</code>) has 8 valid tokenization paths
+    through Whisper's GPT-2 vocabulary. The canonical single-token path captures 99.5% of probability mass,
+    but alternative decompositions collectively contribute measurable additional probability.
+  </p>
+
+  <div class="controls">
+    <label>Select word:</label>
+    <select id="pathWordSelect" onchange="updatePathExplorer()">
+      <option value="cat">cat (3 chars, 8 paths)</option>
+      <option value="dog">dog (3 chars, 8 paths)</option>
+      <option value="the">the (3 chars, 8 paths)</option>
+    </select>
+  </div>
+
+  <div id="pathExplorerContainer"></div>
+
+  <div class="highlight">
+    <strong>Observation:</strong> All 3-character words have exactly 8 tokenization paths: one canonical,
+    three 2-token splits, three 3-token splits, and one full character-level decomposition.
+    The canonical path dominates with 99.5% of probability mass.
+  </div>
+</section>
+
+<!-- ===== PATH GROWTH ===== -->
+<section id="paths">
+  <h2>Tokenization Paths Grow Exponentially</h2>
+  <p>
+    The number of valid BPE tokenizations grows exponentially with word length, following approximately
+    10<sup>0.35n</sup> growth. Each additional character roughly doubles the number of valid tokenizations
+    by introducing new split points.
+  </p>
+
+  <div class="two-col">
+    <div class="chart-container">
+      <canvas id="pathsChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <canvas id="edgesChart"></canvas>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Length</th>
+        <th>N Words</th>
+        <th>Median Paths</th>
+        <th>Max Paths</th>
+        <th>Median Edges</th>
+        <th>Gap (single)</th>
+        <th>Gap (+case)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>2-3</td><td>20</td><td>4</td><td>4</td><td>6</td><td>0.005</td><td>1.104</td></tr>
+      <tr><td>4-5</td><td>81</td><td>15</td><td>16</td><td>14</td><td>0.029</td><td>1.118</td></tr>
+      <tr><td>6-7</td><td>58</td><td>93</td><td>110</td><td>26</td><td>0.535</td><td>1.229</td></tr>
+      <tr><td>8-10</td><td>1</td><td>493</td><td>493</td><td>34</td><td>0.226</td><td>1.010</td></tr>
+      <tr><td>11+</td><td>24</td><td>3,006</td><td>5,337</td><td>46</td><td>0.859</td><td>1.293</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== MARGINALIZATION GAP ===== -->
+<section id="gap">
+  <h2>The Marginalization Gap</h2>
+  <p>
+    The marginalization gap, the log-probability missed by using only the canonical tokenization, grows
+    with both word length and the number of tokenization paths. For complex words (11+ characters),
+    the gap reaches 0.86 nats (single case) and 1.29 nats (with case variants).
+  </p>
+
+  <div class="controls">
+    <label>Show:</label>
+    <button id="btnGapLength" onclick="showGapChart('length')" style="background: var(--accent)">Gap vs. Length</button>
+    <button id="btnGapPaths" onclick="showGapChart('paths')" style="background: var(--muted)">Gap vs. Path Count</button>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="gapChart"></canvas>
+  </div>
+
+  <div class="finding-box">
+    <div class="finding-num">1</div>
+    <div class="finding-text">
+      The single-case marginalization gap ranges from <strong>0.005 nats</strong> for short words to
+      <strong>1.58 nats</strong> for complex words. In probability space, a 0.26 nat mean gap means the
+      canonical estimate captures only exp(-0.26) = <strong>77%</strong> of the true word probability.
+    </div>
+  </div>
+  <div class="finding-box">
+    <div class="finding-num">2</div>
+    <div class="finding-text">
+      Including casing variants raises the mean gap to <strong>1.09 nats</strong>, meaning canonical estimates
+      capture only exp(-1.09) = <strong>34%</strong> of the total probability. The case-inclusive gap is
+      relatively constant across word lengths (~1.10-1.29 nats), suggesting casing ambiguity is a
+      length-independent source of probability dispersion.
+    </div>
+  </div>
+</section>
+
+<!-- ===== BEAM CONVERGENCE ===== -->
+<section id="beam">
+  <h2>Beam Search Convergence</h2>
+  <p>
+    Full marginalization can be expensive for long words with thousands of paths. Beam-pruned
+    marginalization retains only the top-B partial paths at each DAG node. The approximation
+    converges rapidly because probability is concentrated in a few dominant paths.
+  </p>
+
+  <div class="controls">
+    <label>Select word:</label>
+    <select id="beamWordSelect" onchange="updateBeamChart()">
+      <option value="cat">cat (8 paths)</option>
+      <option value="the">the (8 paths)</option>
+      <option value="hello">hello (32 paths)</option>
+      <option value="world">world (22 paths)</option>
+      <option value="playing">playing (80 paths)</option>
+      <option value="machine">machine (104 paths)</option>
+      <option value="reading">reading (106 paths)</option>
+      <option value="believe">believe (99 paths)</option>
+      <option value="application">application (1,011 paths)</option>
+      <option value="international">international (3,642 paths)</option>
+      <option value="understanding">understanding (3,957 paths)</option>
+      <option value="communication">communication (4,182 paths)</option>
+    </select>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="beamChart"></canvas>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Word</th>
+        <th>Paths</th>
+        <th>B=5</th>
+        <th>B=10</th>
+        <th>B=20</th>
+        <th>B=50</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>cat</td><td>8</td><td>99.99%</td><td>100.0%</td><td>100.0%</td><td>100.0%</td></tr>
+      <tr><td>playing</td><td>80</td><td>99.6%</td><td>99.9%</td><td>100.0%</td><td>100.0%</td></tr>
+      <tr><td>application</td><td>1,011</td><td>94.3%</td><td>98.8%</td><td>99.8%</td><td>100.0%</td></tr>
+      <tr><td>international</td><td>3,642</td><td>87.6%</td><td>96.0%</td><td>99.2%</td><td>99.9%</td></tr>
+    </tbody>
+  </table>
+
+  <div class="finding-box">
+    <div class="finding-num">3</div>
+    <div class="finding-text">
+      Beam width <strong>B=10</strong> recovers >99.9% of exact marginal probability for words up to
+      7 characters and >96% for words up to 13 characters. The rapid convergence occurs because the
+      probability distribution over paths is <strong>highly concentrated</strong> in the top few paths.
+    </div>
+  </div>
+</section>
+
+<!-- ===== CASE VARIANTS ===== -->
+<section id="cases">
+  <h2>Case Variant Contributions</h2>
+  <p>
+    In BPE vocabularies, <code>cat</code>, <code>Cat</code>, and <code>CAT</code> are distinct tokens
+    with separate token IDs. Ignoring case variants loses a significant portion of the total word probability.
+    The chart below shows how probability mass is distributed across lowercase, title-case, and uppercase variants.
+  </p>
+
+  <div class="controls">
+    <label>Select word:</label>
+    <select id="caseWordSelect" onchange="updateCaseChart()">
+      <option value="cat">cat</option>
+      <option value="the">the</option>
+      <option value="hello">hello</option>
+      <option value="world">world</option>
+      <option value="playing">playing</option>
+      <option value="running">running</option>
+      <option value="reading">reading</option>
+      <option value="science">science</option>
+      <option value="teacher">teacher</option>
+      <option value="machine">machine</option>
+      <option value="computer">computer</option>
+      <option value="university">university</option>
+      <option value="application">application</option>
+      <option value="international">international</option>
+      <option value="understanding">understanding</option>
+    </select>
+  </div>
+
+  <div class="two-col">
+    <div class="chart-container">
+      <canvas id="caseChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <canvas id="caseFractionChart"></canvas>
+    </div>
+  </div>
+
+  <div class="finding-box">
+    <div class="finding-num">4</div>
+    <div class="finding-text">
+      Case variants are <strong>separate token sequences</strong> in BPE vocabularies. In the mock decoder
+      setting, the lowercase variant accounts for a median of ~38% of total probability, with title-case
+      and uppercase capturing ~62%. Casing adds an average of <strong>1.09 nats</strong> to the marginalization gap.
+    </div>
+  </div>
+</section>
+
+<!-- ===== SUMMARY ===== -->
+<section id="summary">
+  <h2>Summary of Key Results</h2>
+
+  <div class="finding-box">
+    <div class="finding-num" style="background: var(--accent3)">1</div>
+    <div class="finding-text">
+      <strong>Exponential path growth:</strong> Valid tokenization paths grow as ~10<sup>0.35n</sup> with word
+      length n. Median paths range from 4 (2-3 char words) to 3,006 (11+ char words), reaching a maximum
+      of 5,337 for "understanding."
+    </div>
+  </div>
+
+  <div class="finding-box">
+    <div class="finding-num" style="background: var(--accent2)">2</div>
+    <div class="finding-text">
+      <strong>Systematic underestimation:</strong> The marginalization gap averages 0.26 nats (single case)
+      and 1.09 nats (with case variants). Canonical estimates capture as little as 34% of the true word probability,
+      introducing a length-dependent bias in confidence scores.
+    </div>
+  </div>
+
+  <div class="finding-box">
+    <div class="finding-num" style="background: var(--accent4)">3</div>
+    <div class="finding-text">
+      <strong>Practical approximation:</strong> Beam-pruned marginalization with B=10 recovers >96% of exact
+      probability even for 13-character words, requiring at most 460 decoder queries. This makes
+      calibrated word-level uncertainty practical for real-time ASR.
+    </div>
+  </div>
+
+  <div class="finding-box">
+    <div class="finding-num" style="background: var(--header-bg)">4</div>
+    <div class="finding-text">
+      <strong>Compact representation:</strong> While the number of paths is exponential, the DAG
+      representation grows only quadratically (O(n<sup>2</sup>) edges), enabling efficient algorithms.
+      The DAG structure is independent of the decoder and applies to any autoregressive BPE-based model.
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Marginalizing Over BPE Tokenizations for Calibrated Word-Level Probabilities in Whisper &middot; KDD 2026
+</footer>
+
+<script>
+// ========== DATA ==========
+
+const summaryTable = [
+  {length:"2-3", n:20, medPaths:4, maxPaths:4, medEdges:6, gapSingle:0.005, gapCase:1.104},
+  {length:"4-5", n:81, medPaths:15, maxPaths:16, medEdges:14, gapSingle:0.029, gapCase:1.118},
+  {length:"6-7", n:58, medPaths:93, maxPaths:110, medEdges:26, gapSingle:0.535, gapCase:1.229},
+  {length:"8-10", n:1, medPaths:493, maxPaths:493, medEdges:34, gapSingle:0.226, gapCase:1.010},
+  {length:"11+", n:24, medPaths:3006, maxPaths:5337, medEdges:46, gapSingle:0.859, gapCase:1.293}
+];
+
+const pathData = {
+  cat: {
+    word:" cat", nPaths:8,
+    paths:[
+      {tokens:[" cat"], logProb:-0.357, fraction:99.50},
+      {tokens:[" c","at"], logProb:-6.448, fraction:0.23},
+      {tokens:[" ","cat"], logProb:-6.959, fraction:0.14},
+      {tokens:[" ca","t"], logProb:-6.959, fraction:0.14},
+      {tokens:[" ","ca","t"], logProb:-12.906, fraction:0.00},
+      {tokens:[" c","a","t"], logProb:-12.906, fraction:0.00},
+      {tokens:[" ","c","at"], logProb:-12.906, fraction:0.00},
+      {tokens:[" ","c","a","t"], logProb:-19.373, fraction:0.00}
+    ]
+  },
+  dog: {
+    word:" dog", nPaths:8,
+    paths:[
+      {tokens:[" dog"], logProb:-0.357, fraction:99.50},
+      {tokens:[" d","og"], logProb:-6.448, fraction:0.23},
+      {tokens:[" ","dog"], logProb:-6.959, fraction:0.14},
+      {tokens:[" do","g"], logProb:-6.959, fraction:0.14},
+      {tokens:[" ","do","g"], logProb:-12.906, fraction:0.00},
+      {tokens:[" d","o","g"], logProb:-12.906, fraction:0.00},
+      {tokens:[" ","d","og"], logProb:-12.906, fraction:0.00},
+      {tokens:[" ","d","o","g"], logProb:-19.373, fraction:0.00}
+    ]
+  },
+  the: {
+    word:" the", nPaths:8,
+    paths:[
+      {tokens:[" the"], logProb:-0.357, fraction:99.50},
+      {tokens:[" t","he"], logProb:-6.448, fraction:0.23},
+      {tokens:[" ","the"], logProb:-6.959, fraction:0.14},
+      {tokens:[" th","e"], logProb:-6.959, fraction:0.14},
+      {tokens:[" ","th","e"], logProb:-12.906, fraction:0.00},
+      {tokens:[" t","h","e"], logProb:-12.906, fraction:0.00},
+      {tokens:[" ","t","he"], logProb:-12.906, fraction:0.00},
+      {tokens:[" ","t","h","e"], logProb:-19.373, fraction:0.00}
+    ]
+  }
+};
+
+const beamData = {
+  cat: {word:" cat", nPaths:8, beams:[
+    {bw:1,cov:0.9950},{bw:2,cov:0.9973},{bw:3,cov:0.9986},{bw:5,cov:0.9999},{bw:8,cov:1.0},{bw:10,cov:1.0},{bw:15,cov:1.0},{bw:20,cov:1.0},{bw:30,cov:1.0},{bw:50,cov:1.0}
+  ]},
+  the: {word:" the", nPaths:8, beams:[
+    {bw:1,cov:0.9950},{bw:2,cov:0.9973},{bw:3,cov:0.9986},{bw:5,cov:0.9999},{bw:8,cov:1.0},{bw:10,cov:1.0},{bw:15,cov:1.0},{bw:20,cov:1.0},{bw:30,cov:1.0},{bw:50,cov:1.0}
+  ]},
+  hello: {word:" hello", nPaths:32, beams:[
+    {bw:1,cov:0.8961},{bw:2,cov:0.9315},{bw:3,cov:0.9670},{bw:5,cov:0.9924},{bw:8,cov:0.9996},{bw:10,cov:0.9997},{bw:15,cov:0.9999},{bw:20,cov:1.0},{bw:30,cov:1.0},{bw:50,cov:1.0}
+  ]},
+  world: {word:" world", nPaths:22, beams:[
+    {bw:1,cov:0.9196},{bw:2,cov:0.9560},{bw:3,cov:0.9924},{bw:5,cov:0.9998},{bw:8,cov:0.9999},{bw:10,cov:1.0},{bw:15,cov:1.0},{bw:20,cov:1.0},{bw:30,cov:1.0},{bw:50,cov:1.0}
+  ]},
+  playing: {word:" playing", nPaths:80, beams:[
+    {bw:1,cov:0.7988},{bw:2,cov:0.8937},{bw:3,cov:0.9886},{bw:5,cov:0.9962},{bw:8,cov:0.9983},{bw:10,cov:0.9992},{bw:15,cov:0.9999},{bw:20,cov:0.9999},{bw:30,cov:1.0},{bw:50,cov:1.0}
+  ]},
+  machine: {word:" machine", nPaths:104, beams:[
+    {bw:1,cov:0.8508},{bw:2,cov:0.9519},{bw:3,cov:0.9856},{bw:5,cov:0.9936},{bw:8,cov:0.9965},{bw:10,cov:0.9980},{bw:15,cov:0.9999},{bw:20,cov:0.9999},{bw:30,cov:0.9999},{bw:50,cov:1.0}
+  ]},
+  reading: {word:" reading", nPaths:106, beams:[
+    {bw:1,cov:0.7971},{bw:2,cov:0.8918},{bw:3,cov:0.9865},{bw:5,cov:0.9941},{bw:8,cov:0.9963},{bw:10,cov:0.9977},{bw:15,cov:0.9997},{bw:20,cov:0.9999},{bw:30,cov:0.9999},{bw:50,cov:1.0}
+  ]},
+  believe: {word:" believe", nPaths:99, beams:[
+    {bw:1,cov:0.5741},{bw:2,cov:0.9719},{bw:3,cov:0.9946},{bw:5,cov:0.9964},{bw:8,cov:0.9980},{bw:10,cov:0.9990},{bw:15,cov:0.9999},{bw:20,cov:0.9999},{bw:30,cov:0.9999},{bw:50,cov:1.0}
+  ]},
+  application: {word:" application", nPaths:1011, beams:[
+    {bw:1,cov:0.2984},{bw:2,cov:0.5052},{bw:3,cov:0.7119},{bw:5,cov:0.9431},{bw:8,cov:0.9836},{bw:10,cov:0.9876},{bw:15,cov:0.9952},{bw:20,cov:0.9979},{bw:30,cov:0.9993},{bw:50,cov:0.9999}
+  ]},
+  international: {word:" international", nPaths:3642, beams:[
+    {bw:1,cov:0.3438},{bw:2,cov:0.5820},{bw:3,cov:0.8202},{bw:5,cov:0.8763},{bw:8,cov:0.9417},{bw:10,cov:0.9604},{bw:15,cov:0.9838},{bw:20,cov:0.9915},{bw:30,cov:0.9971},{bw:50,cov:0.9991}
+  ]},
+  understanding: {word:" understanding", nPaths:3957, beams:[
+    {bw:1,cov:0.3769},{bw:2,cov:0.6381},{bw:3,cov:0.8173},{bw:5,cov:0.8928},{bw:8,cov:0.9440},{bw:10,cov:0.9612},{bw:15,cov:0.9826},{bw:20,cov:0.9907},{bw:30,cov:0.9961},{bw:50,cov:0.9991}
+  ]},
+  communication: {word:" communication", nPaths:4182, beams:[
+    {bw:1,cov:0.3923},{bw:2,cov:0.6641},{bw:3,cov:0.8506},{bw:5,cov:0.9146},{bw:8,cov:0.9679},{bw:10,cov:0.9747},{bw:15,cov:0.9833},{bw:20,cov:0.9897},{bw:30,cov:0.9969},{bw:50,cov:0.9992}
+  ]}
+};
+
+const caseData = {
+  cat: {variants:[
+    {v:" cat", frac:0.3335, paths:8},
+    {v:" Cat", frac:0.3335, paths:8},
+    {v:" CAT", frac:0.3330, paths:7}
+  ]},
+  the: {variants:[
+    {v:" the", frac:0.3333, paths:8},
+    {v:" The", frac:0.3333, paths:8},
+    {v:" THE", frac:0.3333, paths:8}
+  ]},
+  hello: {variants:[
+    {v:" hello", frac:0.4895, paths:32},
+    {v:" Hello", frac:0.4895, paths:32},
+    {v:" HELLO", frac:0.0210, paths:21}
+  ]},
+  world: {variants:[
+    {v:" world", frac:0.3383, paths:22},
+    {v:" World", frac:0.3383, paths:22},
+    {v:" WORLD", frac:0.3235, paths:15}
+  ]},
+  playing: {variants:[
+    {v:" playing", frac:0.3768, paths:80},
+    {v:" Playing", frac:0.3768, paths:80},
+    {v:" PLAYING", frac:0.2464, paths:64}
+  ]},
+  running: {variants:[
+    {v:" running", frac:0.4167, paths:92},
+    {v:" Running", frac:0.4167, paths:92},
+    {v:" RUNNING", frac:0.1665, paths:54}
+  ]},
+  reading: {variants:[
+    {v:" reading", frac:0.4771, paths:106},
+    {v:" Reading", frac:0.4768, paths:98},
+    {v:" READING", frac:0.0461, paths:60}
+  ]},
+  science: {variants:[
+    {v:" science", frac:0.4843, paths:96},
+    {v:" Science", frac:0.4841, paths:88},
+    {v:" SCIENCE", frac:0.0316, paths:58}
+  ]},
+  teacher: {variants:[
+    {v:" teacher", frac:0.4997, paths:95},
+    {v:" Teacher", frac:0.4999, paths:103},
+    {v:" TEACHER", frac:0.0004, paths:60}
+  ]},
+  machine: {variants:[
+    {v:" machine", frac:0.4989, paths:104},
+    {v:" Machine", frac:0.4993, paths:108},
+    {v:" MACHINE", frac:0.0017, paths:72}
+  ]},
+  computer: {variants:[
+    {v:" computer", frac:0.4995, paths:189},
+    {v:" Computer", frac:0.4979, paths:188},
+    {v:" COMPUTER", frac:0.0026, paths:139}
+  ]},
+  university: {variants:[
+    {v:" university", frac:0.4565, paths:493},
+    {v:" University", frac:0.4946, paths:516},
+    {v:" UNIVERSITY", frac:0.0489, paths:404}
+  ]},
+  application: {variants:[
+    {v:" application", frac:0.4470, paths:1011},
+    {v:" Application", frac:0.4477, paths:1026},
+    {v:" APPLICATION", frac:0.1053, paths:668}
+  ]},
+  international: {variants:[
+    {v:" international", frac:0.4851, paths:3642},
+    {v:" International", frac:0.4851, paths:3642},
+    {v:" INTERNATIONAL", frac:0.0298, paths:2406}
+  ]},
+  understanding: {variants:[
+    {v:" understanding", frac:0.5090, paths:3957},
+    {v:" Understanding", frac:0.4909, paths:3718},
+    {v:" UNDERSTANDING", frac:0.0001, paths:1530}
+  ]}
+};
+
+// Gap data (representative words from experiments)
+const gapByLength = [
+  {len:2, word:"an", gap:0.005, gapCase:1.104, paths:4},
+  {len:2, word:"be", gap:0.005, gapCase:1.104, paths:4},
+  {len:2, word:"if", gap:0.005, gapCase:1.104, paths:4},
+  {len:3, word:"cat", gap:0.005, gapCase:1.104, paths:8},
+  {len:3, word:"the", gap:0.005, gapCase:1.104, paths:8},
+  {len:3, word:"dog", gap:0.005, gapCase:1.104, paths:8},
+  {len:4, word:"good", gap:0.029, gapCase:1.118, paths:15},
+  {len:4, word:"nice", gap:0.029, gapCase:1.118, paths:16},
+  {len:4, word:"fine", gap:0.029, gapCase:1.118, paths:16},
+  {len:4, word:"well", gap:0.029, gapCase:1.118, paths:15},
+  {len:5, word:"hello", gap:0.029, gapCase:1.118, paths:32},
+  {len:5, word:"world", gap:0.029, gapCase:1.118, paths:22},
+  {len:5, word:"great", gap:0.029, gapCase:1.118, paths:30},
+  {len:7, word:"playing", gap:0.535, gapCase:1.229, paths:80},
+  {len:7, word:"machine", gap:0.535, gapCase:1.229, paths:104},
+  {len:7, word:"student", gap:0.535, gapCase:1.229, paths:80},
+  {len:7, word:"reading", gap:0.535, gapCase:1.229, paths:106},
+  {len:7, word:"example", gap:0.535, gapCase:1.229, paths:70},
+  {len:7, word:"believe", gap:0.535, gapCase:1.229, paths:99},
+  {len:7, word:"history", gap:0.535, gapCase:1.229, paths:97},
+  {len:7, word:"science", gap:0.535, gapCase:1.229, paths:96},
+  {len:7, word:"teacher", gap:0.535, gapCase:1.229, paths:95},
+  {len:7, word:"running", gap:0.535, gapCase:1.229, paths:92},
+  {len:7, word:"working", gap:0.535, gapCase:1.229, paths:74},
+  {len:7, word:"special", gap:0.535, gapCase:1.229, paths:98},
+  {len:7, word:"another", gap:0.535, gapCase:1.229, paths:98},
+  {len:7, word:"between", gap:0.535, gapCase:1.229, paths:74},
+  {len:7, word:"certain", gap:0.535, gapCase:1.229, paths:92},
+  {len:10, word:"university", gap:0.226, gapCase:1.010, paths:493},
+  {len:11, word:"application", gap:0.859, gapCase:1.293, paths:1011},
+  {len:13, word:"international", gap:0.859, gapCase:1.293, paths:3642},
+  {len:13, word:"understanding", gap:0.859, gapCase:1.293, paths:3957},
+  {len:13, word:"communication", gap:0.859, gapCase:1.293, paths:4182},
+  {len:13, word:"computational", gap:0.859, gapCase:1.293, paths:3405}
+];
+
+// ========== CHART GLOBALS ==========
+let pathsChartInst, edgesChartInst, gapChartInst, beamChartInst, caseChartInst, caseFracChartInst;
+const blue = 'rgba(37, 99, 235, 0.8)';
+const red = 'rgba(220, 38, 38, 0.8)';
+const green = 'rgba(5, 150, 105, 0.8)';
+const orange = 'rgba(217, 119, 6, 0.8)';
+const blueFill = 'rgba(37, 99, 235, 0.15)';
+const redFill = 'rgba(220, 38, 38, 0.15)';
+
+// ========== PATH EXPLORER ==========
+function updatePathExplorer() {
+  const sel = document.getElementById('pathWordSelect').value;
+  const d = pathData[sel];
+  const container = document.getElementById('pathExplorerContainer');
+  let html = '<div class="dag-visual">';
+  d.paths.forEach((p, i) => {
+    const barW = Math.max(2, p.fraction * 3);
+    const bg = i === 0 ? '#eff6ff' : 'transparent';
+    html += `<div class="dag-path" style="background:${bg}">`;
+    p.tokens.forEach((t, j) => {
+      if (j > 0) html += '<span class="dag-arrow">&rarr;</span>';
+      html += `<span class="dag-token">${t === ' ' ? '&blank;' : t.replace(' ', '&blank;')}</span>`;
+    });
+    html += `<span class="dag-prob">${p.fraction.toFixed(2)}%</span>`;
+    html += `<div class="dag-bar" style="width:${barW}px"></div>`;
+    html += '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ========== PATHS CHART ==========
+function createPathsChart() {
+  const ctx = document.getElementById('pathsChart').getContext('2d');
+  pathsChartInst = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Single-case paths',
+          data: gapByLength.map(d => ({x: d.len, y: d.paths})),
+          backgroundColor: blue,
+          borderColor: blue,
+          pointRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: 'Tokenization Paths vs Word Length', font: {size: 14} },
+        legend: { display: false }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Word Length (characters)' } },
+        y: { type: 'logarithmic', title: { display: true, text: 'Number of Paths (log scale)' },
+             min: 1, max: 10000 }
+      }
+    }
+  });
+}
+
+function createEdgesChart() {
+  const ctx = document.getElementById('edgesChart').getContext('2d');
+  const labels = summaryTable.map(d => d.length);
+  edgesChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Median Edges',
+        data: summaryTable.map(d => d.medEdges),
+        backgroundColor: green,
+        borderColor: green,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: 'DAG Edge Count vs Word Length', font: {size: 14} },
+        legend: { display: false }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Word Length Group' } },
+        y: { title: { display: true, text: 'Median Edge Count' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ========== GAP CHART ==========
+let gapMode = 'length';
+function showGapChart(mode) {
+  gapMode = mode;
+  document.getElementById('btnGapLength').style.background = mode === 'length' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('btnGapPaths').style.background = mode === 'paths' ? 'var(--accent)' : 'var(--muted)';
+  updateGapChart();
+}
+
+function updateGapChart() {
+  if (gapChartInst) gapChartInst.destroy();
+  const ctx = document.getElementById('gapChart').getContext('2d');
+  const xKey = gapMode === 'length' ? 'len' : 'paths';
+  const xLabel = gapMode === 'length' ? 'Word Length (characters)' : 'Number of Paths';
+  const isLog = gapMode === 'paths';
+
+  gapChartInst = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Single-case gap',
+          data: gapByLength.map(d => ({x: d[xKey], y: d.gap})),
+          backgroundColor: blue,
+          borderColor: blue,
+          pointRadius: 5
+        },
+        {
+          label: 'Gap with case variants',
+          data: gapByLength.map(d => ({x: d[xKey], y: d.gapCase})),
+          backgroundColor: red,
+          borderColor: red,
+          pointRadius: 5,
+          pointStyle: 'triangle'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: `Marginalization Gap vs ${gapMode === 'length' ? 'Word Length' : 'Path Count'}`, font: {size: 14} },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const d = gapByLength[ctx.dataIndex];
+              return `${d.word}: ${ctx.parsed.y.toFixed(3)} nats`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: isLog ? 'logarithmic' : 'linear',
+          title: { display: true, text: xLabel }
+        },
+        y: { title: { display: true, text: 'Marginalization Gap (nats)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ========== BEAM CHART ==========
+function updateBeamChart() {
+  if (beamChartInst) beamChartInst.destroy();
+  const sel = document.getElementById('beamWordSelect').value;
+  const d = beamData[sel];
+  const ctx = document.getElementById('beamChart').getContext('2d');
+
+  beamChartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.beams.map(b => b.bw),
+      datasets: [{
+        label: `${sel} (${d.nPaths} paths)`,
+        data: d.beams.map(b => b.cov * 100),
+        borderColor: blue,
+        backgroundColor: blueFill,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: blue
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: `Beam Convergence: "${sel}" (${d.nPaths} paths)`, font: {size: 14} },
+        legend: { display: false }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Beam Width (B)' } },
+        y: {
+          title: { display: true, text: 'Relative Coverage (%)' },
+          min: Math.min(20, Math.floor(d.beams[0].cov * 100) - 5),
+          max: 101
+        }
+      }
+    }
+  });
+}
+
+// ========== CASE CHART ==========
+function updateCaseChart() {
+  if (caseChartInst) caseChartInst.destroy();
+  if (caseFracChartInst) caseFracChartInst.destroy();
+
+  const sel = document.getElementById('caseWordSelect').value;
+  const d = caseData[sel];
+
+  const ctx1 = document.getElementById('caseChart').getContext('2d');
+  caseChartInst = new Chart(ctx1, {
+    type: 'doughnut',
+    data: {
+      labels: d.variants.map(v => v.v.trim()),
+      datasets: [{
+        data: d.variants.map(v => (v.frac * 100).toFixed(1)),
+        backgroundColor: [blue, orange, red],
+        borderWidth: 2,
+        borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: `Probability by Case: "${sel}"`, font: {size: 14} },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return `${ctx.label}: ${ctx.parsed}% (${d.variants[ctx.dataIndex].paths} paths)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const ctx2 = document.getElementById('caseFractionChart').getContext('2d');
+  caseFracChartInst = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: d.variants.map(v => v.v.trim()),
+      datasets: [{
+        label: 'Path Count',
+        data: d.variants.map(v => v.paths),
+        backgroundColor: [blue, orange, red],
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: { display: true, text: `Tokenization Paths by Case`, font: {size: 14} },
+        legend: { display: false }
+      },
+      scales: {
+        y: { title: { display: true, text: 'Number of Paths' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ========== INIT ==========
+document.addEventListener('DOMContentLoaded', function() {
+  updatePathExplorer();
+  createPathsChart();
+  createEdgesChart();
+  updateGapChart();
+  updateBeamChart();
+  updateCaseChart();
+});
+</script>
+
+</body>
+</html>

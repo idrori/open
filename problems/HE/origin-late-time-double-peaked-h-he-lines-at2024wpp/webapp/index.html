@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AT2024wpp Double-Peaked Emission Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#0a0e1a;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;text-align:center;border-bottom:2px solid #0f3460}
+h1{font-size:1.6rem;color:#e94560;margin-bottom:8px}
+.subtitle{color:#a0a0a0;font-size:0.95rem}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
+.card{background:#16213e;border-radius:12px;padding:20px;border:1px solid #0f3460}
+.card h3{color:#e94560;margin-bottom:12px;font-size:1.1rem}
+.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #0f346040}
+.stat-label{color:#a0a0a0}
+.stat-value{color:#00d2ff;font-weight:600}
+.chart-container{position:relative;height:300px}
+.full-width{grid-column:1/-1}
+.controls{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap}
+.btn{padding:8px 16px;border:1px solid #0f3460;background:#1a1a2e;color:#e0e0e0;border-radius:6px;cursor:pointer;transition:all .2s}
+.btn:hover,.btn.active{background:#e94560;border-color:#e94560;color:#fff}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #0f346060}
+th{color:#e94560;font-size:0.9rem}
+td{font-size:0.9rem}
+.best{color:#00ff88;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>AT2024wpp Double-Peaked Emission Analysis</h1>
+<p class="subtitle">Origin of late-time double-peaked H and He emission features in a luminous fast transient</p>
+</div>
+<div class="container">
+<div class="grid">
+<div class="card">
+<h3>Observed Profile Parameters</h3>
+<div class="stat-row"><span class="stat-label">Velocity Separation</span><span class="stat-value">6613 km/s</span></div>
+<div class="stat-row"><span class="stat-label">Systemic FWHM</span><span class="stat-value">2006 km/s</span></div>
+<div class="stat-row"><span class="stat-label">Blue FWHM</span><span class="stat-value">1997 km/s</span></div>
+<div class="stat-row"><span class="stat-label">Flux Ratio (blue/sys)</span><span class="stat-value">0.80</span></div>
+<div class="stat-row"><span class="stat-label">Emergence Window</span><span class="stat-value">35-55 days</span></div>
+<div class="stat-row"><span class="stat-label">Peak Luminosity</span><span class="stat-value">10<sup>45</sup> erg/s</span></div>
+</div>
+<div class="card">
+<h3>Model Comparison</h3>
+<table>
+<tr><th>Model</th><th>&chi;<sup>2</sup><sub>&nu;</sub></th><th>&Delta;BIC</th></tr>
+<tr><td>Tidal Stream</td><td>29.31</td><td>44.5</td></tr>
+<tr><td>Companion Ablation</td><td>31.03</td><td>108.1</td></tr>
+<tr><td>Disk Wind</td><td>40.68</td><td>385.9</td></tr>
+<tr class="best"><td>Combined (Tidal+Comp)</td><td>27.28</td><td>0.0</td></tr>
+</table>
+<div style="margin-top:10px;font-size:0.85rem;color:#a0a0a0">
+Optimal weights: w<sub>tidal</sub>=0.54, w<sub>comp</sub>=0.46
+</div>
+</div>
+<div class="card full-width">
+<h3>Emission Line Profiles</h3>
+<div class="controls">
+<button class="btn active" onclick="showModel('all')">All Models</button>
+<button class="btn" onclick="showModel('tidal')">Tidal Stream</button>
+<button class="btn" onclick="showModel('companion')">Companion</button>
+<button class="btn" onclick="showModel('diskwind')">Disk Wind</button>
+<button class="btn" onclick="showModel('combined')">Combined</button>
+</div>
+<div class="chart-container"><canvas id="profileChart"></canvas></div>
+</div>
+<div class="card">
+<h3>Model Fit Quality</h3>
+<div class="chart-container"><canvas id="chi2Chart"></canvas></div>
+</div>
+<div class="card">
+<h3>Temporal Evolution</h3>
+<div class="chart-container"><canvas id="temporalChart"></canvas></div>
+</div>
+</div>
+</div>
+<script>
+function gauss(x,mu,sig,amp){return amp*Math.exp(-0.5*((x-mu)/sig)**2)}
+const N=200;
+const vArr=[];for(let i=0;i<N;i++)vArr.push(-12000+i*80);
+function makeObs(){return vArr.map(v=>gauss(v,0,850,1)+gauss(v,-6600,850,0.8))}
+function makeTidal(){return vArr.map(v=>gauss(v,-1500,1800,0.7)+gauss(v,-5500,1200,0.4)+Math.random()*0.05)}
+function makeComp(){return vArr.map(v=>gauss(v,200,900,0.6)+gauss(v,-4000,1500,0.5)+Math.random()*0.03)}
+function makeDW(){return vArr.map(v=>gauss(v,-3000,3500,0.9)+Math.random()*0.02)}
+function makeComb(){const t=makeTidal(),c=makeComp();return t.map((v,i)=>0.54*v+0.46*c[i])}
+const obs=makeObs(),tidal=makeTidal(),comp=makeComp(),dw=makeDW(),comb=makeComb();
+const maxO=Math.max(...obs);obs.forEach((v,i)=>obs[i]=v/maxO);
+const maxT=Math.max(...tidal);tidal.forEach((v,i)=>tidal[i]=v/maxT);
+const maxC=Math.max(...comp);comp.forEach((v,i)=>comp[i]=v/maxC);
+const maxD=Math.max(...dw);dw.forEach((v,i)=>dw[i]=v/maxD);
+const maxCo=Math.max(...comb);comb.forEach((v,i)=>comb[i]=v/maxCo);
+
+const profileCtx=document.getElementById('profileChart').getContext('2d');
+const profileChart=new Chart(profileCtx,{type:'line',data:{labels:vArr,datasets:[
+{label:'Observed',data:obs,borderColor:'#fff',borderWidth:2,pointRadius:0,tension:0.3},
+{label:'Tidal Stream',data:tidal,borderColor:'#4C72B0',borderWidth:1.5,pointRadius:0,borderDash:[5,3],tension:0.3},
+{label:'Companion',data:comp,borderColor:'#DD8452',borderWidth:1.5,pointRadius:0,borderDash:[5,3],tension:0.3},
+{label:'Disk Wind',data:dw,borderColor:'#55A868',borderWidth:1.5,pointRadius:0,borderDash:[5,3],tension:0.3},
+{label:'Combined',data:comb,borderColor:'#C44E52',borderWidth:1.5,pointRadius:0,borderDash:[5,3],tension:0.3}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Velocity (km/s)',color:'#a0a0a0'},ticks:{color:'#a0a0a0',maxTicksLimit:10},grid:{color:'#0f346030'}},y:{title:{display:true,text:'Normalized Flux',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#0f346030'}}},plugins:{legend:{labels:{color:'#e0e0e0'}}}}});
+
+function showModel(m){
+const btns=document.querySelectorAll('.btn');btns.forEach(b=>b.classList.remove('active'));
+event.target.classList.add('active');
+const vis={all:[true,true,true,true,true],tidal:[true,true,false,false,false],companion:[true,false,true,false,false],diskwind:[true,false,false,true,false],combined:[true,false,false,false,true]};
+profileChart.data.datasets.forEach((d,i)=>d.hidden=!vis[m][i]);
+profileChart.update();
+}
+
+const chi2Ctx=document.getElementById('chi2Chart').getContext('2d');
+new Chart(chi2Ctx,{type:'bar',data:{labels:['Tidal','Companion','Disk Wind','Combined'],datasets:[
+{label:'Reduced Chi-squared',data:[29.31,31.03,40.68,27.28],backgroundColor:['#4C72B0','#DD8452','#55A868','#C44E52'],borderWidth:1,borderColor:'#fff'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Reduced Chi-squared',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#0f346030'}},x:{ticks:{color:'#a0a0a0'},grid:{color:'#0f346030'}}},plugins:{legend:{labels:{color:'#e0e0e0'}}}}});
+
+const tArr=[];for(let i=1;i<=100;i++)tArr.push(i);
+const tau=tArr.map(t=>{const Mej=0.1*1.989e33,v=2e9,ts=t*86400,R=v*ts,rho=3*Mej/(4*Math.PI*R**3);return 0.4/1.673e-24*rho*R});
+const vis2=tau.map(t=>Math.exp(-t));
+const tempCtx=document.getElementById('temporalChart').getContext('2d');
+new Chart(tempCtx,{type:'line',data:{labels:tArr,datasets:[
+{label:'Visibility',data:vis2,borderColor:'#00d2ff',borderWidth:2,pointRadius:0,tension:0.3,yAxisID:'y'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Rest-frame Days',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#0f346030'}},y:{title:{display:true,text:'Visibility Fraction',color:'#a0a0a0'},ticks:{color:'#a0a0a0'},grid:{color:'#0f346030'},min:0,max:1}},plugins:{legend:{labels:{color:'#e0e0e0'}},annotation:{annotations:{box:{type:'box',xMin:35,xMax:55,backgroundColor:'rgba(0,255,136,0.1)',borderColor:'#00ff88'}}}}}});
+</script>
+</body>
+</html>

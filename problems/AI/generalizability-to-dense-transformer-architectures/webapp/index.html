@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generalizability to Dense Transformer Architectures</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f7fa; color: #333; }
+  .header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.85; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+  .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.2rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .chart-container { position: relative; height: 350px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .summary-item { text-align: center; padding: 1rem; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; color: white; }
+  .summary-item .value { font-size: 1.6rem; font-weight: 700; }
+  .summary-item .label { font-size: 0.75rem; opacity: 0.85; margin-top: 0.3rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: var(--primary); color: white; }
+  tr:hover { background: #f0f4f8; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Generalizability of LR Scaling Laws: MoE to Dense Transformers</h1>
+  <p>Do learning rate configuration findings from MoE architectures transfer to dense Transformers?</p>
+</div>
+<div class="container">
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Loss by Paradigm and Architecture</h2>
+      <div class="chart-container"><canvas id="lossChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>LR Error by Paradigm</h2>
+      <div class="chart-container"><canvas id="errorChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Scaling Law Parameters</h2>
+    <table>
+      <thead><tr><th>Architecture</th><th>c</th><th>alpha</th><th>beta</th><th>Fitting Loss</th><th>muTransfer Loss</th><th>Grid Search Loss</th></tr></thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+var data = {
+  fits: { moe: {c:0.003200,a:-0.0780,b:-0.0320}, dense: {c:0.003680,a:-0.0780,b:-0.0320} },
+  summary: {
+    fitting_moe: {loss:5.2049,err:0}, fitting_dense: {loss:5.2341,err:13.04},
+    mutransfer_moe: {loss:5.5757,err:85.56}, mutransfer_dense: {loss:5.6113,err:87.44},
+    grid_search_moe: {loss:5.2051,err:0}, grid_search_dense: {loss:5.2258,err:0}
+  }
+};
+
+var sg = document.getElementById('summaryGrid');
+var summaryItems = [
+  {v:'15%', l:'Dense LR Offset'},
+  {v:'13%', l:'Fitting LR Error (Dense)'},
+  {v:'87%', l:'muTransfer LR Error (Dense)'}
+];
+summaryItems.forEach(function(item) {
+  var d = document.createElement('div'); d.className = 'summary-item';
+  var v = document.createElement('div'); v.className = 'value'; v.textContent = item.v;
+  var l = document.createElement('div'); l.className = 'label'; l.textContent = item.l;
+  d.appendChild(v); d.appendChild(l); sg.appendChild(d);
+});
+
+// Loss chart
+new Chart(document.getElementById('lossChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: ['Fitting', 'muTransfer', 'Grid Search'],
+    datasets: [
+      { label: 'MoE', data: [5.2049, 5.5757, 5.2051], backgroundColor: '#1a3a5c' },
+      { label: 'Dense', data: [5.2341, 5.6113, 5.2258], backgroundColor: '#e74c3c' }
+    ]
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    scales: { y: { title: {display:true, text:'Mean Loss'}, min:5.0 }},
+    plugins: { legend: { position:'bottom' }}
+  }
+});
+
+// Error chart
+new Chart(document.getElementById('errorChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: ['Fitting', 'muTransfer'],
+    datasets: [
+      { label: 'MoE', data: [0, 85.56], backgroundColor: '#1a3a5c' },
+      { label: 'Dense', data: [13.04, 87.44], backgroundColor: '#e74c3c' }
+    ]
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    scales: { y: { title: {display:true, text:'LR Error (%)'} }},
+    plugins: { legend: { position:'bottom' }}
+  }
+});
+
+// Table
+var tbody = document.getElementById('resultsBody');
+['moe','dense'].forEach(function(arch) {
+  var tr = document.createElement('tr');
+  var f = data.fits[arch];
+  var cells = [
+    arch.toUpperCase(), f.c.toFixed(6), f.a.toFixed(4), f.b.toFixed(4),
+    data.summary['fitting_'+arch].loss.toFixed(4),
+    data.summary['mutransfer_'+arch].loss.toFixed(4),
+    data.summary['grid_search_'+arch].loss.toFixed(4)
+  ];
+  cells.forEach(function(text) {
+    var td = document.createElement('td'); td.textContent = text; tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

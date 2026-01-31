@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shape Similarity Metrics - Rotation Invariants</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+header p { opacity: 0.85; font-size: 0.9rem; max-width: 700px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: var(--card); border-radius: 10px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+.chart-container { position: relative; height: 320px; }
+.metric-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.metric { flex: 1; min-width: 140px; background: var(--bg); border-radius: 8px; padding: 1rem; text-align: center; }
+.metric .value { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+.metric .label { font-size: 0.8rem; color: #666; margin-top: 0.3rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { padding: 0.5rem; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: white; }
+footer { text-align: center; padding: 1.5rem; color: #999; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<header>
+<h1>Shape Similarity Metrics Based on Rotation Invariants</h1>
+<p>Comparing Euclidean, Cosine, Normalized Euclidean, and Mahalanobis metrics on tensor-based invariant descriptors.</p>
+</header>
+<div class="container">
+<div class="metric-row" id="metrics"></div>
+<div class="grid">
+<div class="card">
+<h2>Metric Comparison</h2>
+<div class="chart-container"><canvas id="compChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Noise Robustness</h2>
+<div class="chart-container"><canvas id="noiseChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Rotation Consistency</h2>
+<div class="chart-container"><canvas id="consChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Computation Time</h2>
+<div class="chart-container"><canvas id="timeChart"></canvas></div>
+</div>
+</div>
+<div class="card">
+<h2>Results Summary</h2>
+<table>
+<thead><tr><th>Metric</th><th>Precision</th><th>Consistency</th><th>Rank Corr.</th><th>Time (ms)</th></tr></thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+</div>
+<footer>Shape Similarity Metrics - Rotation Invariants Study</footer>
+<script>
+var COLORS = ['#1a3a5c','#2980b9','#e74c3c','#27ae60'];
+var summary = {
+  "cosine": {"avg_precision":0.725,"avg_consistency":0.9999,"avg_rank_correlation":0.509,"avg_time_ms":49.4},
+  "euclidean": {"avg_precision":0.758,"avg_consistency":0.9999,"avg_rank_correlation":0.558,"avg_time_ms":115.8},
+  "mahalanobis": {"avg_precision":0.492,"avg_consistency":0.9999,"avg_rank_correlation":0.177,"avg_time_ms":275.2},
+  "normalized_euclidean": {"avg_precision":0.742,"avg_consistency":0.9999,"avg_rank_correlation":0.470,"avg_time_ms":238.0}
+};
+var noiseData = {
+  "cosine": {"0.0":0.75,"0.05":0.72,"0.1":0.70},
+  "euclidean": {"0.0":0.78,"0.05":0.75,"0.1":0.73},
+  "mahalanobis": {"0.0":0.55,"0.05":0.48,"0.1":0.45},
+  "normalized_euclidean": {"0.0":0.76,"0.05":0.74,"0.1":0.71}
+};
+
+var metricNames = Object.keys(summary);
+var metricsDiv = document.getElementById('metrics');
+var bestMetric = metricNames.reduce(function(a,b){return summary[a].avg_precision>summary[b].avg_precision?a:b;});
+var items = [
+  {v: (summary[bestMetric].avg_precision*100).toFixed(1)+'%', l: 'Best Precision ('+bestMetric+')'},
+  {v: '99.99%', l: 'Avg Rotation Consistency'},
+  {v: metricNames.length.toString(), l: 'Metrics Evaluated'},
+  {v: '3', l: 'Noise Levels Tested'}
+];
+items.forEach(function(m){
+  var d = document.createElement('div'); d.className='metric';
+  var vd = document.createElement('div'); vd.className='value'; vd.textContent=m.v;
+  var ld = document.createElement('div'); ld.className='label'; ld.textContent=m.l;
+  d.appendChild(vd); d.appendChild(ld); metricsDiv.appendChild(d);
+});
+
+var tbody = document.getElementById('tableBody');
+metricNames.forEach(function(n) {
+  var tr = document.createElement('tr');
+  var s = summary[n];
+  [n.replace(/_/g,' '), s.avg_precision.toFixed(3), s.avg_consistency.toFixed(4), s.avg_rank_correlation.toFixed(3), s.avg_time_ms.toFixed(1)].forEach(function(c){
+    var td = document.createElement('td'); td.textContent=c; tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+
+// Comparison bar chart
+var compCtx = document.getElementById('compChart').getContext('2d');
+new Chart(compCtx, {
+  type: 'bar',
+  data: {
+    labels: metricNames.map(function(n){return n.replace(/_/g,' ');}),
+    datasets: [
+      {label:'Precision', data:metricNames.map(function(n){return summary[n].avg_precision;}), backgroundColor:'#1a3a5c'},
+      {label:'Rank Corr.', data:metricNames.map(function(n){return summary[n].avg_rank_correlation;}), backgroundColor:'#2980b9'}
+    ]
+  },
+  options: {responsive:true, maintainAspectRatio:false, scales:{y:{min:0,max:1}}}
+});
+
+// Noise robustness
+var noiseCtx = document.getElementById('noiseChart').getContext('2d');
+var noiseLevels = ['0.0','0.05','0.1'];
+new Chart(noiseCtx, {
+  type: 'line',
+  data: {
+    labels: noiseLevels.map(function(n){return 'noise='+n;}),
+    datasets: metricNames.map(function(n,i){
+      return {label:n.replace(/_/g,' '), data:noiseLevels.map(function(nl){return noiseData[n][nl];}), borderColor:COLORS[i%4], tension:0.3, pointRadius:5};
+    })
+  },
+  options: {responsive:true, maintainAspectRatio:false, scales:{y:{min:0,max:1,title:{display:true,text:'Precision'}}}}
+});
+
+// Consistency
+var consCtx = document.getElementById('consChart').getContext('2d');
+new Chart(consCtx, {
+  type: 'bar',
+  data: {
+    labels: metricNames.map(function(n){return n.replace(/_/g,' ');}),
+    datasets: [{label:'Rotation Consistency', data:metricNames.map(function(n){return summary[n].avg_consistency;}), backgroundColor:'#27ae60'}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, scales:{y:{min:0.99,max:1.001}}}
+});
+
+// Time
+var timeCtx = document.getElementById('timeChart').getContext('2d');
+new Chart(timeCtx, {
+  type: 'bar',
+  data: {
+    labels: metricNames.map(function(n){return n.replace(/_/g,' ');}),
+    datasets: [{label:'Time (ms)', data:metricNames.map(function(n){return summary[n].avg_time_ms;}), backgroundColor:'#f39c12'}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, scales:{y:{title:{display:true,text:'Milliseconds'}}}}
+});
+</script>
+</body>
+</html>

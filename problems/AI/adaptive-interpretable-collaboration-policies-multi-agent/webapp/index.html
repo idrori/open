@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IGAC: Interpretable Graph-Attention Collaboration</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+    --primary: #2196F3;
+    --secondary: #FF9800;
+    --success: #4CAF50;
+    --danger: #F44336;
+    --purple: #9C27B0;
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #333333;
+    --text-light: #666666;
+    --border: #e0e0e0;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.header {
+    background: linear-gradient(135deg, #1a237e 0%, #1565c0 100%);
+    color: white;
+    padding: 2rem;
+    text-align: center;
+}
+
+.header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+.header p { font-size: 1rem; opacity: 0.9; max-width: 800px; margin: 0 auto; }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+.tabs {
+    display: flex; gap: 0.25rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    background: white; border-radius: 8px; padding: 0.25rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.tab {
+    padding: 0.6rem 1rem; border: none; background: transparent; cursor: pointer;
+    border-radius: 6px; font-size: 0.85rem; font-weight: 500;
+    color: var(--text-light); transition: all 0.2s;
+}
+
+.tab:hover { background: #e3f2fd; color: var(--primary); }
+.tab.active { background: var(--primary); color: white; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.card {
+    background: var(--card-bg); border-radius: 10px; padding: 1.5rem;
+    margin-bottom: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.card h2 { font-size: 1.2rem; margin-bottom: 0.3rem; color: var(--text); }
+.card .subtitle { font-size: 0.85rem; color: var(--text-light); margin-bottom: 1rem; }
+.chart-container { position: relative; width: 100%; max-height: 400px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+.metric-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem; margin-bottom: 1rem;
+}
+
+.metric-card {
+    background: #f5f7fa; border-radius: 8px; padding: 1rem;
+    text-align: center; border-left: 4px solid var(--primary);
+}
+
+.metric-card .value { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+.metric-card .label { font-size: 0.8rem; color: var(--text-light); margin-top: 0.2rem; }
+.metric-card.success { border-left-color: var(--success); }
+.metric-card.success .value { color: var(--success); }
+.metric-card.warning { border-left-color: var(--secondary); }
+.metric-card.warning .value { color: var(--secondary); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-weight: 600; background: #f5f7fa; }
+tr:hover { background: #fafbfc; }
+.best { font-weight: 700; color: var(--primary); }
+
+.controls {
+    display: flex; gap: 1rem; align-items: center;
+    margin-bottom: 1rem; flex-wrap: wrap;
+}
+
+.controls label { font-size: 0.85rem; font-weight: 500; }
+
+.controls select {
+    padding: 0.4rem; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .header h1 { font-size: 1.3rem; }
+    .tab { font-size: 0.75rem; padding: 0.5rem 0.6rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Interpretable Graph-Attention Collaboration (IGAC)</h1>
+    <p>Adaptive Interpretable Collaboration Policies for Multi-Agent Systems</p>
+</div>
+
+<div class="container">
+    <div class="tabs">
+        <button class="tab active" onclick="showPanel('overview')">Overview</button>
+        <button class="tab" onclick="showPanel('topology')">Topology</button>
+        <button class="tab" onclick="showPanel('adversarial')">Adversarial</button>
+        <button class="tab" onclick="showPanel('observability')">Observability</button>
+        <button class="tab" onclick="showPanel('scalability')">Scalability</button>
+        <button class="tab" onclick="showPanel('interpretability')">Interpretability</button>
+        <button class="tab" onclick="showPanel('ablation')">Ablation</button>
+    </div>
+
+    <!-- Overview Panel -->
+    <div id="overview" class="panel active">
+        <div class="metric-grid">
+            <div class="metric-card">
+                <div class="value">1.504</div>
+                <div class="label">IGAC Reconstruction Error</div>
+            </div>
+            <div class="metric-card success">
+                <div class="value">12.3%</div>
+                <div class="label">Communication Reduction vs FC</div>
+            </div>
+            <div class="metric-card success">
+                <div class="value">1.00</div>
+                <div class="label">Adversary Detection Precision</div>
+            </div>
+            <div class="metric-card warning">
+                <div class="value">78.8</div>
+                <div class="label">Mean Communication Cost</div>
+            </div>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <h2>Key Results</h2>
+                <div class="subtitle">Summary of experimental findings</div>
+                <table>
+                    <tr><th>Finding</th><th>Value</th></tr>
+                    <tr><td>IGAC error (no adversary)</td><td>1.504 +/- 0.407</td></tr>
+                    <tr><td>Fully Connected error</td><td>1.499 +/- 0.404</td></tr>
+                    <tr><td>IGAC error (20% adversary)</td><td class="best">1.739</td></tr>
+                    <tr><td>FC error (20% adversary)</td><td>2.224</td></tr>
+                    <tr><td>Comm cost reduction</td><td class="best">12.3%</td></tr>
+                    <tr><td>Adversary detection (IGAC)</td><td class="best">P=1.00, R=1.00</td></tr>
+                </table>
+            </div>
+            <div class="card">
+                <h2>Error Comparison</h2>
+                <div class="subtitle">Across all topologies</div>
+                <div class="chart-container">
+                    <canvas id="overviewChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Topology Panel -->
+    <div id="topology" class="panel">
+        <div class="grid-2">
+            <div class="card">
+                <h2>Reconstruction Error</h2>
+                <div class="subtitle">Mean error with standard deviation by topology</div>
+                <div class="chart-container">
+                    <canvas id="topoErrorChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Communication Cost</h2>
+                <div class="subtitle">Messages exchanged per step across topologies</div>
+                <div class="chart-container">
+                    <canvas id="topoCommChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Detailed Results</h2>
+            <table>
+                <tr><th>Topology</th><th>Mean Error</th><th>Std Error</th><th>Median Error</th><th>Comm Cost</th></tr>
+                <tr><td class="best">IGAC (Learned)</td><td>1.504</td><td>0.407</td><td>1.450</td><td class="best">78.8</td></tr>
+                <tr><td>Fully Connected</td><td>1.499</td><td>0.404</td><td>1.437</td><td>90.0</td></tr>
+                <tr><td>Star</td><td>1.714</td><td>0.537</td><td>1.636</td><td>30.0</td></tr>
+                <tr><td>Chain</td><td>1.511</td><td>0.394</td><td>1.472</td><td>30.0</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Adversarial Panel -->
+    <div id="adversarial" class="panel">
+        <div class="controls">
+            <label>Adversarial Fraction:</label>
+            <select id="advSelect" onchange="updateAdvChart()">
+                <option value="adv_0.00">0%</option>
+                <option value="adv_0.10">10%</option>
+                <option value="adv_0.20" selected>20%</option>
+                <option value="adv_0.33">33%</option>
+            </select>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <h2>Error Under Adversary</h2>
+                <div class="subtitle">Reconstruction error at selected adversarial fraction</div>
+                <div class="chart-container">
+                    <canvas id="advErrorChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Detection Performance</h2>
+                <div class="subtitle">Precision and recall of adversary detection</div>
+                <div class="chart-container">
+                    <canvas id="advDetectChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Error Across All Adversarial Levels</h2>
+            <div class="chart-container">
+                <canvas id="advTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Observability Panel -->
+    <div id="observability" class="panel">
+        <div class="grid-2">
+            <div class="card">
+                <h2>Error vs Observation Fraction</h2>
+                <div class="subtitle">Performance under varying partial observability</div>
+                <div class="chart-container">
+                    <canvas id="obsErrorChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Communication Cost vs Observation</h2>
+                <div class="subtitle">Adaptive communication under different observability</div>
+                <div class="chart-container">
+                    <canvas id="obsCommChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scalability Panel -->
+    <div id="scalability" class="panel">
+        <div class="grid-2">
+            <div class="card">
+                <h2>Error vs Agent Count</h2>
+                <div class="subtitle">How reconstruction error scales with number of agents</div>
+                <div class="chart-container">
+                    <canvas id="scaleErrorChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Communication Cost vs Agent Count</h2>
+                <div class="subtitle">Communication overhead scaling (log scale)</div>
+                <div class="chart-container">
+                    <canvas id="scaleCommChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Scalability Details</h2>
+            <table id="scaleTable">
+                <tr><th>Agents</th><th>IGAC Error</th><th>FC Error</th><th>IGAC Comm</th><th>FC Comm</th><th>Savings</th></tr>
+                <tr><td>3</td><td>1.669</td><td>1.629</td><td>15.7</td><td>18.0</td><td class="best">12.6%</td></tr>
+                <tr><td>6</td><td>1.499</td><td>1.435</td><td>79.1</td><td>90.0</td><td class="best">12.1%</td></tr>
+                <tr><td>10</td><td>1.380</td><td>1.347</td><td>235.8</td><td>270.0</td><td class="best">12.7%</td></tr>
+                <tr><td>15</td><td>1.383</td><td>1.397</td><td>550.5</td><td>630.0</td><td class="best">12.6%</td></tr>
+                <tr><td>20</td><td>1.302</td><td>1.282</td><td>994.0</td><td>1140.0</td><td class="best">12.8%</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Interpretability Panel -->
+    <div id="interpretability" class="panel">
+        <div class="card">
+            <h2>Interpretability Metrics</h2>
+            <div class="subtitle">Attention entropy, edge sparsity, and communication cost</div>
+            <div class="chart-container">
+                <canvas id="interpChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Detailed Metrics</h2>
+            <table>
+                <tr><th>Topology</th><th>Attention Entropy</th><th>Entropy Std</th><th>Edge Sparsity</th><th>Comm Cost</th></tr>
+                <tr><td>IGAC (Learned)</td><td>1.409</td><td>0.059</td><td>0.123</td><td>78.9</td></tr>
+                <tr><td>Fully Connected</td><td>1.523</td><td>0.075</td><td>0.000</td><td>90.0</td></tr>
+                <tr><td>Star</td><td>0.252</td><td>0.017</td><td>0.667</td><td>30.0</td></tr>
+                <tr><td>Chain</td><td>0.422</td><td>0.036</td><td>0.667</td><td>30.0</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Ablation Panel -->
+    <div id="ablation" class="panel">
+        <div class="grid-2">
+            <div class="card">
+                <h2>Ablation: Reconstruction Error</h2>
+                <div class="subtitle">Component contributions under 20% adversarial agents</div>
+                <div class="chart-container">
+                    <canvas id="ablErrorChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Ablation: Adversary Detection</h2>
+                <div class="subtitle">Precision and recall by configuration</div>
+                <div class="chart-container">
+                    <canvas id="ablDetectChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Ablation Details</h2>
+            <table>
+                <tr><th>Configuration</th><th>Error</th><th>Std</th><th>Precision</th><th>Recall</th></tr>
+                <tr><td class="best">Full IGAC</td><td class="best">1.739</td><td>0.608</td><td class="best">1.00</td><td class="best">1.00</td></tr>
+                <tr><td>No Trust</td><td>1.832</td><td>0.658</td><td>0.00</td><td>0.00</td></tr>
+                <tr><td>FC + Trust</td><td>2.117</td><td>0.967</td><td>0.00</td><td>0.00</td></tr>
+                <tr><td>FC (No Trust)</td><td>2.191</td><td>1.045</td><td>0.00</td><td>0.00</td></tr>
+                <tr><td>Star + Trust</td><td>1.917</td><td>0.571</td><td>0.00</td><td>0.00</td></tr>
+                <tr><td>Star (No Trust)</td><td>2.048</td><td>0.735</td><td>0.00</td><td>0.00</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Data embedded from JSON files
+var topoData = {"Learned":{"mean_error":1.5043018941943112,"std_error":0.40740427636539095,"median_error":1.4500283589762093,"mean_comm_cost":78.826},"FullyConnected":{"mean_error":1.4990416794681132,"std_error":0.404036615974219,"median_error":1.436670062720822,"mean_comm_cost":90.0},"Star":{"mean_error":1.7135111642920924,"std_error":0.5372435622401419,"median_error":1.6355038871755228,"mean_comm_cost":30.0},"Chain":{"mean_error":1.5108018806536538,"std_error":0.39362593414728103,"median_error":1.472435113725847,"mean_comm_cost":30.0}};
+
+var advData = {"adv_0.00":{"IGAC_trust":{"mean_error":1.5043018941943112,"std_error":0.40740427636539095,"adversary_precision":1.0,"adversary_recall":1.0},"IGAC_no_trust":{"mean_error":1.4999252201646696,"std_error":0.40636910678902705,"adversary_precision":1.0,"adversary_recall":1.0},"FullyConnected":{"mean_error":1.495191701175821,"std_error":0.43153474359798377,"adversary_precision":1.0,"adversary_recall":1.0},"Star":{"mean_error":1.7124672961376328,"std_error":0.48163365046977874,"adversary_precision":1.0,"adversary_recall":1.0}},"adv_0.10":{"IGAC_trust":{"mean_error":1.5043018941943112,"std_error":0.40740427636539095,"adversary_precision":1.0,"adversary_recall":1.0},"IGAC_no_trust":{"mean_error":1.4999252201646696,"std_error":0.40636910678902705,"adversary_precision":1.0,"adversary_recall":1.0},"FullyConnected":{"mean_error":1.495191701175821,"std_error":0.43153474359798377,"adversary_precision":1.0,"adversary_recall":1.0},"Star":{"mean_error":1.7124672961376328,"std_error":0.48163365046977874,"adversary_precision":1.0,"adversary_recall":1.0}},"adv_0.20":{"IGAC_trust":{"mean_error":1.7391345140314376,"std_error":0.6075555199399623,"adversary_precision":1.0,"adversary_recall":1.0},"IGAC_no_trust":{"mean_error":1.831684631399439,"std_error":0.6583042423134395,"adversary_precision":0.0,"adversary_recall":0.0},"FullyConnected":{"mean_error":2.224428394581456,"std_error":1.0764067306024236,"adversary_precision":0.0,"adversary_recall":0.0},"Star":{"mean_error":2.097810802656505,"std_error":0.7399368186118239,"adversary_precision":0.0,"adversary_recall":0.0}},"adv_0.33":{"IGAC_trust":{"mean_error":1.7391345140314376,"std_error":0.6075555199399623,"adversary_precision":1.0,"adversary_recall":1.0},"IGAC_no_trust":{"mean_error":1.831684631399439,"std_error":0.6583042423134395,"adversary_precision":0.0,"adversary_recall":0.0},"FullyConnected":{"mean_error":2.224428394581456,"std_error":1.0764067306024236,"adversary_precision":0.0,"adversary_recall":0.0},"Star":{"mean_error":2.097810802656505,"std_error":0.7399368186118239,"adversary_precision":0.0,"adversary_recall":0.0}}};
+
+var obsData = {"Learned":{"obs_fractions":[0.2,0.3,0.4,0.5,0.6,0.8,1.0],"mean_errors":[1.2699690858399781,1.2482031153446858,1.4905181938364453,1.7520431246457042,1.9103385344121868,2.528037009275872,3.077062133809176],"comm_costs":[77.39,76.91,79.08666666666667,79.66333333333333,80.41,81.8,83.07]},"FullyConnected":{"obs_fractions":[0.2,0.3,0.4,0.5,0.6,0.8,1.0],"mean_errors":[1.2798541639791077,1.2585662896759404,1.4871358121359637,1.7947296828550485,1.9492412616107977,2.5209291064746124,3.0781892213485107],"comm_costs":[90.0,90.0,90.0,90.0,90.0,90.0,90.0]},"Star":{"obs_fractions":[0.2,0.3,0.4,0.5,0.6,0.8,1.0],"mean_errors":[1.5088486824076641,1.7747954156553625,1.708953984320501,2.247789497607353,2.1923633272855247,2.744832576488432,3.088063640129653],"comm_costs":[30.0,30.0,30.0,30.0,30.0,30.0,30.0]},"Chain":{"obs_fractions":[0.2,0.3,0.4,0.5,0.6,0.8,1.0],"mean_errors":[1.315989800640182,1.2367065775075596,1.4963003078652495,1.781693589185457,2.0013589706731936,2.5114987810211917,3.0784987330979474],"comm_costs":[30.0,30.0,30.0,30.0,30.0,30.0,30.0]}};
+
+var scaleData = {"3":{"Learned":{"mean_error":1.6688766615127775,"mean_comm_cost":15.73},"FullyConnected":{"mean_error":1.6287581207731758,"mean_comm_cost":18.0},"Star":{"mean_error":1.726905179917928,"mean_comm_cost":12.0},"Chain":{"mean_error":1.7261992152275274,"mean_comm_cost":12.0}},"6":{"Learned":{"mean_error":1.4991756458013135,"mean_comm_cost":79.07},"FullyConnected":{"mean_error":1.4346921935960322,"mean_comm_cost":90.0},"Star":{"mean_error":1.7832998372259998,"mean_comm_cost":30.0},"Chain":{"mean_error":1.5296536169213188,"mean_comm_cost":30.0}},"10":{"Learned":{"mean_error":1.3800257176496962,"mean_comm_cost":235.81},"FullyConnected":{"mean_error":1.347369647409976,"mean_comm_cost":270.0},"Star":{"mean_error":1.6625288789780235,"mean_comm_cost":54.0},"Chain":{"mean_error":1.4129988877845379,"mean_comm_cost":54.0}},"15":{"Learned":{"mean_error":1.382633167210094,"mean_comm_cost":550.48},"FullyConnected":{"mean_error":1.396977507125097,"mean_comm_cost":630.0},"Star":{"mean_error":1.8190788430962668,"mean_comm_cost":84.0},"Chain":{"mean_error":1.3780974003974884,"mean_comm_cost":84.0}},"20":{"Learned":{"mean_error":1.3020464119646313,"mean_comm_cost":993.99},"FullyConnected":{"mean_error":1.2822444894860803,"mean_comm_cost":1140.0},"Star":{"mean_error":1.6706761495205382,"mean_comm_cost":114.0},"Chain":{"mean_error":1.327043819488196,"mean_comm_cost":114.0}}};
+
+var interpData = {"Learned":{"mean_attention_entropy":1.408523752704434,"std_attention_entropy":0.05912830545140722,"mean_edge_sparsity":0.12296296296296293,"mean_communication_cost":78.93333333333334},"FullyConnected":{"mean_attention_entropy":1.5226471587845518,"std_attention_entropy":0.07518614943863508,"mean_edge_sparsity":0.0,"mean_communication_cost":90.0},"Star":{"mean_attention_entropy":0.2524338220428471,"std_attention_entropy":0.0169492060085593,"mean_edge_sparsity":0.6666666666666665,"mean_communication_cost":30.0},"Chain":{"mean_attention_entropy":0.42162989326796274,"std_attention_entropy":0.03568819191499389,"mean_edge_sparsity":0.6666666666666665,"mean_communication_cost":30.0}};
+
+var ablData = {"Full_IGAC":{"mean_error":1.7391345140314376,"std_error":0.6075555199399623,"adversary_precision":1.0,"adversary_recall":1.0},"No_Trust":{"mean_error":1.831684631399439,"std_error":0.6583042423134395,"adversary_precision":0.0,"adversary_recall":0.0},"Fixed_FC_Trust":{"mean_error":2.117097627356987,"std_error":0.9671158781316007,"adversary_precision":0.0,"adversary_recall":0.0},"Fixed_FC_NoTrust":{"mean_error":2.1906579986468615,"std_error":1.0448823269460543,"adversary_precision":0.0,"adversary_recall":0.0},"Fixed_Star_Trust":{"mean_error":1.917224444233249,"std_error":0.5710806206794996,"adversary_precision":0.0,"adversary_recall":0.0},"Fixed_Star_NoTrust":{"mean_error":2.04760667501521,"std_error":0.7352756071766652,"adversary_precision":0.0,"adversary_recall":0.0}};
+
+// Colors and labels
+var COLORS = {
+    Learned: '#2196F3', FullyConnected: '#FF9800', Star: '#4CAF50', Chain: '#F44336',
+    IGAC_trust: '#2196F3', IGAC_no_trust: '#9C27B0',
+    Full_IGAC: '#2196F3', No_Trust: '#9C27B0',
+    Fixed_FC_Trust: '#FF9800', Fixed_FC_NoTrust: '#FFB74D',
+    Fixed_Star_Trust: '#4CAF50', Fixed_Star_NoTrust: '#81C784'
+};
+var LABELS = {
+    Learned: 'IGAC (Learned)', FullyConnected: 'Fully Connected', Star: 'Star', Chain: 'Chain',
+    IGAC_trust: 'IGAC + Trust', IGAC_no_trust: 'IGAC (No Trust)',
+    Full_IGAC: 'Full IGAC', No_Trust: 'No Trust',
+    Fixed_FC_Trust: 'FC + Trust', Fixed_FC_NoTrust: 'FC (No Trust)',
+    Fixed_Star_Trust: 'Star + Trust', Fixed_Star_NoTrust: 'Star (No Trust)'
+};
+
+// Tab switching
+function showPanel(id) {
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+}
+
+// Chart helpers
+var charts = {};
+
+function makeBar(canvasId, labels, datasets, opts) {
+    opts = opts || {};
+    if (charts[canvasId]) charts[canvasId].destroy();
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { display: datasets.length > 1 } },
+            scales: {
+                y: { beginAtZero: true, title: { display: !!opts.yLabel, text: opts.yLabel || '' } }
+            }
+        }
+    });
+}
+
+function makeLine(canvasId, labels, datasets, opts) {
+    opts = opts || {};
+    if (charts[canvasId]) charts[canvasId].destroy();
+    var yConfig = { title: { display: !!opts.yLabel, text: opts.yLabel || '' } };
+    if (opts.yType === 'log') yConfig.type = 'logarithmic';
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: yConfig,
+                x: { title: { display: !!opts.xLabel, text: opts.xLabel || '' } }
+            }
+        }
+    });
+}
+
+// Build all charts
+var topoKeys = ['Learned', 'FullyConnected', 'Star', 'Chain'];
+
+// Overview
+makeBar('overviewChart',
+    topoKeys.map(function(k) { return LABELS[k]; }),
+    [{ label: 'Mean Error', data: topoKeys.map(function(k) { return topoData[k].mean_error; }),
+       backgroundColor: topoKeys.map(function(k) { return COLORS[k]; }), borderWidth: 0 }],
+    { yLabel: 'Reconstruction Error' }
+);
+
+// Topology
+makeBar('topoErrorChart',
+    topoKeys.map(function(k) { return LABELS[k]; }),
+    [{ label: 'Mean Error', data: topoKeys.map(function(k) { return topoData[k].mean_error; }),
+       backgroundColor: topoKeys.map(function(k) { return COLORS[k]; }), borderWidth: 0 }],
+    { yLabel: 'Mean Reconstruction Error' }
+);
+
+makeBar('topoCommChart',
+    topoKeys.map(function(k) { return LABELS[k]; }),
+    [{ label: 'Communication Cost', data: topoKeys.map(function(k) { return topoData[k].mean_comm_cost; }),
+       backgroundColor: topoKeys.map(function(k) { return COLORS[k]; }), borderWidth: 0 }],
+    { yLabel: 'Messages per Step' }
+);
+
+// Adversarial
+var advMethods = ['IGAC_trust', 'IGAC_no_trust', 'FullyConnected', 'Star'];
+
+function updateAdvChart() {
+    var level = document.getElementById('advSelect').value;
+    var d = advData[level];
+    makeBar('advErrorChart',
+        advMethods.map(function(k) { return LABELS[k]; }),
+        [{ label: 'Mean Error', data: advMethods.map(function(k) { return d[k].mean_error; }),
+           backgroundColor: advMethods.map(function(k) { return COLORS[k]; }), borderWidth: 0 }],
+        { yLabel: 'Mean Error' }
+    );
+    makeBar('advDetectChart',
+        advMethods.map(function(k) { return LABELS[k]; }),
+        [
+            { label: 'Precision', data: advMethods.map(function(k) { return d[k].adversary_precision; }), backgroundColor: '#2196F3' },
+            { label: 'Recall', data: advMethods.map(function(k) { return d[k].adversary_recall; }), backgroundColor: '#FF9800' }
+        ],
+        { yLabel: 'Score' }
+    );
+}
+updateAdvChart();
+
+var advLevels = ['adv_0.00', 'adv_0.10', 'adv_0.20', 'adv_0.33'];
+var advLabelsX = ['0%', '10%', '20%', '33%'];
+makeLine('advTrendChart', advLabelsX,
+    advMethods.map(function(m) {
+        return {
+            label: LABELS[m],
+            data: advLevels.map(function(l) { return advData[l][m].mean_error; }),
+            borderColor: COLORS[m], backgroundColor: COLORS[m] + '20', tension: 0.3, fill: false
+        };
+    }),
+    { xLabel: 'Adversarial Fraction', yLabel: 'Mean Error' }
+);
+
+// Observability
+makeLine('obsErrorChart', obsData.Learned.obs_fractions.map(function(v) { return v.toFixed(1); }),
+    topoKeys.map(function(k) {
+        return {
+            label: LABELS[k], data: obsData[k].mean_errors,
+            borderColor: COLORS[k], backgroundColor: COLORS[k] + '20', tension: 0.3, fill: false
+        };
+    }),
+    { xLabel: 'Observation Fraction', yLabel: 'Mean Error' }
+);
+
+makeLine('obsCommChart', obsData.Learned.obs_fractions.map(function(v) { return v.toFixed(1); }),
+    topoKeys.map(function(k) {
+        return {
+            label: LABELS[k], data: obsData[k].comm_costs,
+            borderColor: COLORS[k], backgroundColor: COLORS[k] + '20', tension: 0.3, fill: false
+        };
+    }),
+    { xLabel: 'Observation Fraction', yLabel: 'Communication Cost' }
+);
+
+// Scalability
+var agentCounts = ['3', '6', '10', '15', '20'];
+makeLine('scaleErrorChart', agentCounts,
+    topoKeys.map(function(k) {
+        return {
+            label: LABELS[k], data: agentCounts.map(function(n) { return scaleData[n][k].mean_error; }),
+            borderColor: COLORS[k], backgroundColor: COLORS[k] + '20', tension: 0.3, fill: false
+        };
+    }),
+    { xLabel: 'Number of Agents', yLabel: 'Mean Error' }
+);
+
+makeLine('scaleCommChart', agentCounts,
+    topoKeys.map(function(k) {
+        return {
+            label: LABELS[k], data: agentCounts.map(function(n) { return scaleData[n][k].mean_comm_cost; }),
+            borderColor: COLORS[k], backgroundColor: COLORS[k] + '20', tension: 0.3, fill: false
+        };
+    }),
+    { xLabel: 'Number of Agents', yLabel: 'Communication Cost', yType: 'log' }
+);
+
+// Interpretability
+makeBar('interpChart',
+    topoKeys.map(function(k) { return LABELS[k]; }),
+    [
+        { label: 'Attention Entropy', data: topoKeys.map(function(k) { return interpData[k].mean_attention_entropy; }), backgroundColor: '#2196F3' },
+        { label: 'Edge Sparsity', data: topoKeys.map(function(k) { return interpData[k].mean_edge_sparsity; }), backgroundColor: '#FF9800' }
+    ],
+    { yLabel: 'Value' }
+);
+
+// Ablation
+var ablKeys = ['Full_IGAC', 'No_Trust', 'Fixed_FC_Trust', 'Fixed_FC_NoTrust', 'Fixed_Star_Trust', 'Fixed_Star_NoTrust'];
+makeBar('ablErrorChart',
+    ablKeys.map(function(k) { return LABELS[k]; }),
+    [{ label: 'Mean Error', data: ablKeys.map(function(k) { return ablData[k].mean_error; }),
+       backgroundColor: ablKeys.map(function(k) { return COLORS[k]; }), borderWidth: 0 }],
+    { yLabel: 'Mean Error' }
+);
+
+makeBar('ablDetectChart',
+    ablKeys.map(function(k) { return LABELS[k]; }),
+    [
+        { label: 'Precision', data: ablKeys.map(function(k) { return ablData[k].adversary_precision; }), backgroundColor: '#2196F3' },
+        { label: 'Recall', data: ablKeys.map(function(k) { return ablData[k].adversary_recall; }), backgroundColor: '#FF9800' }
+    ],
+    { yLabel: 'Score' }
+);
+</script>
+</body>
+</html>

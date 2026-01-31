@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validity of LLM-Simulated Users as Proxies</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; --warn: #e67e22; --danger: #e74c3c; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .full-width { grid-column: 1 / -1; }
+  .chart-container { position: relative; height: 350px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-box { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .metric-box .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+  .metric-box .delta { font-size: 0.85rem; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Validity of LLM-Simulated Users as Proxies for Real Users</h1>
+  <p>Large-scale study (85,050 interactions) measuring calibration gaps between simulated and real users across difficulty levels, countries, and age groups.</p>
+</div>
+<div class="container">
+  <div class="metric-grid">
+    <div class="metric-box"><div class="value">10.0%</div><div class="label">Aggregate Miscalibration</div><div class="delta" style="color:#e67e22">Systematic bias</div></div>
+    <div class="metric-box"><div class="value">1.0</div><div class="label">Kendall's tau (Rankings)</div><div class="delta" style="color:#27ae60">Perfect preservation</div></div>
+    <div class="metric-box"><div class="value">93.1%</div><div class="label">Distinguishability (RF)</div><div class="delta" style="color:#e74c3c">Easily separable</div></div>
+    <div class="metric-box"><div class="value">85,050</div><div class="label">Total Interactions</div><div class="delta" style="color:#2980b9">24.3K human, 60.8K sim</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Calibration Gap by Difficulty</h2>
+      <div class="chart-container"><canvas id="chartDiff"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Agent Rankings: Human vs Simulated</h2>
+      <div class="chart-container"><canvas id="chartRank"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Calibration by Country (Hard Tasks)</h2>
+      <div class="chart-container"><canvas id="chartCountry"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Feature Distinguishability (KS Statistic)</h2>
+      <div class="chart-container"><canvas id="chartKS"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Calibration by Age Group and Difficulty</h2>
+      <div class="chart-container"><canvas id="chartAge"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Detailed Calibration Table</h2>
+      <table>
+        <thead><tr><th>Difficulty</th><th>Group</th><th>Human Rate</th><th>Simulated Rate</th><th>Gap</th><th>p-value</th></tr></thead>
+        <tbody id="resultsTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+new Chart(document.getElementById('chartDiff'),{
+  type:'bar',data:{labels:['Easy','Medium','Hard'],datasets:[
+    {label:'Human',data:[0.730,0.469,0.199],backgroundColor:'rgba(41,128,185,0.7)'},
+    {label:'Simulated',data:[0.682,0.528,0.392],backgroundColor:'rgba(230,126,34,0.7)'}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:0.9,title:{display:true,text:'Success Rate'}}}}
+});
+
+const agents=['Agent-A','Agent-B','Agent-C','Agent-D','Agent-E','Agent-F'];
+new Chart(document.getElementById('chartRank'),{
+  type:'bar',data:{labels:agents,datasets:[
+    {label:'Human',data:[0.347,0.391,0.446,0.496,0.529,0.585],backgroundColor:'rgba(41,128,185,0.7)'},
+    {label:'Simulated',data:[0.402,0.451,0.500,0.566,0.615,0.671],backgroundColor:'rgba(230,126,34,0.7)'}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0.2,max:0.8,title:{display:true,text:'Success Rate'}}},plugins:{title:{display:true,text:'Kendall tau = 1.0 (perfect rank preservation)'}}}
+});
+
+new Chart(document.getElementById('chartCountry'),{
+  type:'bar',data:{labels:['Brazil','India','US'],datasets:[
+    {label:'Human (Hard)',data:[0.145,0.198,0.254],backgroundColor:'rgba(41,128,185,0.7)'},
+    {label:'Simulated (Hard)',data:[0.372,0.397,0.407],backgroundColor:'rgba(230,126,34,0.7)'}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:0.5,title:{display:true,text:'Success Rate'}}}}
+});
+
+new Chart(document.getElementById('chartKS'),{
+  type:'bar',data:{labels:['Retry Count','Lexical Diversity','Cooperation','Turn Count','Utterance Length','Tool Calls'],
+  datasets:[{label:'KS Statistic',data:[0.615,0.512,0.442,0.337,0.307,0.087],backgroundColor:['#e74c3c','#e67e22','#f39c12','#2980b9','#3498db','#95a5a6'],borderWidth:1}]},
+  options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'KS Statistic (higher = more different)'}}}}
+});
+
+new Chart(document.getElementById('chartAge'),{
+  type:'bar',data:{labels:['18-30 Easy','31-50 Easy','51+ Easy','18-30 Med','31-50 Med','51+ Med','18-30 Hard','31-50 Hard','51+ Hard'],
+  datasets:[
+    {label:'Gap (Human - Sim)',data:[0.091,0.055,-0.003,-0.035,-0.051,-0.093,-0.150,-0.184,-0.244],
+    backgroundColor:function(ctx){return ctx.raw>0?'rgba(41,128,185,0.7)':'rgba(231,76,60,0.7)'}
+    }
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Calibration Gap'}}}}
+});
+
+var rows=[
+  ['Easy','Overall',0.730,0.682,'+0.048','<0.001'],['Medium','Overall',0.469,0.528,'-0.059','<0.001'],['Hard','Overall',0.199,0.392,'-0.193','<0.001'],
+  ['Easy','US',0.783,0.686,'+0.097','<0.001'],['Easy','India',0.735,0.689,'+0.046','<0.001'],['Easy','Brazil',0.672,0.671,'+0.000','1.0'],
+  ['Hard','US',0.254,0.407,'-0.153','<0.001'],['Hard','India',0.198,0.397,'-0.199','<0.001'],['Hard','Brazil',0.145,0.372,'-0.226','<0.001']
+];
+var tbody=document.getElementById('resultsTable');
+rows.forEach(function(r){
+  var tr=document.createElement('tr');
+  r.forEach(function(val,i){
+    var td=document.createElement('td');
+    td.textContent=(typeof val==='number')?val.toFixed(3):val;
+    if(i===4){
+      td.style.fontWeight='bold';
+      td.style.color=String(val).indexOf('-')===0?'#e74c3c':'#27ae60';
+    }
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

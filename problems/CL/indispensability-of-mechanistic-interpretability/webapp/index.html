@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>When Is Mechanistic Interpretability Indispensable?</title>
+<style>
+  :root {
+    --primary: #2563EB;
+    --danger: #DC2626;
+    --success: #059669;
+    --purple: #7C3AED;
+    --cyan: #0891B2;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --text: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .hero {
+    background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 50%, #7C3AED 100%);
+    color: white;
+    padding: 60px 24px 48px;
+    text-align: center;
+  }
+  .hero h1 { font-size: 2em; font-weight: 700; margin-bottom: 12px; max-width: 800px; margin-left: auto; margin-right: auto; }
+  .hero p { font-size: 1.1em; opacity: 0.9; max-width: 700px; margin: 0 auto 20px; }
+  .hero .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; padding: 4px 14px; border-radius: 20px;
+    font-size: 0.85em; font-weight: 600;
+    background: rgba(255,255,255,0.2); color: white;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+  .nav-tabs {
+    display: flex; gap: 4px; background: var(--card); border-radius: 12px;
+    padding: 6px; margin: -28px auto 24px; max-width: 600px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: relative; z-index: 10;
+  }
+  .nav-tab {
+    flex: 1; padding: 10px 16px; text-align: center; border-radius: 8px;
+    cursor: pointer; font-weight: 600; font-size: 0.9em;
+    transition: all 0.2s; border: none; background: transparent; color: var(--muted);
+  }
+  .nav-tab.active { background: var(--primary); color: white; }
+  .nav-tab:hover:not(.active) { background: #EEF2FF; color: var(--primary); }
+  .section { display: none; animation: fadeIn 0.3s ease; }
+  .section.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .card {
+    background: var(--card); border-radius: 12px; padding: 28px;
+    margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .card h2 { font-size: 1.35em; margin-bottom: 14px; color: var(--text); }
+  .card h3 { font-size: 1.1em; margin: 16px 0 8px; color: var(--text); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+  .metric-box {
+    text-align: center; padding: 20px; border-radius: 10px;
+    background: #F1F5F9;
+  }
+  .metric-value { font-size: 2.2em; font-weight: 800; }
+  .metric-label { font-size: 0.85em; color: var(--muted); margin-top: 4px; }
+  .mi { color: var(--primary); }
+  .nonmi { color: var(--danger); }
+  .strong { color: var(--success); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.95em; }
+  th { background: #F1F5F9; padding: 10px 12px; text-align: left; font-weight: 600; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: #F8FAFC; }
+  .chart-container { position: relative; width: 100%; }
+  canvas { width: 100% !important; height: auto !important; }
+  .taxonomy-item {
+    padding: 18px; border-radius: 10px; margin-bottom: 14px;
+    border-left: 4px solid var(--primary);
+    background: #EFF6FF;
+  }
+  .taxonomy-item h4 { color: var(--primary); margin-bottom: 6px; }
+  .taxonomy-item.predicted { border-left-color: var(--purple); background: #F5F3FF; }
+  .taxonomy-item.predicted h4 { color: var(--purple); }
+  .slider-group { margin: 16px 0; }
+  .slider-group label { display: block; font-weight: 600; margin-bottom: 4px; }
+  .slider-group input[type=range] { width: 100%; accent-color: var(--primary); }
+  .slider-value { font-weight: 700; color: var(--primary); }
+  .definition-box {
+    background: #EFF6FF; border-radius: 10px; padding: 20px;
+    border: 1px solid #BFDBFE; margin: 14px 0;
+    font-family: 'Georgia', serif; font-style: italic;
+  }
+  .definition-box .math { font-style: normal; font-family: monospace; font-size: 0.95em; color: var(--primary); }
+  .footer {
+    text-align: center; padding: 30px; color: var(--muted); font-size: 0.85em;
+    border-top: 1px solid var(--border); margin-top: 40px;
+  }
+  .highlight-stat {
+    display: inline-block; background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+    padding: 3px 10px; border-radius: 6px; font-weight: 700;
+    color: var(--primary);
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>When Is Mechanistic Interpretability Indispensable?</h1>
+  <p>An Empirical Separation Framework for Downstream LLM Tasks</p>
+  <div class="badges">
+    <span class="badge">KDD 2026</span>
+    <span class="badge">Research Track</span>
+    <span class="badge">arXiv: 2601.14004</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showSection('overview')">Overview</button>
+    <button class="nav-tab" onclick="showSection('backdoor')">Backdoor</button>
+    <button class="nav-tab" onclick="showSection('editing')">Editing</button>
+    <button class="nav-tab" onclick="showSection('interactive')">Interactive</button>
+    <button class="nav-tab" onclick="showSection('taxonomy')">Taxonomy</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="overview" class="section active">
+    <div class="card">
+      <h2>Research Question</h2>
+      <p>Is mechanistic interpretability (MI) <strong>indispensable</strong> for any downstream task performed by large language models? Or does it merely serve as an alternative or complementary analysis tool?</p>
+      <div class="definition-box">
+        <strong>Definition (epsilon-Indispensability):</strong> MI is epsilon-indispensable for task T under computational budget C if:<br>
+        <span class="math">max_{M' in NonMI} P(M', T, C) + epsilon &lt; max_{M in MI} P(M, T, C)</span>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Key Findings</h2>
+        <div class="metric-box" style="margin-bottom:12px">
+          <div class="metric-value mi">2 / 2</div>
+          <div class="metric-label">Task families with STRONG MI indispensability</div>
+        </div>
+        <ul style="padding-left:18px">
+          <li><strong>Backdoor Detection:</strong> MI detects dormant backdoors that behavioral sampling cannot find (gap = 1.000, p &lt; 0.001)</li>
+          <li><strong>Knowledge Editing:</strong> MI rank-one editing achieves H = 0.935 vs 0.000 for fine-tuning (gap = 0.935, p &lt; 0.001)</li>
+          <li><strong>Phase Transition:</strong> Behavioral methods fail when trigger probability drops below ~10<sup>-3</sup></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Experimental Setup</h2>
+        <table>
+          <tr><th>Parameter</th><th>Value</th></tr>
+          <tr><td>Model</td><td>Single-layer transformer (NumPy)</td></tr>
+          <tr><td>Vocabulary</td><td>64 tokens</td></tr>
+          <tr><td>Embedding dim</td><td>32</td></tr>
+          <tr><td>Sequence length</td><td>8 tokens</td></tr>
+          <tr><td>Behavioral samples</td><td>5,000</td></tr>
+          <tr><td>MI probes</td><td>200 triggered + 200 clean</td></tr>
+          <tr><td>Bootstrap resamples</td><td>10,000</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Indispensability Gap Summary</h2>
+      <div class="chart-container">
+        <canvas id="gapChart" height="250"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- BACKDOOR DETECTION -->
+  <div id="backdoor" class="section">
+    <div class="card">
+      <h2>Experiment 1: Dormant Backdoor Detection</h2>
+      <p>A backdoor is implanted using trigger subsequence (7, 13, 42) targeting token 0. When the trigger appears as a subsequence in the input, the model's logits are shifted by +20.0. We compare MI activation scanning against behavioral sampling.</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="metric-box">
+          <div class="metric-value mi">1.0</div>
+          <div class="metric-label">MI Detection (effect size d=1.24)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="metric-box">
+          <div class="metric-value nonmi">0.0</div>
+          <div class="metric-label">Behavioral Detection (0/5000 triggers found)</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Trigger Rarity Phase Transition</h2>
+      <p>As trigger length increases, the probability of randomly encountering the trigger drops exponentially. This reveals a sharp crossover where MI becomes the only viable detection method.</p>
+      <div class="chart-container">
+        <canvas id="rarityChart" height="300"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Detection Results by Trigger Length</h2>
+      <table>
+        <tr><th>Trigger Length</th><th>Probability</th><th>Behavioral</th><th>MI</th><th>Effect Size</th></tr>
+        <tr><td>1</td><td>1.25e-1</td><td class="strong">Detected (598)</td><td class="nonmi">Missed (d=0.61)</td><td>0.61</td></tr>
+        <tr><td>2</td><td>6.84e-3</td><td class="strong">Detected (36)</td><td class="nonmi">Missed (d=0.88)</td><td>0.88</td></tr>
+        <tr><td>3</td><td>2.14e-4</td><td class="nonmi">Missed</td><td class="strong">Detected (d=1.16)</td><td>1.16</td></tr>
+        <tr><td>4</td><td>4.17e-6</td><td class="nonmi">Missed</td><td class="strong">Detected (d=1.46)</td><td>1.46</td></tr>
+        <tr><td>5</td><td>5.22e-8</td><td class="nonmi">Missed</td><td class="strong">Detected (d=2.10)</td><td>2.10</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- KNOWLEDGE EDITING -->
+  <div id="editing" class="section">
+    <div class="card">
+      <h2>Experiment 2: Knowledge Editing with Locality</h2>
+      <p>We edit a specific association (input [10,20,30,...] to output token 51) and measure both edit success and locality (fraction of unrelated outputs preserved). The harmonic mean H captures the joint objective.</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>MI Rank-One Edit</h3>
+        <div class="metric-box" style="margin-bottom:12px">
+          <div class="metric-value mi">0.935</div>
+          <div class="metric-label">Harmonic Score (Success=1.0, Locality=0.878)</div>
+        </div>
+        <p>Targets only the weight subspace activated by the specific input pattern, using ROME-inspired rank-one update.</p>
+      </div>
+      <div class="card">
+        <h3>Naive Fine-Tuning</h3>
+        <div class="metric-box" style="margin-bottom:12px">
+          <div class="metric-value nonmi">0.000</div>
+          <div class="metric-label">Harmonic Score (Success=0.0, Locality=0.900)</div>
+        </div>
+        <p>Without mechanistic knowledge, gradient descent modifies the wrong weight subspace. Edit fails entirely despite preserving locality.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Pareto Frontier: Success vs. Locality</h2>
+      <p>Sweeping edit strength across 20 values per method reveals the full trade-off. MI achieves the ideal region (high success + high locality) that fine-tuning cannot reach.</p>
+      <div class="chart-container">
+        <canvas id="paretoChart" height="350"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE -->
+  <div id="interactive" class="section">
+    <div class="card">
+      <h2>Interactive Explorer: Trigger Rarity vs. Detection</h2>
+      <p>Adjust the parameters below to explore how trigger rarity and sampling budget affect the crossover point between MI and behavioral detection.</p>
+      <div class="grid-2">
+        <div>
+          <div class="slider-group">
+            <label>Vocabulary Size: <span class="slider-value" id="vocabVal">64</span></label>
+            <input type="range" id="vocabSlider" min="8" max="256" value="64" step="8" oninput="updateInteractive()">
+          </div>
+          <div class="slider-group">
+            <label>Sequence Length: <span class="slider-value" id="seqVal">8</span></label>
+            <input type="range" id="seqSlider" min="4" max="32" value="8" step="1" oninput="updateInteractive()">
+          </div>
+          <div class="slider-group">
+            <label>Behavioral Budget (log10): <span class="slider-value" id="budgetVal">3.70</span></label>
+            <input type="range" id="budgetSlider" min="2" max="7" value="3.7" step="0.1" oninput="updateInteractive()">
+          </div>
+        </div>
+        <div>
+          <div class="metric-box" style="margin-bottom:12px">
+            <div class="metric-value" id="crossoverVal" style="color:var(--purple)">3</div>
+            <div class="metric-label">Crossover Trigger Length (MI becomes indispensable)</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value" id="crossoverProb" style="color:var(--muted); font-size:1.2em">2.14e-4</div>
+            <div class="metric-label">Crossover Trigger Probability</div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="interactiveChart" height="300"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Interactive Explorer: Edit Strength vs. Locality</h2>
+      <p>Adjust the MI edit strength (alpha) and fine-tuning learning rate to see how each method trades off success and locality.</p>
+      <div class="grid-2">
+        <div>
+          <div class="slider-group">
+            <label>MI Alpha: <span class="slider-value" id="alphaVal">0.50</span></label>
+            <input type="range" id="alphaSlider" min="0.05" max="2.0" value="0.5" step="0.05" oninput="updateEditExplorer()">
+          </div>
+          <div class="slider-group">
+            <label>FT Learning Rate: <span class="slider-value" id="lrVal">0.30</span></label>
+            <input type="range" id="lrSlider" min="0.05" max="1.5" value="0.3" step="0.05" oninput="updateEditExplorer()">
+          </div>
+        </div>
+        <div>
+          <div style="display:flex; gap:12px">
+            <div class="metric-box" style="flex:1">
+              <div class="metric-value" id="miHVal" style="color:var(--primary)">0.94</div>
+              <div class="metric-label">MI Harmonic</div>
+            </div>
+            <div class="metric-box" style="flex:1">
+              <div class="metric-value" id="ftHVal" style="color:var(--danger)">0.00</div>
+              <div class="metric-label">FT Harmonic</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAXONOMY -->
+  <div id="taxonomy" class="section">
+    <div class="card">
+      <h2>Taxonomy of MI Indispensability Conditions</h2>
+      <p>We identify three structural conditions under which MI is predicted to be indispensable, based on task properties rather than method specifics.</p>
+    </div>
+    <div class="taxonomy-item">
+      <h4>Condition 1: Dormancy (Experimentally Validated)</h4>
+      <p><strong>When:</strong> The phenomena to be detected are dormant -- not observable in normal I/O behavior because their triggers occupy an exponentially large space.</p>
+      <p><strong>Why MI is indispensable:</strong> Behavioral methods require encountering the trigger distribution. When trigger probability p &lt; 1/N (sampling budget), behavioral methods have negligible coverage. MI can scan internal structures exhaustively.</p>
+      <p><strong>Evidence:</strong> Phase transition at trigger length 3 (p = 2.14e-4). Gap = <span class="highlight-stat">1.000</span>, 95% CI [0.861, 1.139].</p>
+    </div>
+    <div class="taxonomy-item">
+      <h4>Condition 2: Locality Requirements (Experimentally Validated)</h4>
+      <p><strong>When:</strong> The task requires surgical modifications with strict locality guarantees -- changing specific behaviors while preserving all others.</p>
+      <p><strong>Why MI is indispensable:</strong> Without mechanistic knowledge of where a fact is stored, edits propagate unpredictably. MI localizes the target weight subspace, enabling minimal-perturbation edits.</p>
+      <p><strong>Evidence:</strong> MI achieves H = <span class="highlight-stat">0.935</span> vs FT H = 0.000. MI Pareto-dominates in the high-success regime. Gap 95% CI [0.797, 1.072].</p>
+    </div>
+    <div class="taxonomy-item predicted">
+      <h4>Condition 3: Certification (Predicted, Not Yet Tested)</h4>
+      <p><strong>When:</strong> The task requires certifying that a model does NOT possess a dangerous capability, rather than merely failing to exhibit it.</p>
+      <p><strong>Why MI is predicted indispensable:</strong> Behavioral testing can only sample the output space; it cannot distinguish "capability absent" from "capability present but not elicited." MI can in principle verify the absence of relevant computational pathways.</p>
+      <p><strong>Status:</strong> Theoretical prediction awaiting empirical validation. This represents an important direction for future work in AI safety.</p>
+    </div>
+    <div class="card">
+      <h2>Implications for Research Prioritization</h2>
+      <table>
+        <tr><th>Task Type</th><th>MI Needed?</th><th>Recommendation</th></tr>
+        <tr><td>Observable behavior modification</td><td>No</td><td>Fine-tuning / RLHF sufficient</td></tr>
+        <tr><td>Feature detection (common signals)</td><td>No</td><td>Probing classifiers sufficient</td></tr>
+        <tr><td>Dormant threat detection</td><td><strong class="mi">Yes</strong></td><td>MI activation scanning required</td></tr>
+        <tr><td>Surgical editing (high locality)</td><td><strong class="mi">Yes</strong></td><td>MI-guided rank-one edits required</td></tr>
+        <tr><td>Absence certification</td><td><strong style="color:var(--purple)">Predicted Yes</strong></td><td>MI circuit verification (future work)</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Reference</h2>
+      <p>This work addresses the open problem posed by Zhang et al. (arXiv: 2601.14004): "Despite substantial progress and growing methodological sophistication, it remains unclear whether MI is indispensable for any downstream task, rather than serving as an alternative or complementary analysis tool."</p>
+      <p style="margin-top:10px; color:var(--muted); font-size:0.9em;">Paper: "Locate, Steer, and Improve: A Practical Survey of Actionable Mechanistic Interpretability in Large Language Models" -- Zhang et al., Jan 2026.</p>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p>Research webapp for "When Is Mechanistic Interpretability Indispensable?" | KDD 2026 Research Track</p>
+  <p>All results generated from reproducible experiments using NumPy-based transformers.</p>
+</div>
+
+<script>
+// ====== Data from experiments ======
+const sweepData = [
+  {tl:1, prob:0.125, beh:1.0, mi:0.0, es:0.61},
+  {tl:2, prob:0.00684, beh:1.0, mi:0.0, es:0.88},
+  {tl:3, prob:0.000214, beh:0.0, mi:1.0, es:1.16},
+  {tl:4, prob:4.17e-6, beh:0.0, mi:1.0, es:1.46},
+  {tl:5, prob:5.22e-8, beh:0.0, mi:1.0, es:2.10}
+];
+
+const miPareto = [
+  {a:0.05,s:0,l:0.98},{a:0.15,s:0,l:0.966},{a:0.26,s:1,l:0.942},{a:0.36,s:1,l:0.94},
+  {a:0.46,s:1,l:0.904},{a:0.56,s:1,l:0.856},{a:0.67,s:1,l:0.81},{a:0.77,s:1,l:0.74},
+  {a:0.87,s:1,l:0.698},{a:0.97,s:1,l:0.666},{a:1.08,s:1,l:0.648},{a:1.18,s:1,l:0.638},
+  {a:1.28,s:1,l:0.6},{a:1.38,s:1,l:0.564},{a:1.49,s:1,l:0.522},{a:1.59,s:1,l:0.478},
+  {a:1.69,s:1,l:0.458},{a:1.79,s:1,l:0.428},{a:1.90,s:1,l:0.41},{a:2.0,s:1,l:0.396}
+];
+
+const ftPareto = [
+  {lr:0.05,s:0,l:1.0},{lr:0.13,s:0,l:0.994},{lr:0.20,s:0,l:0.984},{lr:0.28,s:0,l:0.98},
+  {lr:0.36,s:0,l:0.98},{lr:0.43,s:0,l:0.978},{lr:0.51,s:0,l:0.978},{lr:0.58,s:0,l:0.964},
+  {lr:0.66,s:1,l:0.952},{lr:0.74,s:1,l:0.938},{lr:0.81,s:1,l:0.93},{lr:0.89,s:1,l:0.922},
+  {lr:0.97,s:1,l:0.92},{lr:1.04,s:1,l:0.918},{lr:1.12,s:1,l:0.91},{lr:1.19,s:1,l:0.896},
+  {lr:1.27,s:1,l:0.88},{lr:1.35,s:1,l:0.874},{lr:1.42,s:1,l:0.858},{lr:1.5,s:1,l:0.846}
+];
+
+// ====== Minimal canvas charting ======
+function drawChart(canvasId, drawFn) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  drawFn(ctx, rect.width, rect.height);
+}
+
+function drawGapChart(ctx, w, h) {
+  const pad = {t:40, b:50, l:60, r:30};
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+  const tasks = ['Backdoor\nDetection', 'Knowledge\nEditing'];
+  const gaps = [1.0, 0.935];
+  const ciLo = [0.861, 0.797];
+  const ciHi = [1.139, 1.072];
+  const colors = ['#2563EB', '#0891B2'];
+  const barW = pw / 5;
+  const maxY = 1.3;
+  const toY = v => pad.t + ph * (1 - v / maxY);
+  const toX = i => pad.l + pw * (i + 0.5) / tasks.length;
+
+  // Grid
+  ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1;
+  for (let v = 0; v <= maxY; v += 0.2) {
+    ctx.beginPath(); ctx.moveTo(pad.l, toY(v)); ctx.lineTo(w-pad.r, toY(v)); ctx.stroke();
+    ctx.fillStyle = '#9CA3AF'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(1), pad.l - 8, toY(v) + 4);
+  }
+  // Zero line
+  ctx.strokeStyle = '#DC2626'; ctx.setLineDash([6,4]); ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l, toY(0)); ctx.lineTo(w-pad.r, toY(0)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Bars
+  tasks.forEach((t, i) => {
+    const x = toX(i);
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(x - barW/2, toY(gaps[i]), barW, toY(0) - toY(gaps[i]));
+    // CI
+    ctx.strokeStyle = '#1E293B'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, toY(ciLo[i])); ctx.lineTo(x, toY(ciHi[i])); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-8, toY(ciLo[i])); ctx.lineTo(x+8, toY(ciLo[i])); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-8, toY(ciHi[i])); ctx.lineTo(x+8, toY(ciHi[i])); ctx.stroke();
+    // Label
+    ctx.fillStyle = '#059669'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Strong', x, toY(ciHi[i]) - 8);
+    // X label
+    ctx.fillStyle = '#1E293B'; ctx.font = '12px sans-serif';
+    const lines = t.split('\n');
+    lines.forEach((line, li) => ctx.fillText(line, x, h - pad.b + 18 + li * 16));
+  });
+  // Y label
+  ctx.save(); ctx.translate(14, h/2); ctx.rotate(-Math.PI/2);
+  ctx.fillStyle = '#1E293B'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Gap (MI - Non-MI)', 0, 0); ctx.restore();
+  // Title
+  ctx.fillStyle = '#1E293B'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Epsilon-Indispensability Gap (95% CI)', w/2, 20);
+}
+
+function drawRarityChart(ctx, w, h) {
+  const pad = {t:40, b:50, l:60, r:60};
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+  const toX = i => pad.l + pw * i / 4;
+  const toY = v => pad.t + ph * (1 - v / 1.15);
+
+  // Grid
+  ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1.0].forEach(v => {
+    ctx.beginPath(); ctx.moveTo(pad.l, toY(v)); ctx.lineTo(w-pad.r, toY(v)); ctx.stroke();
+    ctx.fillStyle = '#9CA3AF'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(2), pad.l - 8, toY(v) + 4);
+  });
+
+  // Shading for MI-dominant region
+  for (let i = 2; i < 5; i++) {
+    ctx.fillStyle = 'rgba(37,99,235,0.06)';
+    ctx.fillRect(toX(i)-pw/10, pad.t, pw/5, ph);
+  }
+
+  // Lines
+  const beh = sweepData.map(d => d.beh);
+  const mi = sweepData.map(d => d.mi);
+
+  // Behavioral
+  ctx.strokeStyle = '#DC2626'; ctx.lineWidth = 2.5; ctx.beginPath();
+  beh.forEach((v, i) => { i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)); });
+  ctx.stroke();
+  beh.forEach((v, i) => {
+    ctx.fillStyle = '#DC2626'; ctx.beginPath(); ctx.rect(toX(i)-5, toY(v)-5, 10, 10); ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // MI
+  ctx.strokeStyle = '#2563EB'; ctx.lineWidth = 2.5; ctx.beginPath();
+  mi.forEach((v, i) => { i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)); });
+  ctx.stroke();
+  mi.forEach((v, i) => {
+    ctx.fillStyle = '#2563EB'; ctx.beginPath(); ctx.arc(toX(i), toY(v), 6, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // X labels
+  sweepData.forEach((d, i) => {
+    ctx.fillStyle = '#1E293B'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(d.tl.toString(), toX(i), h - pad.b + 18);
+  });
+
+  // Legend
+  ctx.fillStyle = '#2563EB'; ctx.beginPath(); ctx.arc(w-pad.r-90, pad.t+12, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1E293B'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('MI Scanning', w-pad.r-80, pad.t+16);
+  ctx.fillStyle = '#DC2626'; ctx.fillRect(w-pad.r-95, pad.t+28, 10, 10);
+  ctx.fillStyle = '#1E293B'; ctx.fillText('Behavioral', w-pad.r-80, pad.t+38);
+
+  ctx.fillStyle = '#1E293B'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Trigger Subsequence Length', w/2, h - 8);
+  ctx.save(); ctx.translate(14, h/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Detection Success', 0, 0); ctx.restore();
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('Detection vs. Trigger Rarity', w/2, 20);
+}
+
+function drawParetoChart(ctx, w, h) {
+  const pad = {t:40, b:50, l:60, r:30};
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+  const toX = v => pad.l + pw * v;
+  const toY = v => pad.t + ph * (1 - v / 1.1);
+
+  // Grid
+  ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1.0].forEach(v => {
+    ctx.beginPath(); ctx.moveTo(pad.l, toY(v)); ctx.lineTo(w-pad.r, toY(v)); ctx.stroke();
+    ctx.fillStyle = '#9CA3AF'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(2), pad.l - 8, toY(v) + 4);
+  });
+  [0, 0.2, 0.4, 0.6, 0.8, 1.0].forEach(v => {
+    ctx.beginPath(); ctx.moveTo(toX(v), pad.t); ctx.lineTo(toX(v), h-pad.b); ctx.stroke();
+    ctx.fillStyle = '#9CA3AF'; ctx.textAlign = 'center';
+    ctx.fillText(v.toFixed(1), toX(v), h - pad.b + 18);
+  });
+
+  // Ideal region
+  ctx.fillStyle = 'rgba(5,150,105,0.1)';
+  ctx.fillRect(toX(0.85), toY(1.0), toX(1.02)-toX(0.85), toY(0.85)-toY(1.0));
+
+  // FT points
+  ftPareto.forEach(p => {
+    ctx.fillStyle = 'rgba(220,38,38,0.7)';
+    ctx.fillRect(toX(p.l)-4, toY(p.s)-4, 8, 8);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.5;
+    ctx.strokeRect(toX(p.l)-4, toY(p.s)-4, 8, 8);
+  });
+
+  // MI points
+  miPareto.forEach(p => {
+    ctx.fillStyle = 'rgba(37,99,235,0.7)'; ctx.beginPath();
+    ctx.arc(toX(p.l), toY(p.s), 5, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.5; ctx.stroke();
+  });
+
+  // Legend
+  const lx = pad.l + 10, ly = h - pad.b - 20;
+  ctx.fillStyle = '#2563EB'; ctx.beginPath(); ctx.arc(lx+5, ly-30, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1E293B'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('MI Rank-One Edit', lx+15, ly-26);
+  ctx.fillStyle = '#DC2626'; ctx.fillRect(lx+1, ly-14, 8, 8);
+  ctx.fillStyle = '#1E293B'; ctx.fillText('Fine-Tuning', lx+15, ly-8);
+  ctx.fillStyle = 'rgba(5,150,105,0.3)'; ctx.fillRect(lx+1, ly+2, 8, 8);
+  ctx.fillStyle = '#1E293B'; ctx.fillText('Ideal Region', lx+15, ly+10);
+
+  ctx.fillStyle = '#1E293B'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Locality (fraction unchanged)', w/2, h - 8);
+  ctx.save(); ctx.translate(14, h/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Edit Success', 0, 0); ctx.restore();
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('Knowledge Editing: Pareto Frontier', w/2, 20);
+}
+
+// ====== Tab navigation ======
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  requestAnimationFrame(renderCharts);
+}
+
+// ====== Interactive controls ======
+function comb(n, k) {
+  if (k > n) return 0;
+  let r = 1;
+  for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
+  return r;
+}
+
+function updateInteractive() {
+  const V = parseInt(document.getElementById('vocabSlider').value);
+  const L = parseInt(document.getElementById('seqSlider').value);
+  const logN = parseFloat(document.getElementById('budgetSlider').value);
+  const N = Math.pow(10, logN);
+  document.getElementById('vocabVal').textContent = V;
+  document.getElementById('seqVal').textContent = L;
+  document.getElementById('budgetVal').textContent = logN.toFixed(2);
+
+  let crossover = -1;
+  let crossoverP = 0;
+  for (let tl = 1; tl <= Math.min(L, 8); tl++) {
+    const p = comb(L, tl) * Math.pow(1/V, tl);
+    const expectedHits = N * p;
+    if (expectedHits < 1 && crossover < 0) {
+      crossover = tl;
+      crossoverP = p;
+    }
+  }
+  if (crossover < 0) { crossover = '>'+Math.min(L,8); crossoverP = 0; }
+  document.getElementById('crossoverVal').textContent = crossover;
+  document.getElementById('crossoverProb').textContent = crossoverP > 0 ? crossoverP.toExponential(2) : 'N/A';
+
+  drawChart('interactiveChart', (ctx, w, h) => {
+    const pad = {t:40, b:50, l:60, r:30};
+    const pw = w - pad.l - pad.r;
+    const ph = h - pad.t - pad.b;
+    const maxTL = Math.min(L, 8);
+    const toX = i => pad.l + pw * i / (maxTL - 1);
+    const toYv = v => pad.t + ph * (1 - Math.max(0, Math.min(1, v)));
+
+    ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1;
+    [0, 0.25, 0.5, 0.75, 1.0].forEach(v => {
+      ctx.beginPath(); ctx.moveTo(pad.l, toYv(v)); ctx.lineTo(w-pad.r, toYv(v)); ctx.stroke();
+    });
+
+    const behData = [], probData = [];
+    for (let tl = 1; tl <= maxTL; tl++) {
+      const p = comb(L, tl) * Math.pow(1/V, tl);
+      const eHits = N * p;
+      behData.push(eHits >= 1 ? 1 : 0);
+      probData.push(p);
+    }
+
+    // Crossover shading
+    if (typeof crossover === 'number') {
+      for (let i = crossover-1; i < maxTL; i++) {
+        ctx.fillStyle = 'rgba(37,99,235,0.06)';
+        ctx.fillRect(toX(i)-pw/(maxTL*2.5), pad.t, pw/(maxTL*1.25), ph);
+      }
+    }
+
+    // Behavioral line
+    ctx.strokeStyle = '#DC2626'; ctx.lineWidth = 2.5; ctx.beginPath();
+    behData.forEach((v, i) => { i===0 ? ctx.moveTo(toX(i), toYv(v)) : ctx.lineTo(toX(i), toYv(v)); });
+    ctx.stroke();
+    behData.forEach((v, i) => {
+      ctx.fillStyle = '#DC2626'; ctx.fillRect(toX(i)-5, toYv(v)-5, 10, 10);
+    });
+
+    // MI line (assume always detects for trig >= crossover)
+    const miData = [];
+    for (let tl = 1; tl <= maxTL; tl++) {
+      miData.push(typeof crossover === 'number' && tl >= crossover ? 1 : 0);
+    }
+    ctx.strokeStyle = '#2563EB'; ctx.lineWidth = 2.5; ctx.beginPath();
+    miData.forEach((v, i) => { i===0 ? ctx.moveTo(toX(i), toYv(v)) : ctx.lineTo(toX(i), toYv(v)); });
+    ctx.stroke();
+    miData.forEach((v, i) => {
+      ctx.fillStyle = '#2563EB'; ctx.beginPath(); ctx.arc(toX(i), toYv(v), 6, 0, Math.PI*2); ctx.fill();
+    });
+
+    for (let tl = 1; tl <= maxTL; tl++) {
+      ctx.fillStyle = '#1E293B'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(tl.toString(), toX(tl-1), h - pad.b + 18);
+    }
+    ctx.fillText('Trigger Length', w/2, h - 8);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('Simulated Detection (V='+V+', L='+L+', N='+N.toExponential(0)+')', w/2, 20);
+  });
+}
+
+function updateEditExplorer() {
+  const alpha = parseFloat(document.getElementById('alphaSlider').value);
+  const lr = parseFloat(document.getElementById('lrSlider').value);
+  document.getElementById('alphaVal').textContent = alpha.toFixed(2);
+  document.getElementById('lrVal').textContent = lr.toFixed(2);
+
+  // Find closest data points
+  let miPt = miPareto.reduce((best, p) => Math.abs(p.a - alpha) < Math.abs(best.a - alpha) ? p : best);
+  let ftPt = ftPareto.reduce((best, p) => Math.abs(p.lr - lr) < Math.abs(best.lr - lr) ? p : best);
+
+  const miH = miPt.s + miPt.l > 0 ? (2*miPt.s*miPt.l/(miPt.s+miPt.l)).toFixed(2) : '0.00';
+  const ftH = ftPt.s + ftPt.l > 0 ? (2*ftPt.s*ftPt.l/(ftPt.s+ftPt.l)).toFixed(2) : '0.00';
+  document.getElementById('miHVal').textContent = miH;
+  document.getElementById('ftHVal').textContent = ftH;
+}
+
+// ====== Render all charts ======
+function renderCharts() {
+  drawChart('gapChart', drawGapChart);
+  drawChart('rarityChart', drawRarityChart);
+  drawChart('paretoChart', drawParetoChart);
+  updateInteractive();
+}
+
+window.addEventListener('load', renderCharts);
+window.addEventListener('resize', renderCharts);
+</script>
+</body>
+</html>

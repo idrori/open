@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standardizing Evaluation Toolchains & Stability Reporting</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card-bg: #fff; --text: #2c3e50; --text-light: #7f8c8d; --border: #e0e6ed; --success: #27ae60; --danger: #e74c3c; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+        .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 1.7rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; max-width: 700px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+        .card h3 { color: var(--primary); margin-bottom: 1rem; font-size: 1.1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+        .card-full { grid-column: 1 / -1; }
+        .chart-container { position: relative; height: 350px; }
+        .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .metric-card { background: var(--card-bg); border-radius: 10px; padding: 1.2rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid var(--accent); }
+        .metric-card .value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+        .metric-card .label { font-size: 0.85rem; color: var(--text-light); margin-top: 0.3rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.7rem; text-align: center; border-bottom: 1px solid var(--border); }
+        th { background: var(--primary); color: white; }
+        tr:hover { background: #f0f4f8; }
+        .best { color: var(--success); font-weight: 700; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Standardizing Evaluation Toolchains & Stability Reporting</h1>
+        <p>Quantifying how toolchain standardization improves agent benchmark reliability</p>
+    </div>
+    <div class="container">
+        <div class="metric-grid">
+            <div class="metric-card"><div class="value">0.979</div><div class="label">Best Ranking Stability</div></div>
+            <div class="metric-card"><div class="value">14%</div><div class="label">Stability Improvement</div></div>
+            <div class="metric-card"><div class="value">5</div><div class="label">Min. Seeds Recommended</div></div>
+            <div class="metric-card"><div class="value">12</div><div class="label">Agents Evaluated</div></div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h3>Ranking Stability by Standardization Level</h3>
+                <div class="chart-container"><canvas id="chartToolchain"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Stability vs. Number of Seeds</h3>
+                <div class="chart-container"><canvas id="chartSeeds"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Impact of Environment Drift</h3>
+                <div class="chart-container"><canvas id="chartDrift"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Standardization Components</h3>
+                <div class="chart-container"><canvas id="chartRadar"></canvas></div>
+            </div>
+        </div>
+        <div class="card card-full">
+            <h3>Detailed Results</h3>
+            <table>
+                <thead><tr><th>Standardization Level</th><th>CV</th><th>Rank Correlation</th><th>Comparability</th></tr></thead>
+                <tbody>
+                    <tr><td>No Standard</td><td>0.372</td><td>0.860</td><td>Low</td></tr>
+                    <tr><td>Version Pinned</td><td>0.387</td><td>0.832</td><td>Medium</td></tr>
+                    <tr><td>Cost Reported</td><td>0.471</td><td>0.741</td><td>Medium</td></tr>
+                    <tr><td>Latency Reported</td><td>0.509</td><td>0.720</td><td>Medium</td></tr>
+                    <tr class="best"><td><strong>Full Standard</strong></td><td><strong>0.392</strong></td><td><strong>0.979</strong></td><td><strong>High</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+    const tcLabels = ['No Standard', 'Version Pin', 'Cost Report', 'Latency Rep.', 'Full Standard'];
+    const tcColors = ['#e74c3c', '#f39c12', '#3498db', '#9b59b6', '#27ae60'];
+
+    new Chart(document.getElementById('chartToolchain'), {
+        type: 'bar',
+        data: { labels: tcLabels, datasets: [{ label: 'Rank Correlation', data: [0.860, 0.832, 0.741, 0.720, 0.979], backgroundColor: tcColors.map(c => c + 'cc'), borderColor: tcColors, borderWidth: 2 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0.6, max: 1.0, title: { display: true, text: 'Rank Correlation' } } }, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('chartSeeds'), {
+        type: 'line',
+        data: { labels: [1, 3, 5, 10, 20], datasets: [
+            { label: 'No Standard', data: [0.65, 0.78, 0.84, 0.86, 0.87], borderColor: '#e74c3c', borderWidth: 2.5, pointRadius: 5, tension: 0.3 },
+            { label: 'Full Standard', data: [0.88, 0.94, 0.97, 0.98, 0.98], borderColor: '#27ae60', borderWidth: 2.5, pointRadius: 5, tension: 0.3 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Number of Seeds' } }, y: { title: { display: true, text: 'Rank Correlation' }, min: 0.5 } }, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('chartDrift'), {
+        type: 'line',
+        data: { labels: [0, 0.02, 0.05, 0.1, 0.2], datasets: [
+            { label: 'No Standard', data: [0.92, 0.88, 0.80, 0.65, 0.42], borderColor: '#e74c3c', backgroundColor: '#e74c3c22', fill: true, borderWidth: 2.5, pointRadius: 5, tension: 0.3 },
+            { label: 'Full Standard', data: [0.99, 0.98, 0.96, 0.90, 0.78], borderColor: '#27ae60', backgroundColor: '#27ae6022', fill: true, borderWidth: 2.5, pointRadius: 5, tension: 0.3 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Environment Drift' } }, y: { title: { display: true, text: 'Rank Correlation' }, min: 0 } }, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('chartRadar'), {
+        type: 'radar',
+        data: { labels: ['Version Pin', 'Cost Report', 'Latency Rep.', 'Multi-Seed', 'Stability Metric'],
+            datasets: [
+                { label: 'No Standard', data: [0, 0, 0, 0, 0.3], borderColor: '#e74c3c', backgroundColor: '#e74c3c22', borderWidth: 2 },
+                { label: 'Full Standard', data: [1, 1, 1, 1, 0.95], borderColor: '#27ae60', backgroundColor: '#27ae6022', borderWidth: 2 }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 1 } }, plugins: { legend: { position: 'bottom' } } }
+    });
+    </script>
+</body>
+</html>

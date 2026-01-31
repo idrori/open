@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantifying ARC-AGI Overfitting</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.8; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
+.card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; height: 300px !important; }
+.controls { margin: 1rem 0; }
+.controls label { font-size: 0.9rem; color: var(--primary); font-weight: 600; }
+.controls input[type="range"] { width: 100%; }
+.stat { display: inline-block; background: #eef2f7; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.25rem; }
+.stat .label { font-size: 0.8rem; color: #666; }
+.stat .val { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Quantifying Knowledge-Dependent Overfitting on ARC-AGI</h1>
+<p>Interactive decomposition of genuine ability vs. contamination effects</p>
+</div>
+<div class="container">
+<div style="text-align:center;margin:1rem 0;">
+<div class="stat"><div class="label">Overall Accuracy</div><div class="val" id="overallVal">42.5%</div></div>
+<div class="stat"><div class="label">Genuine Ability</div><div class="val" id="genuineVal">20.9%</div></div>
+<div class="stat"><div class="label">Overfitting Fraction</div><div class="val" id="overfitVal">50.9%</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Performance Decomposition</h2>
+<canvas id="decompChart"></canvas>
+<div class="controls">
+<label>Contamination Boost: <span id="boostVal">0.91</span></label>
+<input type="range" id="boostSlider" min="0" max="100" value="91">
+</div>
+</div>
+<div class="card">
+<h2>Novelty Gap Analysis</h2>
+<canvas id="noveltyChart"></canvas>
+</div>
+<div class="card">
+<h2>Multi-Model Comparison</h2>
+<canvas id="modelChart"></canvas>
+</div>
+<div class="card">
+<h2>ARC-AGI-1 vs ARC-AGI-2</h2>
+<canvas id="versionChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+const P='#1a3a5c',A='#2980b9',R='#e74c3c',G='#27ae60';
+// Decomposition
+let genuine=0.209,boost=0.912,meanContam=0.237;
+let decompChart = new Chart(document.getElementById('decompChart'),{
+  type:'bar',data:{labels:['Genuine','Contamination','Overall'],
+    datasets:[{data:[genuine,boost*meanContam,genuine+boost*meanContam],backgroundColor:[P,R,A]}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:0.7,title:{display:true,text:'Accuracy'}}}}
+});
+document.getElementById('boostSlider').addEventListener('input',function(e){
+  boost=e.target.value/100;
+  document.getElementById('boostVal').textContent=boost.toFixed(2);
+  let oc=boost*meanContam,ov=genuine+oc;
+  decompChart.data.datasets[0].data=[genuine,oc,ov];
+  decompChart.update();
+  document.getElementById('overallVal').textContent=(ov*100).toFixed(1)+'%';
+  document.getElementById('overfitVal').textContent=((oc/ov)*100).toFixed(1)+'%';
+});
+// Novelty
+const nl=[0,0.11,0.22,0.33,0.44,0.56,0.67,0.78,0.89,1.0];
+const na=[0.52,0.50,0.48,0.46,0.44,0.43,0.42,0.41,0.40,0.42];
+new Chart(document.getElementById('noveltyChart'),{
+  type:'line',data:{labels:nl.map(v=>v.toFixed(2)),datasets:[{label:'Accuracy',data:na,borderColor:P,fill:true,backgroundColor:'rgba(26,58,92,0.1)',tension:0.3}]},
+  options:{responsive:true,scales:{x:{title:{display:true,text:'Task Novelty'}},y:{title:{display:true,text:'Accuracy'},min:0.3,max:0.6}}}
+});
+// Models
+const mnames=['A','B','C','D','E','F','G','H'];
+const mgenuine=[0.15,0.20,0.25,0.28,0.32,0.36,0.40,0.45];
+const moverfit=[0.08,0.10,0.12,0.11,0.13,0.10,0.09,0.07];
+new Chart(document.getElementById('modelChart'),{
+  type:'bar',data:{labels:mnames.map(n=>'Model '+n),
+    datasets:[{label:'Genuine',data:mgenuine,backgroundColor:P},{label:'Contamination',data:moverfit,backgroundColor:R}]},
+  options:{responsive:true,scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Accuracy'}}}}
+});
+// Version comparison
+new Chart(document.getElementById('versionChart'),{
+  type:'bar',data:{labels:['ARC-AGI-1','ARC-AGI-2'],
+    datasets:[{label:'Overall',data:[0.425,0.380],backgroundColor:A},{label:'Genuine',data:[0.209,0.204],backgroundColor:P}]},
+  options:{responsive:true,scales:{y:{min:0,max:0.5,title:{display:true,text:'Accuracy'}}}}
+});
+</script>
+</body>
+</html>

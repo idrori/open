@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Implicit Adam Updates &amp; Dead Primitives in 3D Gaussian Splatting</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #2980b9;
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --text: #2c3e50;
+  --text-light: #6c7a89;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --border: #e1e8ef;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: white; padding: 3rem 2rem; text-align: center;
+}
+.hero h1 { font-size: 2rem; margin-bottom: 0.5rem; font-weight: 700; }
+.hero .subtitle { font-size: 1.05rem; opacity: 0.9; max-width: 850px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+.metrics-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.2rem; margin-bottom: 2rem;
+}
+.metric-card {
+  background: var(--card); border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center;
+  border-top: 4px solid var(--accent);
+}
+.metric-card .value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+.metric-card .label { font-size: 0.82rem; color: var(--text-light); margin-top: 0.3rem; }
+.charts-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem; margin-bottom: 2rem;
+}
+.chart-card {
+  background: var(--card); border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.chart-card h3 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; }
+.table-card {
+  background: var(--card); border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 2rem; overflow-x: auto;
+}
+.table-card h3 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.7rem 1rem; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: white; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+tr:hover { background: #f0f4f8; }
+td { font-size: 0.9rem; }
+.tag { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+.tag-adam { background: #fdeaea; color: var(--danger); }
+.tag-sparse { background: #e8f8f0; color: var(--success); }
+.section-title { font-size: 1.5rem; color: var(--primary); margin-bottom: 1rem; font-weight: 700; }
+footer { text-align: center; padding: 2rem; color: var(--text-light); font-size: 0.85rem; border-top: 1px solid var(--border); }
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.4rem; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Implicit Adam Updates &amp; Dead Primitives in 3DGS</h1>
+  <p class="subtitle">Investigating how standard Adam's implicit parameter updates accelerate dead primitive formation in 3D Gaussian Splatting compared to Sparse Adam.</p>
+</div>
+
+<div class="container">
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="value">59.95%</div>
+      <div class="label">Adam Dead Primitives</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">41.50%</div>
+      <div class="label">Sparse Adam Dead Primitives</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">0.9005</div>
+      <div class="label">Decay Ratio per Invisible Step</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">6.61</div>
+      <div class="label">Half-life (steps)</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">386.3</div>
+      <div class="label">Mean Excess Dead (10 seeds)</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Main Comparison</h2>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Dead Primitives: Adam vs Sparse Adam</h3>
+      <canvas id="mainChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Opacity Statistics</h3>
+      <canvas id="opacityChart"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Sensitivity Analysis</h2>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Learning Rate Sensitivity</h3>
+      <canvas id="lrChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Gradient Bias Sweep</h3>
+      <canvas id="biasChart"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Multi-Seed Robustness (10 seeds)</h3>
+      <canvas id="seedChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Feedback Loop: Drift &amp; Visibility by Quartile</h3>
+      <canvas id="feedbackChart"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Detailed Results</h2>
+  <div class="table-card">
+    <h3>Main Comparison (2,000 primitives, 3,000 steps)</h3>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Adam</th><th>Sparse Adam</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Final Dead Count</td><td><span class="tag tag-adam">1,199</span></td><td><span class="tag tag-sparse">830</span></td></tr>
+        <tr><td>Dead Percentage</td><td>59.95%</td><td>41.50%</td></tr>
+        <tr><td>Peak Dead Count</td><td>1,202</td><td>830</td></tr>
+        <tr><td>Mean Final Opacity</td><td>0.0205</td><td>0.0260</td></tr>
+        <tr><td>Median Final Opacity</td><td>0.0025</td><td>0.0073</td></tr>
+        <tr><td>Total Implicit Drift</td><td>36,382.8</td><td>0.0</td></tr>
+        <tr><td>Mean Drift/Primitive</td><td>18.19</td><td>0.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <h3>Opacity-Visibility Feedback Loop (Adam)</h3>
+    <table>
+      <thead>
+        <tr><th>Quartile</th><th>Opacity Range</th><th>Mean Drift</th><th>Mean Visibility</th><th>Dead Count</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Q1 (lowest)</td><td>[0.0, 0.0005)</td><td>18.84</td><td>493.06</td><td>500</td></tr>
+        <tr><td>Q2</td><td>[0.0005, 0.0025)</td><td>18.39</td><td>514.43</td><td>500</td></tr>
+        <tr><td>Q3</td><td>[0.0025, 0.014)</td><td>17.88</td><td>552.92</td><td>199</td></tr>
+        <tr><td>Q4 (highest)</td><td>[0.014, 0.788]</td><td>17.66</td><td>623.34</td><td>0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <h3>Learning Rate Sensitivity</h3>
+    <table>
+      <thead>
+        <tr><th>Learning Rate</th><th>Adam Dead</th><th>Sparse Dead</th><th>Difference</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0.01</td><td>0</td><td>0</td><td>0</td></tr>
+        <tr><td>0.02</td><td>76</td><td>15</td><td>61</td></tr>
+        <tr><td>0.05</td><td>1,199</td><td>830</td><td><strong>369</strong></td></tr>
+        <tr><td>0.10</td><td>1,745</td><td>1,615</td><td>130</td></tr>
+        <tr><td>0.15</td><td>1,873</td><td>1,816</td><td>57</td></tr>
+        <tr><td>0.20</td><td>1,918</td><td>1,887</td><td>31</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer>Implicit Adam Updates &amp; Dead Primitives in 3D Gaussian Splatting &mdash; KDD 2026</footer>
+
+<script>
+const cAdam = '#e74c3c', cSparse = '#27ae60', cAccent = '#2980b9';
+
+new Chart(document.getElementById('mainChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Dead Count', 'Peak Dead', 'Alive Count'],
+    datasets: [
+      {label:'Adam', data:[1199,1202,801], backgroundColor:cAdam},
+      {label:'Sparse Adam', data:[830,830,1170], backgroundColor:cSparse}
+    ]
+  },
+  options: { responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{title:{display:true,text:'Primitives'}}} }
+});
+
+new Chart(document.getElementById('opacityChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Mean Opacity', 'Median Opacity'],
+    datasets: [
+      {label:'Adam', data:[0.0205,0.0025], backgroundColor:cAdam},
+      {label:'Sparse Adam', data:[0.026,0.0073], backgroundColor:cSparse}
+    ]
+  },
+  options: { responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{title:{display:true,text:'Opacity'}}} }
+});
+
+new Chart(document.getElementById('lrChart'), {
+  type: 'line',
+  data: {
+    labels: ['0.01','0.02','0.05','0.10','0.15','0.20'],
+    datasets: [
+      {label:'Adam Dead', data:[0,76,1199,1745,1873,1918], borderColor:cAdam, backgroundColor:'rgba(231,76,60,0.1)', fill:true, tension:0.3, pointRadius:5},
+      {label:'Sparse Adam Dead', data:[0,15,830,1615,1816,1887], borderColor:cSparse, backgroundColor:'rgba(39,174,96,0.1)', fill:true, tension:0.3, pointRadius:5}
+    ]
+  },
+  options: { responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'Learning Rate'}},y:{title:{display:true,text:'Dead Primitives'}}} }
+});
+
+new Chart(document.getElementById('biasChart'), {
+  type: 'line',
+  data: {
+    labels: ['0.005','0.01','0.02','0.03','0.05','0.08','0.10','0.15'],
+    datasets: [
+      {label:'Adam Dead', data:[1199,1965,2000,2000,2000,2000,2000,2000], borderColor:cAdam, tension:0.3, pointRadius:5},
+      {label:'Sparse Adam Dead', data:[830,1872,2000,2000,2000,2000,2000,2000], borderColor:cSparse, tension:0.3, pointRadius:5}
+    ]
+  },
+  options: { responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'Gradient Bias (mu_g)'}},y:{title:{display:true,text:'Dead Primitives'},min:0,max:2100}} }
+});
+
+const seeds = [42,142,242,342,442,542,642,742,842,942].map(String);
+new Chart(document.getElementById('seedChart'), {
+  type: 'bar',
+  data: {
+    labels: seeds,
+    datasets: [
+      {label:'Adam Dead', data:[1199,1195,1152,1216,1194,1201,1230,1193,1234,1200], backgroundColor:cAdam},
+      {label:'Sparse Adam Dead', data:[830,833,842,797,815,803,801,788,800,842], backgroundColor:cSparse}
+    ]
+  },
+  options: { responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'Seed'}},y:{title:{display:true,text:'Dead Primitives'}}} }
+});
+
+new Chart(document.getElementById('feedbackChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Q1 (lowest)','Q2','Q3','Q4 (highest)'],
+    datasets: [
+      {label:'Mean Drift', data:[18.84,18.39,17.88,17.66], backgroundColor:cAccent, yAxisID:'y'},
+      {label:'Mean Visibility', data:[493.06,514.43,552.92,623.34], backgroundColor:'#f39c12', yAxisID:'y1'}
+    ]
+  },
+  options: {
+    responsive:true, plugins:{legend:{position:'top'}},
+    scales:{
+      y:{position:'left',title:{display:true,text:'Mean Implicit Drift'}},
+      y1:{position:'right',title:{display:true,text:'Mean Visibility Count'},grid:{drawOnChartArea:false}}
+    }
+  }
+});
+</script>
+</body>
+</html>

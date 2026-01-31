@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gradient Noise Indicator for Scale Adaptation</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: var(--primary); }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.85; }
+.container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; max-height: 350px; }
+.controls { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+.slider-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+.slider-row label { min-width: 200px; font-weight: 600; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.slider-row .val { min-width: 60px; text-align: right; font-family: monospace; color: var(--accent); font-weight: bold; }
+.metric-box { display: inline-block; background: var(--primary); color: white; padding: 0.5rem 1.2rem; border-radius: 8px; margin: 0.3rem; }
+.metric-box span { font-weight: bold; font-size: 1.1rem; }
+.full-width { grid-column: 1 / -1; }
+.formula { background: #f0f4f8; padding: 1rem; border-radius: 8px; font-family: monospace; text-align: center; margin: 1rem 0; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Empirical Indicator of Gradient Noise for Scale Adaptation</h1>
+<p>GSNR predicts whether parameters can adapt scale under weight decay</p>
+</div>
+<div class="container">
+<div class="card" style="margin-bottom:1.5rem;">
+<h2>Gradient Signal-to-Noise Ratio (GSNR)</h2>
+<div class="formula">GSNR = ||E[g]||^2 / E[||g - E[g]||^2]</div>
+<p>High GSNR: gradient signal dominates noise, enabling scale adaptation. Low GSNR: noise dominates, parameter trapped in WD equilibrium.</p>
+</div>
+<div class="controls">
+<h2>Interactive Configuration</h2>
+<div class="slider-row">
+<label>Noise Level (sigma):</label>
+<input type="range" id="noiseSlider" min="1" max="100" value="20">
+<div class="val" id="noiseVal">0.20</div>
+</div>
+<div class="slider-row">
+<label>Weight Decay (lambda):</label>
+<input type="range" id="wdSlider" min="1" max="100" value="10">
+<div class="val" id="wdVal">0.010</div>
+</div>
+<div style="margin-top:1rem;">
+<div class="metric-box">Matrix GSNR: <span id="matGsnr">--</span></div>
+<div class="metric-box">Vector GSNR: <span id="vecGsnr">--</span></div>
+<div class="metric-box">Scalar GSNR: <span id="scaGsnr">--</span></div>
+</div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>GSNR by Parameter Shape</h2>
+<canvas id="gsnrChart"></canvas>
+</div>
+<div class="card">
+<h2>Scale Adaptation vs Noise</h2>
+<canvas id="adaptChart"></canvas>
+</div>
+<div class="card full-width">
+<h2>GSNR Threshold Classification</h2>
+<canvas id="threshChart" style="max-height:400px;"></canvas>
+</div>
+</div>
+</div>
+<script>
+function computeGSNR(paramCount, noiseStd) {
+    const signalNorm = paramCount * 0.04;
+    const noiseVar = paramCount * noiseStd * noiseStd;
+    return signalNorm / Math.max(noiseVar, 1e-12);
+}
+
+function computeAdaptation(gsnr, wd) {
+    if (gsnr > 1.0) return Math.min(5, Math.log(gsnr + 1) * (1 - wd));
+    return 0.01 * gsnr;
+}
+
+const shapes = { 'Matrix (64x64)': 4096, 'Vector (64)': 64, 'Scalar': 1 };
+const shapeColors = { 'Matrix (64x64)': '#2980b9', 'Vector (64)': '#f39c12', 'Scalar': '#e74c3c' };
+
+let gsnrChart, adaptChart, threshChart;
+
+function updateAll() {
+    const noiseStd = parseInt(document.getElementById('noiseSlider').value) / 100;
+    const wd = parseInt(document.getElementById('wdSlider').value) / 1000;
+    document.getElementById('noiseVal').textContent = noiseStd.toFixed(2);
+    document.getElementById('wdVal').textContent = wd.toFixed(3);
+
+    const matGsnr = computeGSNR(4096, noiseStd);
+    const vecGsnr = computeGSNR(64, noiseStd);
+    const scaGsnr = computeGSNR(1, noiseStd);
+    document.getElementById('matGsnr').textContent = matGsnr.toFixed(2);
+    document.getElementById('vecGsnr').textContent = vecGsnr.toFixed(4);
+    document.getElementById('scaGsnr').textContent = scaGsnr.toFixed(6);
+
+    const noiseLevels = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0];
+
+    // GSNR chart
+    if (gsnrChart) gsnrChart.destroy();
+    gsnrChart = new Chart(document.getElementById('gsnrChart'), {
+        type: 'line',
+        data: {
+            labels: noiseLevels.map(n => n.toString()),
+            datasets: Object.entries(shapes).map(([name, pc]) => ({
+                label: name,
+                data: noiseLevels.map(n => Math.log10(computeGSNR(pc, n))),
+                borderColor: shapeColors[name], borderWidth: 2.5, tension: 0.3, pointRadius: 4, fill: false
+            }))
+        },
+        options: { responsive: true,
+            scales: { x: { title: { display: true, text: 'Noise Level' } },
+                     y: { title: { display: true, text: 'log10(GSNR)' } } },
+            plugins: { legend: { position: 'top' } } }
+    });
+
+    // Adaptation chart
+    if (adaptChart) adaptChart.destroy();
+    adaptChart = new Chart(document.getElementById('adaptChart'), {
+        type: 'line',
+        data: {
+            labels: noiseLevels.map(n => n.toString()),
+            datasets: Object.entries(shapes).map(([name, pc]) => ({
+                label: name,
+                data: noiseLevels.map(n => computeAdaptation(computeGSNR(pc, n), wd)),
+                borderColor: shapeColors[name], borderWidth: 2.5, tension: 0.3, pointRadius: 4, fill: false
+            }))
+        },
+        options: { responsive: true,
+            scales: { x: { title: { display: true, text: 'Noise Level' } },
+                     y: { title: { display: true, text: 'Scale Adaptation' }, beginAtZero: true } },
+            plugins: { legend: { position: 'top' } } }
+    });
+
+    // Threshold scatter
+    if (threshChart) threshChart.destroy();
+    const points = [];
+    [4096, 1024, 256, 128, 64, 32, 16, 8, 4, 1].forEach(pc => {
+        [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0].forEach(n => {
+            const g = computeGSNR(pc, n);
+            const a = computeAdaptation(g, wd);
+            points.push({ x: Math.log10(g), y: a, canAdapt: a > 0.1 });
+        });
+    });
+    threshChart = new Chart(document.getElementById('threshChart'), {
+        type: 'scatter',
+        data: {
+            datasets: [
+                { label: 'Can adapt', data: points.filter(p => p.canAdapt).map(p => ({x: p.x, y: p.y})),
+                  backgroundColor: '#27ae60', pointRadius: 5 },
+                { label: 'Cannot adapt', data: points.filter(p => !p.canAdapt).map(p => ({x: p.x, y: p.y})),
+                  backgroundColor: '#e74c3c', pointRadius: 5 }
+            ]
+        },
+        options: { responsive: true,
+            scales: { x: { title: { display: true, text: 'log10(GSNR)' } },
+                     y: { title: { display: true, text: 'Scale Adaptation' } } },
+            plugins: { legend: { position: 'top' },
+                      annotation: { annotations: { line1: { type: 'line', xMin: 0, xMax: 0, borderColor: '#1a3a5c', borderDash: [5,5], borderWidth: 2 } } } } }
+    });
+}
+
+document.getElementById('noiseSlider').addEventListener('input', updateAll);
+document.getElementById('wdSlider').addEventListener('input', updateAll);
+updateAll();
+</script>
+</body>
+</html>

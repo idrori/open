@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libby-Fox Eigenvalues and Norms | Interactive Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --accent: #2980b9;
+    --accent-light: #3498db;
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --text-light: #7f8c8d;
+    --border: #e0e4e8;
+    --success: #27ae60;
+    --warning: #f39c12;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, var(--primary) 0%, #2c5f8a 100%);
+    color: white;
+    padding: 3rem 2rem 2.5rem;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .hero .subtitle {
+    font-size: 1rem;
+    opacity: 0.85;
+    max-width: 700px;
+    margin: 0 auto 1.5rem;
+  }
+
+  .key-findings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .kf-card {
+    background: rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .kf-card .kf-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .kf-card .kf-label {
+    font-size: 0.8rem;
+    opacity: 0.8;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  .section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .grid-1 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 1.4rem; }
+    .key-findings { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid var(--border);
+  }
+
+  .card h3 {
+    font-size: 1rem;
+    color: var(--primary);
+    margin-bottom: 0.8rem;
+  }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 320px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  thead {
+    background: var(--primary);
+    color: white;
+  }
+
+  th, td {
+    padding: 0.5rem 0.6rem;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th { font-weight: 600; }
+
+  td:first-child, th:first-child { text-align: center; }
+
+  tbody tr:hover { background: #eef3f8; }
+
+  tbody tr:nth-child(even) { background: #fafbfc; }
+
+  .math {
+    font-family: 'Cambria Math', 'Latin Modern Math', serif;
+    font-style: italic;
+  }
+
+  .formula-box {
+    background: #eef3f8;
+    border-left: 4px solid var(--accent);
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.95rem;
+  }
+
+  .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.3rem;
+    vertical-align: middle;
+  }
+
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-light);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+
+  .tab-controls {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    background: transparent;
+    color: var(--text-light);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-btn:hover { color: var(--primary); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .findings-list {
+    padding-left: 1.2rem;
+  }
+
+  .findings-list li {
+    margin-bottom: 0.5rem;
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>Closed-Form Expressions for Libby-Fox Eigenvalues and Norms</h1>
+  <p class="subtitle">
+    Computational investigation of the eigenvalue problem governing perturbations
+    to the Blasius boundary layer. An open problem in fluid dynamics.
+  </p>
+  <div class="key-findings">
+    <div class="kf-card">
+      <span class="kf-value">12</span>
+      <span class="kf-label">Eigenvalues Computed</span>
+    </div>
+    <div class="kf-card">
+      <span class="kf-value">1.908</span>
+      <span class="kf-label">Asymptotic Slope &alpha;</span>
+    </div>
+    <div class="kf-card">
+      <span class="kf-value">&lt; 0.06</span>
+      <span class="kf-label">Residual (k &ge; 6)</span>
+    </div>
+    <div class="kf-card">
+      <span class="kf-value">12 digits</span>
+      <span class="kf-label">Sum-Rule Precision</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Problem Overview -->
+  <h2 class="section-title">Problem Overview</h2>
+  <div class="card" style="margin-bottom:2rem;">
+    <p>
+      The Blasius boundary layer arises from the self-similar reduction of the
+      steady incompressible boundary-layer equations on a flat plate. Perturbations
+      about the Blasius profile lead to the eigenvalue problem:
+    </p>
+    <div class="formula-box">
+      <span class="math">&phi;''<sub>k</sub> + (1/2) f &phi;'<sub>k</sub> - A<sub>k</sub> f' &phi;<sub>k</sub> = 0</span>,
+      &nbsp;&nbsp; <span class="math">&phi;<sub>k</sub>(0) = 0</span>,
+      &nbsp;&nbsp; <span class="math">&phi;<sub>k</sub>(&eta; &rarr; &infin;) &rarr; 0</span>
+    </div>
+    <p>
+      where <span class="math">A<sub>k</sub></span> are the Libby-Fox eigenvalues
+      and <span class="math">f(&eta;)</span> is the Blasius profile satisfying
+      <span class="math">f''' + (1/2)ff'' = 0</span>.
+      No closed-form expressions are known beyond Brown's asymptotic approximation for large <span class="math">k</span>.
+    </p>
+  </div>
+
+  <!-- Charts Section -->
+  <h2 class="section-title">Interactive Results</h2>
+
+  <div class="tab-controls">
+    <button class="tab-btn active" onclick="switchTab('spectrum')">Eigenvalue Spectrum</button>
+    <button class="tab-btn" onclick="switchTab('spacing')">Spacings</button>
+    <button class="tab-btn" onclick="switchTab('norms')">Norms &amp; C<sub>k</sub></button>
+    <button class="tab-btn" onclick="switchTab('sumrule')">Sum Rule</button>
+  </div>
+
+  <div id="tab-spectrum" class="tab-content active">
+    <div class="grid-2">
+      <div class="card">
+        <h3>Eigenvalue Spectrum vs. Brown's Asymptotic Fit</h3>
+        <div class="chart-container"><canvas id="chartSpectrum"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Brown's Asymptotic Residuals</h3>
+        <div class="chart-container"><canvas id="chartResiduals"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-spacing" class="tab-content">
+    <div class="grid-2">
+      <div class="card">
+        <h3>Eigenvalue Spacings: A(k+1) - A(k)</h3>
+        <div class="chart-container"><canvas id="chartSpacing"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Spacing Ratio: Delta(k) / alpha</h3>
+        <div class="chart-container"><canvas id="chartSpacingRatio"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-norms" class="tab-content">
+    <div class="grid-2">
+      <div class="card">
+        <h3>Normalization Constants C(k) <span class="badge">log scale</span></h3>
+        <div class="chart-container"><canvas id="chartCk"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Weighted Norms <span class="badge">log scale</span></h3>
+        <div class="chart-container"><canvas id="chartNorms"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-sumrule" class="tab-content">
+    <div class="grid-1">
+      <div class="card">
+        <h3>Sum-Rule Convergence</h3>
+        <div class="chart-container"><canvas id="chartSumRule"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Tables -->
+  <h2 class="section-title">Numerical Data</h2>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Eigenvalues and Normalization Constants</h3>
+      <div id="eigenTableContainer"></div>
+    </div>
+    <div class="card">
+      <h3>Eigenvalue Spacings and Brown's Fit</h3>
+      <div id="brownTableContainer"></div>
+    </div>
+  </div>
+
+  <div class="grid-1" style="margin-top:1.5rem;">
+    <div class="card">
+      <h3>Sum-Rule Partial Sums</h3>
+      <div id="sumruleTableContainer"></div>
+    </div>
+  </div>
+
+  <!-- Key Findings -->
+  <h2 class="section-title" style="margin-top:2rem;">Key Findings</h2>
+  <div class="card" style="margin-bottom:2rem;">
+    <ul class="findings-list">
+      <li>
+        <strong>Brown's asymptotic formula:</strong>
+        A(k) ~ 1.9084k - 2.6642 fits with residuals below 0.06 for k >= 6.
+      </li>
+      <li>
+        <strong>Super-exponential norm growth:</strong>
+        Norms grow as approximately 10^(1.8k), from 0.333 (k=0) to 4.9e19 (k=11).
+      </li>
+      <li>
+        <strong>Rapid sum-rule convergence:</strong>
+        Partial sums stabilize to 12-digit precision by K=7, dominated by the first two terms.
+      </li>
+      <li>
+        <strong>Principal obstacle:</strong>
+        The transcendental nature of the Blasius profile f(eta) prevents standard special-function identification.
+      </li>
+      <li>
+        <strong>Promising direction:</strong>
+        The change of variable xi = f'(eta) maps the problem to [0,1), potentially connecting to the Heun class of ODEs.
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="footer">
+  Libby-Fox Eigenvalue Analysis | AI4Sciences Research | Data from arXiv:2601.16718
+</div>
+
+<script>
+// ---- DATA ----
+var eigenvalues = [0.0, 1.0, 2.2976, 3.7741, 5.3802, 7.0791, 8.8499, 10.6779, 12.5525, 14.4658, 16.4117, 18.3858];
+var norms = [3.333e-1, 1.503e1, 2.186e2, 5.979e3, 2.359e5, 1.176e7, 6.953e8, 4.756e10, 4.083e12, 6.068e14, 1.625e17, 4.943e19];
+var Ck = [1.7321, 0.2580, 0.0676, 0.01293, 0.00206, 2.917e-4, 3.793e-5, 4.585e-6, 4.949e-7, 4.060e-8, 2.481e-9, 1.422e-10];
+var alpha = 1.9084;
+var beta_val = -2.6642;
+var spacings = [1.0, 1.2976, 1.4765, 1.6061, 1.6989, 1.7708, 1.8280, 1.8746, 1.9133, 1.9459, 1.9741];
+var brownPred = eigenvalues.map(function(_, k) { return alpha * k + beta_val; });
+var residuals = eigenvalues.map(function(a, k) { return a - (alpha * k + beta_val); });
+var sumRuleM2 = [1.5000,1.5222,1.5232,1.5233,1.5233,1.5233,1.5233,1.5233,1.5233,1.5233,1.5233,1.5233];
+var sumRuleM1 = [3.0000,3.0333,3.0347,3.0347,3.0347,3.0347,3.0347,3.0347,3.0347,3.0347,3.0347,3.0347];
+var sumRuleM05 = [6.0000,6.0444,6.0460,6.0460,6.0460,6.0460,6.0460,6.0460,6.0460,6.0460,6.0460,6.0460];
+var kLabels = eigenvalues.map(function(_, i) { return i; });
+var kSpLabels = spacings.map(function(_, i) { return i; });
+
+// ---- Tab switching ----
+function switchTab(name) {
+  var tabs = document.querySelectorAll('.tab-content');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  var btns = document.querySelectorAll('.tab-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
+}
+
+// ---- Build tables safely using DOM API ----
+function buildEigenTable() {
+  var container = document.getElementById('eigenTableContainer');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  var headers = ['k', 'A(k)', '||phi(k)||^2', 'C(k)'];
+  for (var i = 0; i < headers.length; i++) {
+    var th = document.createElement('th');
+    th.textContent = headers[i];
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var k = 0; k < eigenvalues.length; k++) {
+    var tr = document.createElement('tr');
+    var td0 = document.createElement('td'); td0.textContent = k;
+    var td1 = document.createElement('td'); td1.textContent = eigenvalues[k].toFixed(4);
+    var td2 = document.createElement('td'); td2.textContent = norms[k] < 1e4 ? norms[k].toFixed(3) : norms[k].toExponential(3);
+    var td3 = document.createElement('td'); td3.textContent = Ck[k] < 0.001 ? Ck[k].toExponential(3) : Ck[k].toFixed(4);
+    tr.appendChild(td0); tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function buildBrownTable() {
+  var container = document.getElementById('brownTableContainer');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  var headers = ['k', 'Delta(k)', 'Brown Pred.', 'Residual'];
+  for (var i = 0; i < headers.length; i++) {
+    var th = document.createElement('th');
+    th.textContent = headers[i];
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var k = 0; k < eigenvalues.length; k++) {
+    var tr = document.createElement('tr');
+    var td0 = document.createElement('td'); td0.textContent = k;
+    var td1 = document.createElement('td'); td1.textContent = k < spacings.length ? spacings[k].toFixed(4) : '-';
+    var td2 = document.createElement('td'); td2.textContent = brownPred[k].toFixed(4);
+    var td3 = document.createElement('td'); td3.textContent = residuals[k].toFixed(4);
+    tr.appendChild(td0); tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function buildSumRuleTable() {
+  var container = document.getElementById('sumruleTableContainer');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  var headers = ['K', 'S(K, lam=-2)', 'S(K, lam=-1)', 'S(K, lam=-0.5)'];
+  for (var i = 0; i < headers.length; i++) {
+    var th = document.createElement('th');
+    th.textContent = headers[i];
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var k = 0; k < sumRuleM1.length; k++) {
+    var tr = document.createElement('tr');
+    var td0 = document.createElement('td'); td0.textContent = k;
+    var td1 = document.createElement('td'); td1.textContent = sumRuleM2[k].toFixed(4);
+    var td2 = document.createElement('td'); td2.textContent = sumRuleM1[k].toFixed(4);
+    var td3 = document.createElement('td'); td3.textContent = sumRuleM05[k].toFixed(4);
+    tr.appendChild(td0); tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+buildEigenTable();
+buildBrownTable();
+buildSumRuleTable();
+
+// ---- Charts ----
+var accentColor = '#2980b9';
+var primaryColor = '#1a3a5c';
+var redColor = '#e74c3c';
+var greenColor = '#27ae60';
+
+// Spectrum chart
+new Chart(document.getElementById('chartSpectrum'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      {
+        label: 'Computed Ak',
+        data: kLabels.map(function(k, i) { return {x: k, y: eigenvalues[i]}; }),
+        backgroundColor: primaryColor,
+        pointRadius: 5,
+        order: 1
+      },
+      {
+        label: 'Brown asymptotic',
+        data: kLabels.map(function(k, i) { return {x: k, y: brownPred[i]}; }),
+        type: 'line',
+        borderColor: redColor,
+        borderDash: [5, 3],
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false,
+        order: 2
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Mode index k' }},
+      y: { title: { display: true, text: 'Ak' }}
+    },
+    plugins: { legend: { position: 'top' }}
+  }
+});
+
+// Residuals chart
+new Chart(document.getElementById('chartResiduals'), {
+  type: 'bar',
+  data: {
+    labels: kLabels,
+    datasets: [{
+      label: 'Residual',
+      data: residuals,
+      backgroundColor: residuals.map(function(r) { return r >= 0 ? accentColor : '#e74c3c'; }),
+      borderWidth: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Mode index k' }},
+      y: { title: { display: true, text: 'Ak - (alpha*k + beta)' }}
+    },
+    plugins: { legend: { display: false }}
+  }
+});
+
+// Spacing chart
+new Chart(document.getElementById('chartSpacing'), {
+  type: 'line',
+  data: {
+    labels: kSpLabels,
+    datasets: [
+      {
+        label: 'Delta_k',
+        data: spacings,
+        borderColor: primaryColor,
+        backgroundColor: primaryColor,
+        pointRadius: 5,
+        borderWidth: 2,
+        fill: false
+      },
+      {
+        label: 'alpha = 1.9084',
+        data: spacings.map(function() { return alpha; }),
+        borderColor: redColor,
+        borderDash: [5, 3],
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'k' }},
+      y: { title: { display: true, text: 'Delta_k' }, min: 0.8 }
+    }
+  }
+});
+
+// Spacing ratio chart
+new Chart(document.getElementById('chartSpacingRatio'), {
+  type: 'line',
+  data: {
+    labels: kSpLabels,
+    datasets: [
+      {
+        label: 'Delta_k / alpha',
+        data: spacings.map(function(d) { return d / alpha; }),
+        borderColor: accentColor,
+        backgroundColor: accentColor,
+        pointRadius: 5,
+        borderWidth: 2,
+        fill: false
+      },
+      {
+        label: 'Unity',
+        data: spacings.map(function() { return 1.0; }),
+        borderColor: '#95a5a6',
+        borderDash: [4, 4],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'k' }},
+      y: { title: { display: true, text: 'Delta_k / alpha' }, min: 0.4 }
+    }
+  }
+});
+
+// Ck chart (log scale)
+new Chart(document.getElementById('chartCk'), {
+  type: 'line',
+  data: {
+    labels: kLabels,
+    datasets: [{
+      label: 'C_k',
+      data: Ck.map(function(c) { return Math.log10(c); }),
+      borderColor: greenColor,
+      backgroundColor: greenColor,
+      pointRadius: 5,
+      borderWidth: 2,
+      fill: false
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Mode index k' }},
+      y: { title: { display: true, text: 'log10(Ck)' }}
+    },
+    plugins: { legend: { display: false }}
+  }
+});
+
+// Norms chart (log scale)
+new Chart(document.getElementById('chartNorms'), {
+  type: 'line',
+  data: {
+    labels: kLabels,
+    datasets: [{
+      label: 'Norm squared',
+      data: norms.map(function(n) { return Math.log10(n); }),
+      borderColor: redColor,
+      backgroundColor: redColor,
+      pointRadius: 5,
+      borderWidth: 2,
+      fill: false
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Mode index k' }},
+      y: { title: { display: true, text: 'log10(||phi_k||^2)' }}
+    },
+    plugins: { legend: { display: false }}
+  }
+});
+
+// Sum rule chart
+new Chart(document.getElementById('chartSumRule'), {
+  type: 'line',
+  data: {
+    labels: kLabels,
+    datasets: [
+      {
+        label: 'lambda = -2.0',
+        data: sumRuleM2,
+        borderColor: primaryColor,
+        pointRadius: 4,
+        borderWidth: 2,
+        fill: false
+      },
+      {
+        label: 'lambda = -1.0',
+        data: sumRuleM1,
+        borderColor: accentColor,
+        pointRadius: 4,
+        borderWidth: 2,
+        fill: false
+      },
+      {
+        label: 'lambda = -0.5',
+        data: sumRuleM05,
+        borderColor: redColor,
+        pointRadius: 4,
+        borderWidth: 2,
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Truncation index K' }},
+      y: { title: { display: true, text: 'S_K(lambda)' }}
+    }
+  }
+});
+</script>
+</body>
+</html>

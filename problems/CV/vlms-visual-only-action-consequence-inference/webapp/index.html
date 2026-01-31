@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VACI: Visual Action-Consequence Inference for VLMs</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+header{text-align:center;padding:40px 20px;border-bottom:1px solid #1e293b;margin-bottom:30px}
+h1{font-size:1.8rem;color:#f1f5f9;margin-bottom:10px}
+h2{font-size:1.3rem;color:#94a3b8;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid #1e293b}
+h3{font-size:1.1rem;color:#cbd5e1;margin-bottom:12px}
+.subtitle{color:#64748b;font-size:1rem;max-width:900px;margin:0 auto}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;margin:4px}
+.badge-cv{background:#059669;color:#ecfdf5}
+.grid{display:grid;gap:24px;margin-bottom:30px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(500px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(350px,1fr))}
+.grid-4{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:#1e293b;border-radius:12px;padding:24px;border:1px solid #334155}
+.stat-card{text-align:center;padding:20px}
+.stat-value{font-size:2.2rem;font-weight:700;color:#38bdf8}
+.stat-label{font-size:0.85rem;color:#94a3b8;margin-top:4px}
+.stat-delta{font-size:0.8rem;margin-top:2px}
+.chart-container{position:relative;height:380px;width:100%}
+.chart-sm{height:300px}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600;background:#0f172a}
+td{color:#cbd5e1}
+.problem-box{background:linear-gradient(135deg,#0c4a6e,#164e63);border:1px solid #0891b2;border-radius:12px;padding:24px;margin-bottom:30px}
+.problem-box p{color:#a5f3fc}
+.method-box{background:#1e293b;border-left:4px solid #38bdf8;padding:16px 20px;margin-bottom:16px;border-radius:0 8px 8px 0}
+.method-box h4{color:#38bdf8;margin-bottom:6px}
+.method-box p{color:#94a3b8;font-size:0.9rem}
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:0.85rem;background:#334155;color:#94a3b8;border:none;transition:all 0.2s}
+.tab.active{background:#0891b2;color:#fff}
+.tab:hover{background:#475569;color:#fff}
+.good{color:#4ade80;font-weight:600}
+.bad{color:#ef4444;font-weight:600}
+@media(max-width:768px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}h1{font-size:1.4rem}.chart-container{height:300px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<div><span class="badge badge-cv">CV</span></div>
+<h1>Visual Action-Consequence Inference (VACI)</h1>
+<p class="subtitle">Can VLMs see what they did? Recovering text-feedback performance through Difference-Augmented Prompting and Chain-of-State Reasoning</p>
+</header>
+
+<div class="problem-box">
+<h3>Open Problem</h3>
+<p>All evaluated VLMs show significant performance drops when textual environment feedback is removed (Wang et al., VisGym 2026). This work demonstrates that the feedback gap is closable: Difference-Augmented Prompting (DAP) recovers 103.4% of text-feedback performance on validity accuracy by providing explicit visual difference maps as auxiliary input.</p>
+</div>
+
+<div class="grid grid-4">
+<div class="card stat-card"><div class="stat-value">103.4%</div><div class="stat-label">Feedback Gap Recovery</div><div class="stat-delta" style="color:#4ade80">DAP exceeds text feedback baseline</div></div>
+<div class="card stat-card"><div class="stat-value">0.879</div><div class="stat-label">DAP Validity Accuracy</div><div class="stat-delta" style="color:#4ade80">+0.228 vs Naive (0.651)</div></div>
+<div class="card stat-card"><div class="stat-value">73.1%</div><div class="stat-label">Probe Accuracy</div><div class="stat-delta" style="color:#94a3b8">Bottleneck is in reasoning</div></div>
+<div class="card stat-card"><div class="stat-value">800</div><div class="stat-label">VACI-Bench Transitions</div><div class="stat-delta" style="color:#94a3b8">4 envs x 200 each</div></div>
+</div>
+
+<div class="grid grid-3" style="margin-bottom:30px">
+<div class="method-box">
+<h4>Naive Baseline</h4>
+<p>Present pre/post frames directly to VLM. Recovers only 76.6% of text-feedback performance. Struggles with subtle pixel changes.</p>
+</div>
+<div class="method-box">
+<h4>Difference-Augmented Prompting (DAP)</h4>
+<p>Compute explicit pixel difference map, apply noise suppression and morphological closing. Transforms comparison task into description task. Achieves 1.000 on Maze2D and Sliding Block.</p>
+</div>
+<div class="method-box">
+<h4>Visual Chain-of-State (VCoS)</h4>
+<p>Decompose into 4 steps: State Description, Change Detection, Action Matching, Consequence Derivation. Matches DAP validity (0.879) with greater interpretability.</p>
+</div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Method Comparison: All Metrics</h2>
+<div class="chart-container"><canvas id="mainChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Per-Environment Validity Accuracy</h2>
+<div class="chart-container"><canvas id="envChart"></canvas></div>
+</div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Feedback Gap Recovery Ratio</h2>
+<div class="chart-container"><canvas id="gapChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Per-Outcome Accuracy</h2>
+<div class="chart-container"><canvas id="outcomeChart"></canvas></div>
+</div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Difficulty Analysis</h2>
+<div class="tabs" id="diffTabs">
+<button class="tab active" onclick="switchDiff('validity')">Validity Accuracy</button>
+<button class="tab" onclick="switchDiff('outcome')">Outcome Accuracy</button>
+</div>
+<div class="chart-container"><canvas id="diffChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Contrastive Probe Training</h2>
+<div class="chart-container"><canvas id="probeChart"></canvas></div>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Main Results Table</h2>
+<table>
+<thead><tr><th>Method</th><th>Validity Acc.</th><th>Outcome Acc.</th><th>Change Detection F1</th><th>Feedback Gap Ratio</th></tr></thead>
+<tbody>
+<tr><td>Naive Baseline</td><td>0.651</td><td>0.579</td><td>0.710</td><td>0.766</td></tr>
+<tr><td style="color:#38bdf8;font-weight:700">DAP</td><td class="good">0.879</td><td class="good">0.879</td><td class="good">0.918</td><td class="good">1.034</td></tr>
+<tr><td style="color:#a78bfa;font-weight:700">VCoS+DAP</td><td class="good">0.879</td><td>0.828</td><td class="good">0.918</td><td class="good">1.034</td></tr>
+<tr style="color:#64748b;font-style:italic"><td>Text Feedback</td><td>0.850</td><td>--</td><td>--</td><td>1.000</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Per-Environment Breakdown</h2>
+<table>
+<thead><tr><th>Environment</th><th>Total</th><th>Success</th><th>Blocked</th><th>No Effect</th><th>Naive</th><th>DAP</th><th>VCoS+DAP</th></tr></thead>
+<tbody>
+<tr><td>Maze 2D</td><td>200</td><td>107</td><td>93</td><td>0</td><td>0.580</td><td class="good">1.000</td><td class="good">1.000</td></tr>
+<tr><td>Sliding Block</td><td>200</td><td>142</td><td>58</td><td>0</td><td>0.925</td><td class="good">1.000</td><td class="good">1.000</td></tr>
+<tr><td>Matchstick</td><td>200</td><td>120</td><td>0</td><td>80</td><td>0.470</td><td>0.600</td><td>0.600</td></tr>
+<tr><td>Maze 3D</td><td>200</td><td>191</td><td>9</td><td>0</td><td>0.630</td><td>0.915</td><td>0.915</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Benchmark Statistics</h2>
+<div class="chart-container chart-sm"><canvas id="benchChart"></canvas></div>
+</div>
+</div>
+
+<script>
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+
+const methods = ['Naive','DAP','VCoS+DAP'];
+const methodColors = ['#ef4444','#38bdf8','#a78bfa'];
+
+// Main Comparison
+new Chart(document.getElementById('mainChart'),{
+  type:'bar',
+  data:{labels:methods,datasets:[
+    {label:'Validity Acc.',data:[0.651,0.879,0.879],backgroundColor:'#38bdf8cc'},
+    {label:'Outcome Acc.',data:[0.579,0.879,0.828],backgroundColor:'#a78bfacc'},
+    {label:'Change Det. F1',data:[0.710,0.918,0.918],backgroundColor:'#4ade80cc'},
+    {label:'Feedback Gap Ratio',data:[0.766,1.034,1.034],backgroundColor:'#fbbf24cc'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},annotation:{}},scales:{y:{beginAtZero:true,max:1.2,title:{display:true,text:'Score'}}}}
+});
+
+// Per-Environment
+const envLabels = ['Maze 2D','Sliding Block','Matchstick','Maze 3D'];
+new Chart(document.getElementById('envChart'),{
+  type:'bar',
+  data:{labels:envLabels,datasets:[
+    {label:'Naive',data:[0.580,0.925,0.470,0.630],backgroundColor:'#ef4444cc'},
+    {label:'DAP',data:[1.000,1.000,0.600,0.915],backgroundColor:'#38bdf8cc'},
+    {label:'VCoS+DAP',data:[1.000,1.000,0.600,0.915],backgroundColor:'#a78bfacc'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,max:1.1,title:{display:true,text:'Validity Accuracy'}}}}
+});
+
+// Feedback Gap
+new Chart(document.getElementById('gapChart'),{
+  type:'bar',
+  data:{labels:methods,datasets:[{
+    label:'Feedback Gap Ratio',data:[0.766,1.034,1.034],
+    backgroundColor:['#ef4444cc','#38bdf8cc','#a78bfacc'],
+    borderColor:['#ef4444','#38bdf8','#a78bfa'],borderWidth:2
+  }]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+    annotation:{annotations:{line1:{type:'line',yMin:1.0,yMax:1.0,borderColor:'#fbbf24',borderDash:[6,4],borderWidth:2,label:{display:true,content:'Text Feedback Baseline',color:'#fbbf24'}}}}},
+    scales:{y:{min:0.6,max:1.15,title:{display:true,text:'Feedback Gap Ratio (1.0 = text feedback)'}}}}
+});
+
+// Per-Outcome
+new Chart(document.getElementById('outcomeChart'),{
+  type:'bar',
+  data:{labels:['Success\n(n=560)','Blocked\n(n=160)','No Effect\n(n=80)'],datasets:[
+    {label:'Naive',data:[0.609,0.763,0.000],backgroundColor:'#ef4444cc'},
+    {label:'DAP',data:[0.970,1.000,0.000],backgroundColor:'#38bdf8cc'},
+    {label:'VCoS+DAP',data:[0.896,1.000,0.000],backgroundColor:'#a78bfacc'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,max:1.1,title:{display:true,text:'Accuracy'}}}}
+});
+
+// Difficulty Chart
+let diffChart;
+function buildDiffChart(metric) {
+  if(diffChart) diffChart.destroy();
+  const data = {
+    validity:{medium:[0.623,0.848,0.848],hard:[0.763,1.000,1.000]},
+    outcome:{medium:[0.533,0.848,0.784],hard:[0.763,1.000,1.000]}
+  };
+  diffChart = new Chart(document.getElementById('diffChart'),{
+    type:'bar',
+    data:{labels:['Medium','Hard'],datasets:methods.map((m,i)=>({
+      label:m,data:data[metric].map(d=>d[i]),backgroundColor:methodColors[i]+'cc',borderColor:methodColors[i],borderWidth:1
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,max:1.1,title:{display:true,text:metric==='validity'?'Validity Accuracy':'Outcome Accuracy'}}}}
+  });
+}
+buildDiffChart('validity');
+function switchDiff(m){document.querySelectorAll('#diffTabs .tab').forEach(t=>t.classList.remove('active'));event.target.classList.add('active');buildDiffChart(m);}
+
+// Probe Training
+const trainLoss = [1.332,1.202,1.136,0.999,0.958,0.922,0.911,0.924,0.919,0.861,0.851,0.841,0.828,0.855,0.847,0.801,0.799,0.787,0.783,0.782,0.785,0.778,0.775,0.778,0.762,0.758,0.758,0.762,0.737,0.738,0.735,0.718,0.719,0.724,0.731,0.720,0.705,0.695,0.699,0.699,0.701,0.701,0.694,0.679,0.682,0.665,0.680,0.676,0.675,0.672];
+const valLoss = [1.041,0.958,0.854,0.836,0.797,0.806,0.824,0.807,0.774,0.743,0.730,0.745,0.767,0.760,0.732,0.710,0.705,0.708,0.711,0.709,0.706,0.704,0.705,0.703,0.695,0.681,0.668,0.661,0.657,0.653,0.654,0.656,0.659,0.657,0.651,0.642,0.633,0.626,0.622,0.619,0.616,0.617,0.617,0.616,0.611,0.605,0.600,0.596,0.594,0.590];
+const epochs = Array.from({length:50},(_, i)=>i+1);
+
+new Chart(document.getElementById('probeChart'),{
+  type:'line',
+  data:{labels:epochs,datasets:[
+    {label:'Train Loss',data:trainLoss,borderColor:'#38bdf8',backgroundColor:'#38bdf833',borderWidth:2,pointRadius:0,fill:true},
+    {label:'Val Loss',data:valLoss,borderColor:'#4ade80',backgroundColor:'#4ade8033',borderWidth:2,pointRadius:0,fill:true}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:'Probe val accuracy: 73.1%'}},
+    scales:{x:{title:{display:true,text:'Epoch'}},y:{title:{display:true,text:'Loss'}}}}
+});
+
+// Benchmark Stats
+const envStats = {maze2d:{success:107,blocked:93,no_effect:0},sliding_block:{success:142,blocked:58,no_effect:0},matchstick:{success:120,blocked:0,no_effect:80},maze3d:{success:191,blocked:9,no_effect:0}};
+new Chart(document.getElementById('benchChart'),{
+  type:'bar',
+  data:{labels:['Maze 2D','Sliding Block','Matchstick','Maze 3D'],datasets:[
+    {label:'Success',data:[107,142,120,191],backgroundColor:'#4ade80cc'},
+    {label:'Blocked',data:[93,58,0,9],backgroundColor:'#fbbf24cc'},
+    {label:'No Effect',data:[0,0,80,0],backgroundColor:'#ef4444cc'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Number of Transitions'}}}}
+});
+</script>
+</body>
+</html>

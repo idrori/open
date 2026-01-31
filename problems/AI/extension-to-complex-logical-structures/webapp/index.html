@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extension to Complex Logical Structures</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f7fa; color: #333; }
+  .header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.85; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+  .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.2rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .chart-container { position: relative; height: 350px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: var(--primary); color: white; font-weight: 600; }
+  tr:hover { background: #f0f4f8; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+  .badge-yes { background: #d4edda; color: #155724; }
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 768px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  .summary-item { text-align: center; padding: 1rem; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; color: white; }
+  .summary-item .value { font-size: 1.8rem; font-weight: 700; }
+  .summary-item .label { font-size: 0.75rem; opacity: 0.85; margin-top: 0.3rem; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Extension of Structured Decomposition Benefits to Complex Logical Structures</h1>
+  <p>Investigating whether LLM + OWL 2 ABox + SWRL verification benefits extend beyond conjunctive predicates to disjunctions, negation, and nested quantifiers.</p>
+</div>
+<div class="container">
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Accuracy Improvement by Logic Type</h2>
+      <div class="chart-container"><canvas id="improvementChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Effect Size (Cohen's d)</h2>
+      <div class="chart-container"><canvas id="effectChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Baseline vs Framework Accuracy</h2>
+    <div class="chart-container"><canvas id="comparisonChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Detailed Results</h2>
+    <table id="resultsTable">
+      <thead>
+        <tr><th>Logic Type</th><th>Predicates</th><th>Baseline</th><th>Framework</th><th>Improvement</th><th>Cohen's d</th><th>p-value</th><th>Significant</th></tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+const data = {
+  logicTypes: ["conjunction","disjunction","negation","nested_quantifier","mixed"],
+  predicates: [2,4,6,8,10],
+  colors: { conjunction:"#1a3a5c", disjunction:"#2980b9", negation:"#e74c3c", nested_quantifier:"#f39c12", mixed:"#8e44ad" },
+  experiments: [
+    {lt:"conjunction",n:2,bl:0.7985,fw:0.9196,imp:0.1211,d:3.13,p:3.88e-13},
+    {lt:"conjunction",n:4,bl:0.7632,fw:0.8792,imp:0.1161,d:3.06,p:3.87e-13},
+    {lt:"conjunction",n:6,bl:0.6966,fw:0.7988,imp:0.1022,d:2.42,p:4.02e-9},
+    {lt:"conjunction",n:8,bl:0.6003,fw:0.6991,imp:0.0988,d:2.82,p:6.28e-14},
+    {lt:"conjunction",n:10,bl:0.4796,fw:0.5546,imp:0.0749,d:1.72,p:7.15e-8},
+    {lt:"disjunction",n:2,bl:0.8058,fw:0.9072,imp:0.1015,d:2.40,p:9.99e-10},
+    {lt:"disjunction",n:4,bl:0.7562,fw:0.8829,imp:0.1267,d:3.16,p:6.13e-14},
+    {lt:"disjunction",n:6,bl:0.6823,fw:0.7869,imp:0.1046,d:2.31,p:2.36e-10},
+    {lt:"disjunction",n:8,bl:0.5794,fw:0.6909,imp:0.1115,d:2.65,p:3.34e-13},
+    {lt:"disjunction",n:10,bl:0.4761,fw:0.5714,imp:0.0954,d:2.35,p:2.68e-8},
+    {lt:"negation",n:2,bl:0.8107,fw:0.9164,imp:0.1058,d:2.62,p:4.73e-10},
+    {lt:"negation",n:4,bl:0.7650,fw:0.8759,imp:0.1109,d:2.59,p:2.48e-10},
+    {lt:"negation",n:6,bl:0.6872,fw:0.8040,imp:0.1169,d:2.91,p:5.88e-12},
+    {lt:"negation",n:8,bl:0.5724,fw:0.6765,imp:0.1041,d:2.79,p:6.53e-11},
+    {lt:"negation",n:10,bl:0.4676,fw:0.5597,imp:0.0922,d:2.31,p:6.28e-13},
+    {lt:"nested_quantifier",n:2,bl:0.7918,fw:0.9307,imp:0.1389,d:3.39,p:3.78e-14},
+    {lt:"nested_quantifier",n:4,bl:0.7627,fw:0.8793,imp:0.1166,d:2.57,p:1.07e-9},
+    {lt:"nested_quantifier",n:6,bl:0.6719,fw:0.7723,imp:0.1004,d:2.36,p:4.19e-11},
+    {lt:"nested_quantifier",n:8,bl:0.5858,fw:0.6767,imp:0.0909,d:2.25,p:1.38e-9},
+    {lt:"nested_quantifier",n:10,bl:0.4744,fw:0.5597,imp:0.0853,d:2.21,p:2.77e-10},
+    {lt:"mixed",n:2,bl:0.7892,fw:0.9166,imp:0.1274,d:3.46,p:1.09e-13},
+    {lt:"mixed",n:4,bl:0.7491,fw:0.8661,imp:0.1170,d:2.50,p:1.00e-9},
+    {lt:"mixed",n:6,bl:0.6717,fw:0.7678,imp:0.0960,d:2.26,p:5.42e-9},
+    {lt:"mixed",n:8,bl:0.5627,fw:0.6567,imp:0.0940,d:2.31,p:9.07e-10},
+    {lt:"mixed",n:10,bl:0.4713,fw:0.5573,imp:0.0860,d:2.00,p:1.58e-8}
+  ]
+};
+
+// Summary cards
+const summaryGrid = document.getElementById('summaryGrid');
+data.logicTypes.forEach(function(lt) {
+  var exps = data.experiments.filter(function(e) { return e.lt === lt; });
+  var avgImp = (exps.reduce(function(s,e) { return s + e.imp; }, 0) / exps.length * 100).toFixed(2);
+  var div = document.createElement('div');
+  div.className = 'summary-item';
+  var valDiv = document.createElement('div');
+  valDiv.className = 'value';
+  valDiv.textContent = avgImp + '%';
+  var labDiv = document.createElement('div');
+  labDiv.className = 'label';
+  labDiv.textContent = lt.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+  div.appendChild(valDiv);
+  div.appendChild(labDiv);
+  summaryGrid.appendChild(div);
+});
+
+// Improvement chart
+var improvementCtx = document.getElementById('improvementChart').getContext('2d');
+var datasets = data.logicTypes.map(function(lt) {
+  return {
+    label: lt.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();}),
+    data: data.experiments.filter(function(e){return e.lt===lt;}).map(function(e){return e.imp*100;}),
+    borderColor: data.colors[lt], backgroundColor: data.colors[lt]+'33',
+    borderWidth: 2, pointRadius: 5, tension: 0.3
+  };
+});
+new Chart(improvementCtx, {
+  type: 'line',
+  data: { labels: data.predicates, datasets: datasets },
+  options: { responsive: true, maintainAspectRatio: false,
+    scales: { x: { title: { display: true, text: 'Number of Predicates' }}, y: { title: { display: true, text: 'Improvement (%)' }, beginAtZero: true }},
+    plugins: { legend: { position: 'bottom' }}
+  }
+});
+
+// Effect size chart
+var effectCtx = document.getElementById('effectChart').getContext('2d');
+new Chart(effectCtx, {
+  type: 'bar',
+  data: {
+    labels: data.predicates,
+    datasets: data.logicTypes.map(function(lt) {
+      return {
+        label: lt.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();}),
+        data: data.experiments.filter(function(e){return e.lt===lt;}).map(function(e){return e.d;}),
+        backgroundColor: data.colors[lt]+'cc'
+      };
+    })
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    scales: { x: { title: { display: true, text: 'Number of Predicates' }}, y: { title: { display: true, text: "Cohen's d" }, beginAtZero: true }},
+    plugins: { legend: { position: 'bottom' }}
+  }
+});
+
+// Comparison chart
+var compCtx = document.getElementById('comparisonChart').getContext('2d');
+new Chart(compCtx, {
+  type: 'bar',
+  data: {
+    labels: data.experiments.map(function(e){ return e.lt.substring(0,4)+'-'+e.n; }),
+    datasets: [
+      { label: 'Baseline', data: data.experiments.map(function(e){return e.bl*100;}), backgroundColor: '#95a5a6' },
+      { label: 'Framework', data: data.experiments.map(function(e){return e.fw*100;}), backgroundColor: '#2980b9' }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    scales: { x: { title: { display: true, text: 'Condition' }}, y: { title: { display: true, text: 'Accuracy (%)' }, min: 40, max: 100 }},
+    plugins: { legend: { position: 'bottom' }}
+  }
+});
+
+// Results table
+var tbody = document.getElementById('resultsBody');
+data.experiments.forEach(function(e) {
+  var tr = document.createElement('tr');
+  var cells = [
+    e.lt.replace(/_/g,' '),
+    e.n.toString(),
+    (e.bl*100).toFixed(2) + '%',
+    (e.fw*100).toFixed(2) + '%',
+    (e.imp*100).toFixed(2) + '%',
+    e.d.toFixed(2),
+    e.p.toExponential(2),
+    'Yes'
+  ];
+  cells.forEach(function(text, i) {
+    var td = document.createElement('td');
+    if (i === 7) {
+      var span = document.createElement('span');
+      span.className = 'badge badge-yes';
+      span.textContent = text;
+      td.appendChild(span);
+    } else {
+      td.textContent = text;
+    }
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

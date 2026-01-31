@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flexibility of Regularization Hyperparameters in 3DGS</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --card: #ffffff;
+    --border: #e0e0e0;
+    --text: #1a1a2e;
+    --text2: #444;
+    --accent: #2563eb;
+    --accent2: #dc2626;
+    --accent3: #059669;
+    --code-bg: #f1f5f9;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    color: white;
+    padding: 2.5rem 1rem 2rem;
+    text-align: center;
+  }
+  header h1 {
+    font-size: 1.65rem;
+    max-width: 800px;
+    margin: 0 auto 0.5rem;
+    line-height: 1.35;
+  }
+  header .subtitle {
+    font-size: 0.95rem;
+    opacity: 0.85;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .tag {
+    display: inline-block;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 0.8rem;
+    margin-top: 0.8rem;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+  }
+  section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.7rem;
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.3rem;
+  }
+  h3 { font-size: 1.05rem; margin: 1rem 0 0.4rem; }
+  p { margin-bottom: 0.7rem; }
+  .key-finding {
+    background: #eff6ff;
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 0.8rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .key-finding strong { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  th { background: #f1f5f9; font-weight: 600; }
+  .sim-container {
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 0.8rem 0;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: end;
+  }
+  .control-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    color: var(--text2);
+  }
+  .control-group input[type=range] { width: 180px; }
+  .control-group .val { font-size: 0.85rem; color: var(--accent); font-weight: 600; }
+  canvas {
+    display: block;
+    width: 100%;
+    max-width: 800px;
+    height: 340px;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: white;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.45rem 1.2rem;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button:hover { opacity: 0.9; }
+  .eq {
+    text-align: center;
+    padding: 0.5rem;
+    font-style: italic;
+    background: var(--code-bg);
+    border-radius: 4px;
+    margin: 0.6rem 0;
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+  }
+  .footer {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #888;
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.25rem; }
+    .controls { flex-direction: column; }
+    canvas { height: 260px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>On the Flexibility of Regularization Hyperparameters in 3D Gaussian Splatting Under Adaptive Optimizers</h1>
+  <p class="subtitle">Interactive companion to the KDD 2026 research paper</p>
+  <span class="tag">cs.CV &mdash; Computer Vision</span>
+  <span class="tag">3D Gaussian Splatting</span>
+  <span class="tag">Adam Optimizer</span>
+</header>
+
+<main>
+
+<!-- ─── Abstract ─── -->
+<section>
+<h2>Abstract</h2>
+<p>
+3DGS pipelines use scalar hyperparameters (&lambda;) to weight regularization losses.
+Practitioners assume &lambda; provides proportional control. We show that under the Adam
+optimizer this assumption fails: the per-parameter adaptive denominator absorbs gradient
+magnitude changes, creating sub-linear ERR response, cross-coupling between terms, and
+heterogeneous effective strength across parameter types.
+</p>
+<div class="key-finding">
+<strong>Key finding:</strong> A 500&times; increase in &lambda; yields only ~142&times; increase
+in effective regularization strength under Adam, vs. the full 500&times; under SGD.
+An adaptive &lambda;-scheduler reduces ERR variance by 43.8%.
+</div>
+</section>
+
+<!-- ─── Background ─── -->
+<section>
+<h2>1. Background</h2>
+<p>
+The total 3DGS training loss is:
+</p>
+<div class="eq">
+L = L<sub>recon</sub> + &Sigma;<sub>k</sub> &lambda;<sub>k</sub> L<sub>reg</sub><sup>(k)</sup>
+</div>
+<p>
+Under SGD the parameter update is linear in &lambda;, so doubling &lambda; doubles the
+regularization influence.  Under Adam the update is:
+</p>
+<div class="eq">
+&Delta;&theta; = &minus;&eta; &middot; m&#x302; / (&radic;v&#x302; + &epsilon;)
+</div>
+<p>
+The second-moment estimate v&#x302; absorbs the <em>total</em> gradient magnitude,
+coupling all loss terms and distorting the &lambda;-to-strength mapping.
+</p>
+</section>
+
+<!-- ─── Interactive Simulation 1 ─── -->
+<section>
+<h2>2. Interactive: ERR vs. Lambda (SGD vs. Adam)</h2>
+<p>Adjust the gradient magnitude ratio and observe how ERR responds to &lambda; under each optimizer.</p>
+<div class="sim-container">
+  <div class="controls">
+    <div class="control-group">
+      <label>&sigma;<sub>recon</sub></label>
+      <input type="range" id="sigR" min="0.2" max="3" step="0.1" value="1.0">
+      <span class="val" id="sigR_v">1.0</span>
+    </div>
+    <div class="control-group">
+      <label>&sigma;<sub>reg</sub></label>
+      <input type="range" id="sigK" min="0.05" max="2" step="0.05" value="0.5">
+      <span class="val" id="sigK_v">0.5</span>
+    </div>
+    <div class="control-group">
+      <label>Adam &beta;<sub>2</sub></label>
+      <input type="range" id="beta2" min="0.9" max="0.9999" step="0.001" value="0.999">
+      <span class="val" id="beta2_v">0.999</span>
+    </div>
+    <div class="control-group">
+      <button onclick="runSim1()">Run Simulation</button>
+    </div>
+  </div>
+  <canvas id="canvas1"></canvas>
+</div>
+</section>
+
+<!-- ─── Interactive Simulation 2: Adaptive scheduling ─── -->
+<section>
+<h2>3. Interactive: Adaptive Lambda Scheduling</h2>
+<p>Compare fixed &lambda; vs. the adaptive controller that targets a specified ERR value.</p>
+<div class="sim-container">
+  <div class="controls">
+    <div class="control-group">
+      <label>Initial &lambda;</label>
+      <input type="range" id="initLam" min="-3" max="1" step="0.1" value="-1">
+      <span class="val" id="initLam_v">0.100</span>
+    </div>
+    <div class="control-group">
+      <label>Target ERR</label>
+      <input type="range" id="targetERR" min="0.05" max="0.5" step="0.01" value="0.20">
+      <span class="val" id="targetERR_v">0.20</span>
+    </div>
+    <div class="control-group">
+      <label>Adaptation rate &eta;</label>
+      <input type="range" id="etaLam" min="0.01" max="0.3" step="0.01" value="0.12">
+      <span class="val" id="etaLam_v">0.12</span>
+    </div>
+    <div class="control-group">
+      <button onclick="runSim2()">Run Simulation</button>
+    </div>
+  </div>
+  <canvas id="canvas2"></canvas>
+</div>
+</section>
+
+<!-- ─── Results Table ─── -->
+<section>
+<h2>4. Summary of Results</h2>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Log-log slope (Adam ERR vs. &lambda;)</td><td>0.853</td></tr>
+<tr><td>Log-log slope (SGD reference)</td><td>0.852</td></tr>
+<tr><td>500&times; &lambda; &rarr; ERR ratio</td><td>142&times;</td></tr>
+<tr><td>Cross-coupling ratio (off/on-diag)</td><td>0.034</td></tr>
+<tr><td>ERR heterogeneity (max/min across types)</td><td>14.2&times;</td></tr>
+<tr><td>Fixed &lambda; ERR mean &plusmn; std</td><td>0.166 &plusmn; 0.038</td></tr>
+<tr><td>Adaptive &lambda; ERR mean &plusmn; std</td><td>0.224 &plusmn; 0.021</td></tr>
+<tr><td>Adaptive variance reduction</td><td>43.8%</td></tr>
+</table>
+</section>
+
+<!-- ─── Three Mechanisms ─── -->
+<section>
+<h2>5. Three Distortion Mechanisms</h2>
+
+<h3>Mechanism 1: Denominator Absorption</h3>
+<p>Increasing &lambda; inflates the regularization gradient, which inflates the second-moment
+estimate v&#x302;, which inflates the Adam denominator, partially canceling the intended
+effect. This creates the sub-linear ERR-vs-&lambda; response.</p>
+
+<h3>Mechanism 2: Shared Second Moments</h3>
+<p>All gradient components contribute to a single v&#x302; estimate. Changing one &lambda;
+perturbs the second moments for <em>all</em> gradient components, coupling regularization
+terms. Cross-coupling ratio measured at 0.034.</p>
+
+<h3>Mechanism 3: Gradient Magnitude Heterogeneity</h3>
+<p>Different 3DGS parameter types (position, scale, opacity, color) have different gradient
+magnitude profiles. A single &lambda; produces up to 14.2&times; different ERR values across
+types. Per-parameter-type &lambda; or decoupled optimizers are needed.</p>
+</section>
+
+<!-- ─── Solutions ─── -->
+<section>
+<h2>6. Proposed Solutions</h2>
+<div class="key-finding">
+<strong>Adaptive &lambda;-scheduling:</strong> Adjusts &lambda; online via a negative-feedback
+controller: log(&lambda;<sub>t+1</sub>) = log(&lambda;<sub>t</sub>) &minus; &eta; &middot;
+(ERR<sub>t</sub> &minus; ERR*). Reduces ERR variance by 43.8%.
+</div>
+<p><strong>Decoupled optimization</strong> (Ding et al., 2026): Separates reconstruction and
+regularization into independent optimizer channels, eliminating the second-moment coupling
+entirely. Restores linear &lambda; control.</p>
+<p><strong>Decoupled weight decay</strong> (AdamW): Applies regularization as a weight-decay
+step outside the Adam update, removing it from the gradient computation entirely.</p>
+</section>
+
+<!-- ─── References ─── -->
+<section>
+<h2>References</h2>
+<p style="font-size:0.88rem; line-height:1.5;">
+[1] Kerbl et al. "3D Gaussian Splatting for Real-Time Radiance Field Rendering." ACM TOG 42(4), 2023.<br>
+[2] Ding et al. "A Step to Decouple Optimization in 3DGS." arXiv:2601.16736, 2026.<br>
+[3] Loshchilov &amp; Hutter. "Decoupled Weight Decay Regularization." ICLR, 2019.<br>
+[4] Kingma &amp; Ba. "Adam: A Method for Stochastic Optimization." ICLR, 2015.<br>
+[5] Pezeshki et al. "Gradient Starvation." NeurIPS, 2021.<br>
+[6] Chen et al. "GradNorm: Gradient Normalization for Adaptive Loss Balancing." ICML, 2018.<br>
+[7] Kendall et al. "Multi-task Learning Using Uncertainty to Weigh Losses." CVPR, 2018.<br>
+[8] Huang et al. "2D Gaussian Splatting for Geometrically Accurate Radiance Fields." SIGGRAPH, 2024.<br>
+</p>
+</section>
+
+</main>
+
+<div class="footer">
+  Research companion &mdash; Flexibility of Regularization Hyperparameters in 3DGS &mdash; KDD 2026
+</div>
+
+<script>
+// ─── Utility ──────────────────────────────────────────────
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
+function randn(rng) {
+  // Box-Muller
+  let u1 = rng(), u2 = rng();
+  return Math.sqrt(-2*Math.log(u1+1e-12)) * Math.cos(2*Math.PI*u2);
+}
+
+function makeRng(seed) {
+  // simple xorshift for reproducibility
+  let s = seed | 0 || 1;
+  return function() {
+    s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+    return (s >>> 0) / 4294967296;
+  };
+}
+
+// ─── Canvas drawing helpers ──────────────────────────────
+function setupCanvas(id) {
+  const c = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.getBoundingClientRect();
+  c.width = rect.width * dpr;
+  c.height = rect.height * dpr;
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function drawAxes(ctx, ox, oy, w, h, xLabel, yLabel) {
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(ox, oy - h);
+  ctx.lineTo(ox, oy);
+  ctx.lineTo(ox + w, oy);
+  ctx.stroke();
+  ctx.fillStyle = '#444';
+  ctx.font = '11px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText(xLabel, ox + w/2, oy + 32);
+  ctx.save();
+  ctx.translate(ox - 40, oy - h/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+}
+
+function drawLine(ctx, pts, ox, oy, w, h, xRange, yRange, color, lw) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw || 2;
+  ctx.beginPath();
+  let first = true;
+  for (const [x, y] of pts) {
+    const px = ox + ((x - xRange[0]) / (xRange[1] - xRange[0])) * w;
+    const py = oy - ((y - yRange[0]) / (yRange[1] - yRange[0])) * h;
+    if (first) { ctx.moveTo(px, py); first = false; }
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+}
+
+function drawTicks(ctx, ox, oy, w, h, xRange, yRange, logX) {
+  ctx.fillStyle = '#666';
+  ctx.font = '9px Georgia';
+  ctx.textAlign = 'center';
+  // X ticks
+  const nxt = 5;
+  for (let i = 0; i <= nxt; i++) {
+    let xv;
+    if (logX) {
+      xv = xRange[0] + i * (xRange[1]-xRange[0]) / nxt;
+      const px = ox + (i/nxt) * w;
+      ctx.fillText(Math.pow(10, xv).toExponential(0), px, oy + 16);
+    } else {
+      xv = xRange[0] + i*(xRange[1]-xRange[0])/nxt;
+      const px = ox + (i/nxt)*w;
+      ctx.fillText(xv.toFixed(0), px, oy+16);
+    }
+  }
+  // Y ticks
+  ctx.textAlign = 'right';
+  const nyt = 5;
+  for (let i = 0; i <= nyt; i++) {
+    const yv = yRange[0] + i*(yRange[1]-yRange[0])/nyt;
+    const py = oy - (i/nyt)*h;
+    ctx.fillText(yv.toFixed(2), ox - 6, py + 3);
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(ox, py); ctx.lineTo(ox+w, py); ctx.stroke();
+  }
+}
+
+// ─── Slider updates ──────────────────────────────────────
+for (const id of ['sigR','sigK','beta2','initLam','targetERR','etaLam']) {
+  const el = document.getElementById(id);
+  const vEl = document.getElementById(id + '_v');
+  el.addEventListener('input', () => {
+    let v = parseFloat(el.value);
+    if (id === 'initLam') v = Math.pow(10, v);
+    vEl.textContent = v < 0.01 ? v.toExponential(1) : v.toFixed(id==='beta2' ? 3 : (id==='initLam' ? 3 : 2));
+  });
+}
+
+// ─── Simulation 1: ERR vs Lambda ─────────────────────────
+function runSim1() {
+  const sigR = parseFloat(document.getElementById('sigR').value);
+  const sigK = parseFloat(document.getElementById('sigK').value);
+  const b2   = parseFloat(document.getElementById('beta2').value);
+  const b1 = 0.9, eps = 1e-8, nSteps = 300;
+  const lambdas = [];
+  for (let e = -3; e <= 1.5; e += 0.15) lambdas.push(Math.pow(10, e));
+
+  const errSgd = [], errAdam = [];
+  for (const lam of lambdas) {
+    // SGD
+    errSgd.push([Math.log10(lam), lam*sigK / (sigR + lam*sigK)]);
+
+    // Adam scalar
+    const rng = makeRng(42);
+    let m = 0, v = 0, m_reg = 0, m_rec = 0;
+    let acc = 0, cnt = 0;
+    for (let t = 1; t <= nSteps; t++) {
+      const gr = sigR * (1 + 0.3*randn(rng));
+      const gk = sigK * (1 + 0.3*randn(rng));
+      const g = gr + lam*gk;
+      m = b1*m + (1-b1)*g;
+      v = b2*v + (1-b2)*g*g;
+      m_reg = b1*m_reg + (1-b1)*(lam*gk);
+      m_rec = b1*m_rec + (1-b1)*gr;
+      const mhr = m_reg / (1-Math.pow(b1,t));
+      const mhc = m_rec / (1-Math.pow(b1,t));
+      const frac = Math.abs(mhr) / (Math.abs(mhr) + Math.abs(mhc) + 1e-15);
+      if (t > nSteps/4) { acc += frac; cnt++; }
+    }
+    errAdam.push([Math.log10(lam), acc/cnt]);
+  }
+
+  // Draw
+  const {ctx, w: cw, h: ch} = setupCanvas('canvas1');
+  ctx.clearRect(0, 0, cw, ch);
+  const ox = 60, oy = ch - 45, pw = cw - 90, ph = ch - 80;
+
+  const xR = [-3, 1.5], yR = [0, 1.05];
+  drawAxes(ctx, ox, oy, pw, ph, 'log10(lambda)', 'ERR');
+  drawTicks(ctx, ox, oy, pw, ph, xR, yR, true);
+  drawLine(ctx, errSgd, ox, oy, pw, ph, xR, yR, '#2563eb', 2.5);
+  drawLine(ctx, errAdam, ox, oy, pw, ph, xR, yR, '#dc2626', 2.5);
+
+  // legend
+  ctx.font = '11px Georgia';
+  const lx = ox + pw - 140, ly = oy - ph + 20;
+  ctx.fillStyle = '#2563eb'; ctx.fillRect(lx, ly, 20, 3);
+  ctx.fillStyle = '#333'; ctx.textAlign = 'left';
+  ctx.fillText('SGD (linear)', lx+25, ly+5);
+  ctx.fillStyle = '#dc2626'; ctx.fillRect(lx, ly+18, 20, 3);
+  ctx.fillStyle = '#333'; ctx.fillText('Adam (saturating)', lx+25, ly+23);
+}
+
+// ─── Simulation 2: Adaptive scheduling ───────────────────
+function runSim2() {
+  const initLam   = Math.pow(10, parseFloat(document.getElementById('initLam').value));
+  const targetERR = parseFloat(document.getElementById('targetERR').value);
+  const etaLam    = parseFloat(document.getElementById('etaLam').value);
+  const b1 = 0.9, nSteps = 500, nParams = 30;
+
+  function trial(adaptive) {
+    const rng = makeRng(42);
+    const m = new Float64Array(nParams);
+    const mr = new Float64Array(nParams);
+    const mc = new Float64Array(nParams);
+    let logLam = Math.log(initLam);
+    const errs = [], lams = [];
+    let rScale = 1.0;
+    for (let t = 1; t <= nSteps; t++) {
+      const lam = clamp(Math.exp(logLam), 1e-6, 20);
+      rScale = Math.max(0.1, rScale * 0.997);
+      for (let j = 0; j < nParams; j++) {
+        const gr = randn(rng) * rScale;
+        const gk = randn(rng) * 0.5;
+        const g = gr + lam*gk;
+        m[j]  = b1*m[j]  + (1-b1)*g;
+        mr[j] = b1*mr[j] + (1-b1)*(lam*gk);
+        mc[j] = b1*mc[j] + (1-b1)*gr;
+      }
+      let nReg = 0, nRec = 0;
+      for (let j = 0; j < nParams; j++) {
+        const a = mr[j]/(1-Math.pow(b1,t));
+        const b = mc[j]/(1-Math.pow(b1,t));
+        nReg += a*a; nRec += b*b;
+      }
+      nReg = Math.sqrt(nReg); nRec = Math.sqrt(nRec);
+      const err = nReg / (nReg + nRec + 1e-15);
+      errs.push(err);
+      lams.push(lam);
+      if (adaptive) logLam -= etaLam * (err - targetERR);
+    }
+    return {errs, lams};
+  }
+
+  const fixed = trial(false);
+  const adapt = trial(true);
+
+  // Draw: left half = ERR, right half = lambda
+  const {ctx, w: cw, h: ch} = setupCanvas('canvas2');
+  ctx.clearRect(0, 0, cw, ch);
+  const gap = 20;
+  const halfW = (cw - 80 - gap) / 2;
+  const ox1 = 55, oy = ch - 45, ph = ch - 80;
+
+  // Panel A: ERR
+  const yR1 = [0, 0.8];
+  drawAxes(ctx, ox1, oy, halfW, ph, 'Iteration', 'ERR');
+  drawTicks(ctx, ox1, oy, halfW, ph, [0, nSteps], yR1, false);
+  // smooth
+  const k = 12;
+  function smooth(arr) {
+    const out = [];
+    for (let i = 0; i < arr.length - k; i++) {
+      let s = 0; for (let j = 0; j < k; j++) s += arr[i+j];
+      out.push(s/k);
+    }
+    return out;
+  }
+  const sf = smooth(fixed.errs).map((v,i) => [i, v]);
+  const sa = smooth(adapt.errs).map((v,i) => [i, v]);
+  drawLine(ctx, sf, ox1, oy, halfW, ph, [0, nSteps], yR1, '#dc2626', 2);
+  drawLine(ctx, sa, ox1, oy, halfW, ph, [0, nSteps], yR1, '#2563eb', 2);
+  // target line
+  const ty = oy - (targetERR / yR1[1]) * ph;
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ox1, ty); ctx.lineTo(ox1+halfW, ty); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#333'; ctx.font='9px Georgia'; ctx.textAlign='left';
+  ctx.fillText('target', ox1+halfW-35, ty-4);
+
+  // Panel B: lambda
+  const ox2 = ox1 + halfW + gap + 40;
+  const maxLam = Math.max(...fixed.lams, ...adapt.lams) * 1.1;
+  const yR2 = [0, maxLam];
+  drawAxes(ctx, ox2, oy, halfW, ph, 'Iteration', 'Lambda');
+  drawTicks(ctx, ox2, oy, halfW, ph, [0, nSteps], yR2, false);
+  const lf = fixed.lams.map((v,i) => [i, v]);
+  const la = adapt.lams.map((v,i) => [i, v]);
+  drawLine(ctx, lf, ox2, oy, halfW, ph, [0, nSteps], yR2, '#dc2626', 2);
+  drawLine(ctx, la, ox2, oy, halfW, ph, [0, nSteps], yR2, '#2563eb', 2);
+
+  // legend
+  ctx.font = '10px Georgia';
+  const lx = ox1 + 10, ly = oy - ph + 15;
+  ctx.fillStyle = '#dc2626'; ctx.fillRect(lx, ly, 16, 3);
+  ctx.fillStyle = '#333'; ctx.textAlign = 'left';
+  ctx.fillText('Fixed', lx+20, ly+5);
+  ctx.fillStyle = '#2563eb'; ctx.fillRect(lx, ly+16, 16, 3);
+  ctx.fillStyle = '#333'; ctx.fillText('Adaptive', lx+20, ly+21);
+}
+
+// Run on load
+window.addEventListener('load', () => { runSim1(); runSim2(); });
+window.addEventListener('resize', () => { runSim1(); runSim2(); });
+</script>
+
+</body>
+</html>

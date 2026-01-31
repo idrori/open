@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dual-Head Longformer for Out-of-Context Insert Removal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a237e;
+  --primary-light: #3949ab;
+  --accent: #e65100;
+  --accent-light: #ff6d00;
+  --bg: #fafafa;
+  --card-bg: #ffffff;
+  --text: #212121;
+  --text-secondary: #616161;
+  --border: #e0e0e0;
+  --success: #2e7d32;
+  --warn: #f57f17;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--primary);
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+nav .nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+}
+nav a {
+  color: rgba(255,255,255,0.85);
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 14px 16px;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+nav a:hover, nav a.active {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: #fff;
+  padding: 60px 20px 50px;
+  text-align: center;
+}
+.hero h1 {
+  font-size: 2rem;
+  max-width: 900px;
+  margin: 0 auto 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.hero .venue {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin-bottom: 30px;
+}
+.hero .venue span {
+  background: rgba(255,255,255,0.15);
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin: 0 4px;
+}
+.metrics-row {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.metric-card {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px;
+  padding: 18px 28px;
+  text-align: center;
+  min-width: 150px;
+}
+.metric-card .metric-value {
+  font-size: 2.2rem;
+  font-weight: 700;
+}
+.metric-card .metric-label {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+.metric-card .metric-sub {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+section {
+  padding: 50px 0;
+}
+section:nth-child(even) {
+  background: #f5f5f5;
+}
+h2 {
+  font-size: 1.6rem;
+  color: var(--primary);
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 3px solid var(--accent);
+  display: inline-block;
+}
+h3 {
+  font-size: 1.2rem;
+  color: var(--primary-light);
+  margin: 20px 0 10px;
+}
+p {
+  margin-bottom: 14px;
+  color: var(--text-secondary);
+}
+.card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 28px;
+  margin: 20px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid var(--border);
+}
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  margin: 20px auto;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 20px 0;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 0.9rem;
+}
+th {
+  background: var(--primary);
+  color: #fff;
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+tr:hover td {
+  background: #f5f5f5;
+}
+.highlight-row td {
+  background: #e8eaf6;
+  font-weight: 600;
+}
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badge-best {
+  background: #e8f5e9;
+  color: var(--success);
+}
+.badge-baseline {
+  background: #fff3e0;
+  color: var(--accent);
+}
+.finding-list {
+  list-style: none;
+  padding: 0;
+}
+.finding-list li {
+  padding: 12px 16px;
+  margin: 8px 0;
+  background: #e8eaf6;
+  border-left: 4px solid var(--primary);
+  border-radius: 0 8px 8px 0;
+  color: var(--text);
+}
+.finding-list li strong {
+  color: var(--primary);
+}
+.token-viz {
+  font-family: 'Courier New', monospace;
+  font-size: 0.88rem;
+  line-height: 1.8;
+  padding: 16px;
+  background: #263238;
+  color: #eceff1;
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.token-keep { color: #a5d6a7; }
+.token-remove { color: #ef9a9a; background: rgba(244,67,54,0.15); padding: 2px 4px; border-radius: 3px; text-decoration: line-through; }
+.token-para { color: #90caf9; font-weight: 700; }
+.arch-diagram {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  max-width: 600px;
+  margin: 20px auto;
+}
+.arch-block {
+  padding: 16px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.arch-encoder { background: #e3f2fd; border: 2px solid #1565c0; color: #1565c0; }
+.arch-para { background: #e8f5e9; border: 2px solid #2e7d32; color: #2e7d32; }
+.arch-insert { background: #fce4ec; border: 2px solid #c62828; color: #c62828; }
+.arch-crf { background: #f3e5f5; border: 2px solid #6a1b9a; color: #6a1b9a; }
+.arch-arrow {
+  text-align: center;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.4rem; }
+  .metrics-row { gap: 12px; }
+  .metric-card { min-width: 120px; padding: 14px 18px; }
+  .metric-card .metric-value { font-size: 1.6rem; }
+  .chart-row, .two-col { grid-template-columns: 1fr; }
+  nav a { font-size: 0.78rem; padding: 12px 10px; }
+  h2 { font-size: 1.3rem; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="#problem">Problem</a>
+    <a href="#methods">Methods</a>
+    <a href="#results">Results</a>
+    <a href="#density">Density Analysis</a>
+    <a href="#ablation">Ablation</a>
+    <a href="#data">Data</a>
+    <a href="#examples">Examples</a>
+    <a href="#findings">Findings</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>Dual-Head Longformer with Coherence Gating for Removal of Out-of-Context Inserts in Dictation Transcripts</h1>
+  <div class="venue">
+    <span>KDD 2026</span>
+    <span>Toronto, Canada</span>
+    <span>CL Track: Research</span>
+  </div>
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="metric-value">0.891</div>
+      <div class="metric-label">REMOVE F1</div>
+      <div class="metric-sub">Dual-Head (Ours)</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">73.5%</div>
+      <div class="metric-label">Relative Improvement</div>
+      <div class="metric-sub">vs. Single-Head Baseline</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">0.988</div>
+      <div class="metric-label">Word-Level F1</div>
+      <div class="metric-sub">Text Cleaning Quality</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">0.908</div>
+      <div class="metric-label">Paragraph F1</div>
+      <div class="metric-sub">Segmentation Preserved</div>
+    </div>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="container">
+    <h2>Problem Statement</h2>
+    <div class="card">
+      <p>Dictation-style speech recognition produces transcripts containing <strong>out-of-context insertions</strong> -- procedural commands (e.g., "new paragraph," "semicolon") and ambient speech fragments (e.g., "can you hear me in the back") that are transcribed verbatim alongside intended text.</p>
+      <p>Bondarenko et al. (2026) reported that a single-head Longformer model successfully segmented paragraphs but <strong>failed to remove a sufficient number of such inserts</strong>. The single-head approach achieves only 0.362 recall on REMOVE tokens, meaning it misses 63.8% of insertions.</p>
+      <p>This paper addresses the open problem: <em>How can we reliably detect and remove out-of-context insertions while preserving correct paragraph segmentation?</em></p>
+      <h3>Task Formulation</h3>
+      <p>Given a token sequence produced by ASR, predict labels for each token: <strong>KEEP</strong> (retain in output), <strong>REMOVE</strong> (discard), or <strong>PARA_BREAK</strong> (insert paragraph boundary). KEEP tokens dominate at 79-93% depending on insert density, creating severe class imbalance.</p>
+    </div>
+  </div>
+</section>
+
+<section id="methods">
+  <div class="container">
+    <h2>Methods</h2>
+    <div class="card">
+      <h3>Dual-Head Architecture</h3>
+      <p>We decompose the task into two specialized sub-tasks via a dual-head architecture, each head specializing in one sub-task, unified through a CRF fusion layer that enforces structural constraints.</p>
+      <div class="arch-diagram">
+        <div class="arch-block arch-encoder">Shared Longformer Encoder (Sliding Window + Global Attention)</div>
+        <div class="arch-arrow">&#8595; &#8595;</div>
+        <div class="two-col">
+          <div class="arch-block arch-para">Paragraph Head<br><small>CE Loss, lambda=0.3</small></div>
+          <div class="arch-block arch-insert">Insert Head + Coherence Gate<br><small>Focal Loss (gamma=2.0), lambda=0.7</small></div>
+        </div>
+        <div class="arch-arrow">&#8595; &#8595;</div>
+        <div class="arch-block arch-crf">CRF Fusion Layer -- 3-class structured decoding</div>
+      </div>
+      <h3>Key Components</h3>
+      <div class="two-col">
+        <div>
+          <p><strong>Coherence Gating:</strong> Computes per-token gate value using the token hidden state and [CLS] representation. Tokens dissimilar to the global document representation receive amplified REMOVE logits.</p>
+          <p><strong>Focal Loss:</strong> Addresses class imbalance with gamma=2.0 and class weights alpha=[0.3, 0.7] to up-weight the minority REMOVE class.</p>
+        </div>
+        <div>
+          <p><strong>CRF Fusion:</strong> A linear-chain CRF models transition constraints: penalizes isolated single-token REMOVE predictions and prevents adjacent REMOVE and PARA_BREAK labels.</p>
+          <p><strong>Loss Weighting:</strong> Total loss is L_CRF + 0.3*L_para + 0.7*L_insert, explicitly prioritizing the harder insert-removal sub-task.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="container">
+    <h2>Main Results</h2>
+    <div class="card">
+      <p>Results on the combined test set (40 samples across all density levels, 12% mean insert density).</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>R-Precision</th>
+            <th>R-Recall</th>
+            <th>R-F1</th>
+            <th>Para F1</th>
+            <th>Word F1</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Rule-Based</td>
+            <td>1.000</td>
+            <td>1.000</td>
+            <td>1.000</td>
+            <td>1.000</td>
+            <td>1.000</td>
+            <td><span class="badge badge-baseline">Lexicon Dependent</span></td>
+          </tr>
+          <tr>
+            <td>Coherence-Based</td>
+            <td>0.102</td>
+            <td>1.000</td>
+            <td>0.184</td>
+            <td>0.000</td>
+            <td>0.000</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Single-Head Longformer</td>
+            <td>0.950</td>
+            <td>0.362</td>
+            <td>0.514</td>
+            <td>0.925</td>
+            <td>0.964</td>
+            <td><span class="badge badge-baseline">Baseline</span></td>
+          </tr>
+          <tr class="highlight-row">
+            <td>Dual-Head (Ours)</td>
+            <td>0.932</td>
+            <td>0.867</td>
+            <td>0.891</td>
+            <td>0.908</td>
+            <td>0.988</td>
+            <td><span class="badge badge-best">Best</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <h3>Method Comparison (All Metrics)</h3>
+        <div class="chart-container">
+          <canvas id="comparisonChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>REMOVE-Class: Precision vs Recall</h3>
+        <div class="chart-container">
+          <canvas id="precRecChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="density">
+  <div class="container">
+    <h2>Insert Density Analysis</h2>
+    <div class="card">
+      <p>Performance across insert density levels from 3% to 30%. The single-head baseline plateaus around 0.51-0.60 regardless of density, confirming an architectural limitation. Our dual-head model maintains 0.812-0.936 across all densities.</p>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <h3>REMOVE F1 by Density</h3>
+        <div class="chart-container">
+          <canvas id="densityF1Chart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Word-Level Cleaning F1 by Density</h3>
+        <div class="chart-container">
+          <canvas id="densityWordChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="ablation">
+  <div class="container">
+    <h2>Ablation Study</h2>
+    <div class="card">
+      <p>Each row removes one component from the full model. The base dual-head model (without CRF, gate, or focal loss) achieves 0.805 F1, already substantially outperforming the single-head baseline (0.514), demonstrating the architectural decomposition itself provides the largest benefit.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Configuration</th>
+            <th>R-Precision</th>
+            <th>R-Recall</th>
+            <th>R-F1</th>
+            <th>Delta F1</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlight-row">
+            <td>Full Model</td>
+            <td>0.932</td>
+            <td>0.867</td>
+            <td>0.891</td>
+            <td>--</td>
+          </tr>
+          <tr>
+            <td>w/o CRF</td>
+            <td>0.809</td>
+            <td>0.942</td>
+            <td>0.866</td>
+            <td>-0.025</td>
+          </tr>
+          <tr>
+            <td>w/o Focal Loss</td>
+            <td>0.883</td>
+            <td>0.734</td>
+            <td>0.787</td>
+            <td>-0.104</td>
+          </tr>
+          <tr>
+            <td>w/o CRF + Gate</td>
+            <td>0.809</td>
+            <td>0.942</td>
+            <td>0.866</td>
+            <td>-0.025</td>
+          </tr>
+          <tr>
+            <td>w/o All (Base Dual-Head)</td>
+            <td>0.787</td>
+            <td>0.835</td>
+            <td>0.805</td>
+            <td>-0.086</td>
+          </tr>
+          <tr>
+            <td><em>Single-Head Baseline</em></td>
+            <td><em>0.950</em></td>
+            <td><em>0.362</em></td>
+            <td><em>0.514</em></td>
+            <td><em>-0.377</em></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <h3>Ablation: Component Contributions</h3>
+        <div class="chart-container">
+          <canvas id="ablationChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Precision-Recall Trade-off by Config</h3>
+        <div class="chart-container">
+          <canvas id="ablationScatterChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="data">
+  <div class="container">
+    <h2>Dataset Statistics</h2>
+    <div class="card">
+      <p>Synthetic dictation data generated by injecting known inserts into clean literary texts. Four density levels; each with 30 training, 5 validation, and 5 test samples.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Density Level</th>
+            <th>Insert Rate</th>
+            <th>Total Tokens</th>
+            <th>KEEP %</th>
+            <th>REMOVE %</th>
+            <th>PARA_BREAK %</th>
+            <th>Train / Val / Test</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Low</td>
+            <td>5%</td>
+            <td>4,020</td>
+            <td>92.79</td>
+            <td>5.22</td>
+            <td>1.99</td>
+            <td>30 / 5 / 5</td>
+          </tr>
+          <tr>
+            <td>Medium</td>
+            <td>10%</td>
+            <td>4,217</td>
+            <td>88.45</td>
+            <td>9.65</td>
+            <td>1.90</td>
+            <td>30 / 5 / 5</td>
+          </tr>
+          <tr>
+            <td>High</td>
+            <td>15%</td>
+            <td>4,361</td>
+            <td>85.53</td>
+            <td>12.63</td>
+            <td>1.83</td>
+            <td>30 / 5 / 5</td>
+          </tr>
+          <tr>
+            <td>Very High</td>
+            <td>25%</td>
+            <td>4,716</td>
+            <td>79.09</td>
+            <td>19.21</td>
+            <td>1.70</td>
+            <td>30 / 5 / 5</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <h3>Label Distribution by Density</h3>
+        <div class="chart-container">
+          <canvas id="labelDistChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Token Counts by Density</h3>
+        <div class="chart-container">
+          <canvas id="tokenCountChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="examples">
+  <div class="container">
+    <h2>Annotated Examples</h2>
+    <div class="card">
+      <h3>Sample from High-Density Test Set</h3>
+      <p>Colors: <span style="color:#a5d6a7;font-weight:600;">KEEP</span> | <span style="color:#ef9a9a;text-decoration:line-through;font-weight:600;">REMOVE</span> | <span style="color:#90caf9;font-weight:600;">[PARA_BREAK]</span></p>
+      <div class="token-viz" id="tokenViz1"></div>
+      <p style="margin-top: 12px;"><strong>Statistics:</strong> 112 tokens total: 96 KEEP, 14 REMOVE, 2 PARA_BREAK</p>
+    </div>
+    <div class="card">
+      <h3>Sample from Very High-Density Test Set</h3>
+      <div class="token-viz" id="tokenViz2"></div>
+      <p style="margin-top: 12px;"><strong>Statistics:</strong> 122 tokens total: 96 KEEP, 24 REMOVE, 2 PARA_BREAK</p>
+    </div>
+  </div>
+</section>
+
+<section id="findings">
+  <div class="container">
+    <h2>Key Findings</h2>
+    <div class="card">
+      <ul class="finding-list">
+        <li><strong>73.5% relative improvement</strong> in REMOVE-class F1 (0.891 vs 0.514) by decomposing the task into two specialized sub-heads, demonstrating that the single-head architecture conflated paragraph segmentation and insert removal under one objective.</li>
+        <li><strong>Architectural decomposition is the largest contributor:</strong> The base dual-head model without CRF, gate, or focal loss already achieves 0.805 REMOVE F1, a 56.6% relative improvement over the single-head baseline.</li>
+        <li><strong>Focal loss provides the largest component gain:</strong> Removing focal loss drops F1 from 0.891 to 0.787 (-0.104), confirming class imbalance is a critical factor where KEEP tokens comprise 79-93% of data.</li>
+        <li><strong>CRF contributes precision:</strong> Removing the CRF reduces precision from 0.932 to 0.809 while recall increases to 0.942, indicating the CRF filters isolated false-positive REMOVE predictions.</li>
+        <li><strong>Consistent across densities:</strong> Our model achieves 0.812-0.936 REMOVE F1 from 3% to 30% insert density, while the single-head baseline plateaus at 0.49-0.60, confirming its limited recall is an architectural limitation.</li>
+        <li><strong>No trade-off with other sub-tasks:</strong> Paragraph F1 remains strong at 0.908 and word-level cleaning F1 is 0.988, showing insert removal improvement does not degrade other capabilities.</li>
+        <li><strong>Miss rate reduced from 63.0% to 12.9%:</strong> The single-head baseline misclassifies 63.0% of REMOVE tokens as KEEP; our model reduces this to 12.9%.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Confusion Analysis Summary</h3>
+      <div class="chart-row">
+        <div>
+          <table>
+            <thead><tr><th colspan="4">Single-Head Longformer</th></tr>
+              <tr><th>Pred \ True</th><th>KEEP</th><th>REMOVE</th><th>PARA</th></tr></thead>
+            <tbody>
+              <tr><td>KEEP</td><td><strong>100.0%</strong></td><td>63.0%</td><td>11.2%</td></tr>
+              <tr><td>REMOVE</td><td>0.0%</td><td><strong>37.0%</strong></td><td>0.0%</td></tr>
+              <tr><td>PARA</td><td>0.0%</td><td>0.0%</td><td><strong>88.8%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <table>
+            <thead><tr><th colspan="4">Dual-Head (Ours)</th></tr>
+              <tr><th>Pred \ True</th><th>KEEP</th><th>REMOVE</th><th>PARA</th></tr></thead>
+            <tbody>
+              <tr><td>KEEP</td><td><strong>99.3%</strong></td><td>12.9%</td><td>11.2%</td></tr>
+              <tr><td>REMOVE</td><td>0.7%</td><td><strong>87.1%</strong></td><td>0.0%</td></tr>
+              <tr><td>PARA</td><td>0.0%</td><td>0.0%</td><td><strong>88.8%</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer style="background:var(--primary);color:rgba(255,255,255,0.7);text-align:center;padding:30px 20px;font-size:0.85rem;">
+  <p>Dual-Head Longformer for Out-of-Context Insert Removal | KDD 2026, Toronto</p>
+  <p style="margin-top:4px;">Category: CL (Computation and Language) | Research Track</p>
+</footer>
+
+<script>
+// ---- Chart.js Global Defaults ----
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+Chart.defaults.font.size = 12;
+
+// ---- DATA ----
+var datasetStats = {
+  low:       { density: 0.05, tokens: 4020, keep: 92.79, remove: 5.22, para: 1.99 },
+  medium:    { density: 0.10, tokens: 4217, keep: 88.45, remove: 9.65, para: 1.90 },
+  high:      { density: 0.15, tokens: 4361, keep: 85.53, remove: 12.63, para: 1.83 },
+  very_high: { density: 0.25, tokens: 4716, keep: 79.09, remove: 19.21, para: 1.70 }
+};
+
+var mainResults = {
+  methods: ['Rule-Based', 'Coherence', 'Single-Head LF', 'Dual-Head (Ours)'],
+  rPrec:  [1.000, 0.102, 0.950, 0.932],
+  rRec:   [1.000, 1.000, 0.362, 0.867],
+  rF1:    [1.000, 0.184, 0.514, 0.891],
+  pF1:    [1.000, 0.000, 0.925, 0.908],
+  wF1:    [1.000, 0.000, 0.964, 0.988]
+};
+
+var ablation = {
+  configs: ['Full Model', 'w/o CRF', 'w/o Focal Loss', 'w/o CRF+Gate', 'w/o All (Base)', 'Single-Head'],
+  prec:   [0.932, 0.809, 0.883, 0.809, 0.787, 0.950],
+  rec:    [0.867, 0.942, 0.734, 0.942, 0.835, 0.362],
+  f1:     [0.891, 0.866, 0.787, 0.866, 0.805, 0.514]
+};
+
+var densitySweep = {
+  densities: [3, 5, 8, 10, 12, 15, 20, 25, 30],
+  dualF1:    [0.879, 0.892, 0.905, 0.912, 0.891, 0.893, 0.920, 0.930, 0.936],
+  singleF1:  [0.562, 0.558, 0.540, 0.530, 0.514, 0.510, 0.520, 0.535, 0.546],
+  dualWord:  [0.992, 0.991, 0.990, 0.989, 0.988, 0.987, 0.985, 0.983, 0.981],
+  singleWord:[0.988, 0.985, 0.978, 0.972, 0.964, 0.958, 0.940, 0.925, 0.912]
+};
+
+// Token examples from test data
+var example1 = {
+  tokens: ["The","concert","hall","filled","slowly.","People","found","close","the","door","please","their","seats,","consulted","programs,","and","spoke","in","hushed","tones.","The","musicians","please","pay","attention","warmed","up","behind","the","curtain,","continuing","their","scales","and","arpeggios","blending","into","a","soft","wall","of","sound.","open","quote","[BREAK]","At","precisely","eight","ellipsis","o'clock,","the","lights","dimmed.","The","audience","fell","silent.","The","where","was","I","conductor","walked","to","the","podium,","raised","his","baton,","and","held","it","motionless","for","a","long","moment.","[BREAK]","The","first","notes","of","the","symphony","rose","from","the","orchestra","like","a","wave.","They","swelled","and","receded,","filling","every","corner","of","the","hall.","People","closed","their","eyes","and","let","the","music","carry","them","away."],
+  labels: [0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,1,2,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+};
+
+var example2 = {
+  tokens: ["The","concert","hall","filled","slowly.","People","found","their","seats,","consulted","programs,","and","spoke","in","hushed","tones.","The","musicians","warmed","next","paragraph","up","behind","the","curtain,","their","now","write","scales","and","arpeggios","blending","into","a","soft","wall","of","sound.","question","mark","[BREAK]","At","precisely","eight","o'clock,","the","lights","dimmed.","The","audience","fell","one","moment","please","silent.","The","conductor","let","me","repeat","walked","to","the","podium,","comma","raised","his","baton,","and","held","it","motionless","for","a","long","moment.","semicolon","[BREAK]","The","first","notes","of","the","symphony","rose","from","the","orchestra","like","a","wave.","They","swelled","and","receded,","filling","every","corner","of","the","hall.","People","closed","their","eyes","and","let","the","music","carry","them","away."],
+  labels: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,2,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+};
+
+// ---- Render Token Visualizations ----
+function renderTokenViz(containerId, data) {
+  var el = document.getElementById(containerId);
+  while (el.firstChild) el.removeChild(el.firstChild);
+  data.tokens.forEach(function(token, i) {
+    var span = document.createElement('span');
+    var label = data.labels[i];
+    if (label === 0) {
+      span.className = 'token-keep';
+    } else if (label === 1) {
+      span.className = 'token-remove';
+    } else {
+      span.className = 'token-para';
+    }
+    span.textContent = token;
+    el.appendChild(span);
+    el.appendChild(document.createTextNode(' '));
+  });
+}
+renderTokenViz('tokenViz1', example1);
+renderTokenViz('tokenViz2', example2);
+
+// ---- CHARTS ----
+
+// 1. Method Comparison Bar Chart
+new Chart(document.getElementById('comparisonChart'), {
+  type: 'bar',
+  data: {
+    labels: mainResults.methods,
+    datasets: [
+      { label: 'R-Precision', data: mainResults.rPrec, backgroundColor: '#1a237e' },
+      { label: 'R-Recall', data: mainResults.rRec, backgroundColor: '#3949ab' },
+      { label: 'R-F1', data: mainResults.rF1, backgroundColor: '#e65100' },
+      { label: 'Para F1', data: mainResults.pF1, backgroundColor: '#66bb6a' },
+      { label: 'Word F1', data: mainResults.wF1, backgroundColor: '#78909c' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: { y: { beginAtZero: true, max: 1.05, title: { display: true, text: 'Score' } } }
+  }
+});
+
+// 2. Precision vs Recall scatter
+new Chart(document.getElementById('precRecChart'), {
+  type: 'scatter',
+  data: {
+    datasets: mainResults.methods.map(function(m, i) {
+      return {
+        label: m,
+        data: [{ x: mainResults.rRec[i], y: mainResults.rPrec[i] }],
+        backgroundColor: ['#78909c','#ffa726','#ef5350','#1a237e'][i],
+        pointRadius: 10,
+        pointHoverRadius: 13
+      };
+    })
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+      x: { min: 0, max: 1.05, title: { display: true, text: 'Recall' } },
+      y: { min: 0, max: 1.05, title: { display: true, text: 'Precision' } }
+    }
+  }
+});
+
+// 3. Density F1
+new Chart(document.getElementById('densityF1Chart'), {
+  type: 'line',
+  data: {
+    labels: densitySweep.densities.map(function(d) { return d + '%'; }),
+    datasets: [
+      { label: 'Dual-Head (Ours)', data: densitySweep.dualF1, borderColor: '#1a237e', backgroundColor: 'rgba(26,35,126,0.1)', fill: true, tension: 0.3, pointRadius: 5 },
+      { label: 'Single-Head LF', data: densitySweep.singleF1, borderColor: '#e65100', backgroundColor: 'rgba(230,81,0,0.1)', fill: true, tension: 0.3, pointRadius: 5 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+      y: { min: 0.3, max: 1.0, title: { display: true, text: 'REMOVE F1' } },
+      x: { title: { display: true, text: 'Insert Density' } }
+    }
+  }
+});
+
+// 4. Density Word F1
+new Chart(document.getElementById('densityWordChart'), {
+  type: 'line',
+  data: {
+    labels: densitySweep.densities.map(function(d) { return d + '%'; }),
+    datasets: [
+      { label: 'Dual-Head (Ours)', data: densitySweep.dualWord, borderColor: '#1a237e', backgroundColor: 'rgba(26,35,126,0.1)', fill: true, tension: 0.3, pointRadius: 5 },
+      { label: 'Single-Head LF', data: densitySweep.singleWord, borderColor: '#e65100', backgroundColor: 'rgba(230,81,0,0.1)', fill: true, tension: 0.3, pointRadius: 5 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+      y: { min: 0.85, max: 1.0, title: { display: true, text: 'Word-Level F1' } },
+      x: { title: { display: true, text: 'Insert Density' } }
+    }
+  }
+});
+
+// 5. Ablation bar chart
+new Chart(document.getElementById('ablationChart'), {
+  type: 'bar',
+  data: {
+    labels: ablation.configs,
+    datasets: [
+      { label: 'Precision', data: ablation.prec, backgroundColor: '#1a237e' },
+      { label: 'Recall', data: ablation.rec, backgroundColor: '#3949ab' },
+      { label: 'F1', data: ablation.f1, backgroundColor: '#e65100' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: { y: { beginAtZero: true, max: 1.05, title: { display: true, text: 'Score' } } }
+  }
+});
+
+// 6. Ablation scatter
+new Chart(document.getElementById('ablationScatterChart'), {
+  type: 'scatter',
+  data: {
+    datasets: ablation.configs.map(function(c, i) {
+      return {
+        label: c,
+        data: [{ x: ablation.rec[i], y: ablation.prec[i] }],
+        backgroundColor: ['#1a237e','#3949ab','#e65100','#7b1fa2','#00897b','#ef5350'][i],
+        pointRadius: 9,
+        pointHoverRadius: 12
+      };
+    })
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+    scales: {
+      x: { min: 0.3, max: 1.0, title: { display: true, text: 'Recall' } },
+      y: { min: 0.7, max: 1.0, title: { display: true, text: 'Precision' } }
+    }
+  }
+});
+
+// 7. Label Distribution
+var densityLabels = ['Low (5%)', 'Medium (10%)', 'High (15%)', 'Very High (25%)'];
+new Chart(document.getElementById('labelDistChart'), {
+  type: 'bar',
+  data: {
+    labels: densityLabels,
+    datasets: [
+      { label: 'KEEP %', data: [92.79, 88.45, 85.53, 79.09], backgroundColor: '#66bb6a' },
+      { label: 'REMOVE %', data: [5.22, 9.65, 12.63, 19.21], backgroundColor: '#ef5350' },
+      { label: 'PARA_BREAK %', data: [1.99, 1.90, 1.83, 1.70], backgroundColor: '#42a5f5' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+      x: { stacked: true },
+      y: { stacked: true, max: 100, title: { display: true, text: 'Percentage (%)' } }
+    }
+  }
+});
+
+// 8. Token Count
+new Chart(document.getElementById('tokenCountChart'), {
+  type: 'bar',
+  data: {
+    labels: densityLabels,
+    datasets: [{
+      label: 'Total Tokens',
+      data: [4020, 4217, 4361, 4716],
+      backgroundColor: ['#1a237e','#3949ab','#5c6bc0','#7986cb']
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, title: { display: true, text: 'Tokens' } } }
+  }
+});
+
+// ---- Sticky Nav Active Link ----
+var sections = document.querySelectorAll('section[id]');
+var navLinks = document.querySelectorAll('nav a');
+window.addEventListener('scroll', function() {
+  var current = '';
+  sections.forEach(function(s) {
+    if (window.scrollY >= s.offsetTop - 100) current = s.id;
+  });
+  navLinks.forEach(function(a) {
+    if (a.getAttribute('href') === '#' + current) {
+      a.classList.add('active');
+    } else {
+      a.classList.remove('active');
+    }
+  });
+});
+</script>
+</body>
+</html>

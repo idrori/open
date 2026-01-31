@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dynamic Regret Under Time-Varying Arm Sets</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a1628; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 30px; text-align: center; }
+.header h1 { font-size: 1.7em; color: #fff; margin-bottom: 8px; }
+.header p { color: #b0d4f1; font-size: 0.95em; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.stats-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+.stat-box { background: #152238; border-radius: 10px; padding: 18px 28px; text-align: center; border: 1px solid #1e3a5f; min-width: 170px; flex: 1; }
+.stat-box .value { font-size: 1.7em; font-weight: bold; color: var(--accent); }
+.stat-box .label { font-size: 0.82em; color: #7a9ec5; margin-top: 5px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.card { background: #152238; border-radius: 12px; padding: 20px; border: 1px solid #1e3a5f; }
+.card h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.05em; }
+.full-width { grid-column: 1 / -1; }
+canvas { max-height: 340px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 10px 14px; text-align: center; border-bottom: 1px solid #1e3a5f; }
+th { color: var(--accent); font-weight: 600; font-size: 0.9em; }
+td { color: #b0c4de; font-size: 0.9em; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .stats-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Minimax Dynamic Regret Under Time-Varying Arm Sets</h1>
+<p>Non-stationary Linear Bandits | Wang et al., arXiv:2601.01069</p>
+</div>
+<div class="container">
+<div class="stats-row">
+<div class="stat-box"><div class="value">0.877</div><div class="label">Weighted LS Exponent</div></div>
+<div class="stat-box"><div class="value">0.858</div><div class="label">Restarting Exponent</div></div>
+<div class="stat-box"><div class="value">0.667</div><div class="label">Theoretical Optimal</div></div>
+<div class="stat-box"><div class="value">d=5</div><div class="label">Feature Dimension</div></div>
+<div class="stat-box"><div class="value">10K</div><div class="label">Max Horizon</div></div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h3>Regret Scaling with Horizon (Log-Log)</h3>
+<canvas id="horizonChart"></canvas>
+</div>
+<div class="card">
+<h3>Arm Variation Impact (T=1000)</h3>
+<canvas id="armVarChart"></canvas>
+</div>
+<div class="card">
+<h3>Non-stationarity Budget</h3>
+<canvas id="budgetChart"></canvas>
+</div>
+<div class="card">
+<h3>Scaling Exponents</h3>
+<canvas id="exponentChart"></canvas>
+</div>
+<div class="card">
+<h3>Experiment Summary</h3>
+<table>
+<thead><tr><th>Algorithm</th><th>Exponent</th><th>R&sup2;</th><th>Type</th></tr></thead>
+<tbody>
+<tr><td>Weighted LS</td><td>0.877</td><td>1.000</td><td>Adaptive</td></tr>
+<tr><td>Sliding Window</td><td>0.877</td><td>1.000</td><td>Adaptive</td></tr>
+<tr><td>Restarting</td><td>0.858</td><td>0.999</td><td>Adaptive</td></tr>
+<tr><td>MASTER</td><td>0.878</td><td>1.000</td><td>Static</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<script>
+const colors = {
+  'Weighted LS': '#2980b9', 'Sliding Window': '#e74c3c',
+  'Restarting': '#27ae60', 'MASTER': '#8e44ad'
+};
+const horizonData = {
+  T: [500,1000,2000,5000,10000],
+  'Weighted LS': [191.0,347.0,639.1,1421.8,2642.9],
+  'Sliding Window': [191.1,347.0,641.4,1421.0,2644.5],
+  'Restarting': [196.8,348.1,613.0,1322.2,2362.2],
+  'MASTER': [190.2,345.4,638.6,1421.2,2644.5]
+};
+const armData = {
+  rates: [0.0,0.1,0.3,0.5],
+  'Weighted LS': [274.8,297.8,343.3,379.0],
+  'Sliding Window': [275.0,297.8,343.3,379.1],
+  'Restarting': [273.9,291.2,335.2,370.7],
+  'MASTER': [274.5,296.2,341.6,376.4]
+};
+const budgetData = {
+  fracs: [0.1,0.5,1.0,2.0],
+  'Weighted LS': [240.1,293.1,347.0,424.2],
+  'Sliding Window': [240.2,293.1,347.0,424.3],
+  'Restarting': [246.1,296.7,348.1,410.5],
+  'MASTER': [239.2,291.6,345.4,422.7]
+};
+const chartOpts = {
+  responsive: true,
+  plugins: { legend: { labels: { color: '#b0c4de', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#7a9ec5' }, grid: { color: '#1e3a5f' } },
+    y: { ticks: { color: '#7a9ec5' }, grid: { color: '#1e3a5f' } }
+  }
+};
+// Horizon chart (log scale)
+new Chart(document.getElementById('horizonChart'), {
+  type: 'line',
+  data: {
+    labels: horizonData.T.map(String),
+    datasets: Object.keys(colors).map(alg => ({
+      label: alg, data: horizonData[alg],
+      borderColor: colors[alg], backgroundColor: colors[alg]+'33',
+      borderWidth: 2, pointRadius: 5, tension: 0.1
+    }))
+  },
+  options: {...chartOpts, scales: {
+    x: {...chartOpts.scales.x, type: 'logarithmic', title: {display:true, text:'Horizon T', color:'#7a9ec5'}},
+    y: {...chartOpts.scales.y, type: 'logarithmic', title: {display:true, text:'Dynamic Regret', color:'#7a9ec5'}}
+  }}
+});
+// Arm variation chart
+new Chart(document.getElementById('armVarChart'), {
+  type: 'line',
+  data: {
+    labels: armData.rates.map(String),
+    datasets: Object.keys(colors).map(alg => ({
+      label: alg, data: armData[alg],
+      borderColor: colors[alg], borderWidth: 2, pointRadius: 5, tension: 0.1
+    }))
+  },
+  options: {...chartOpts, scales: {
+    x: {...chartOpts.scales.x, title: {display:true, text:'Arm Variation Rate', color:'#7a9ec5'}},
+    y: {...chartOpts.scales.y, title: {display:true, text:'Dynamic Regret', color:'#7a9ec5'}}
+  }}
+});
+// Budget chart
+new Chart(document.getElementById('budgetChart'), {
+  type: 'line',
+  data: {
+    labels: budgetData.fracs.map(String),
+    datasets: Object.keys(colors).map(alg => ({
+      label: alg, data: budgetData[alg],
+      borderColor: colors[alg], borderWidth: 2, pointRadius: 5, tension: 0.1
+    }))
+  },
+  options: {...chartOpts, scales: {
+    x: {...chartOpts.scales.x, title: {display:true, text:'P_T / T^{2/3}', color:'#7a9ec5'}},
+    y: {...chartOpts.scales.y, title: {display:true, text:'Dynamic Regret', color:'#7a9ec5'}}
+  }}
+});
+// Exponent bar chart
+new Chart(document.getElementById('exponentChart'), {
+  type: 'bar',
+  data: {
+    labels: Object.keys(colors),
+    datasets: [{
+      label: 'Scaling Exponent',
+      data: [0.877, 0.877, 0.858, 0.878],
+      backgroundColor: Object.values(colors).map(c => c+'cc')
+    }]
+  },
+  options: {...chartOpts,
+    plugins: {...chartOpts.plugins, annotation: {
+      annotations: { line1: { type:'line', yMin:0.667, yMax:0.667, borderColor:'#fff', borderDash:[5,5], borderWidth:1 }}
+    }},
+    scales: {
+      x: {...chartOpts.scales.x},
+      y: {...chartOpts.scales.y, min: 0, max: 1.1, title: {display:true, text:'Exponent', color:'#7a9ec5'}}
+    }
+  }
+});
+</script>
+</body>
+</html>

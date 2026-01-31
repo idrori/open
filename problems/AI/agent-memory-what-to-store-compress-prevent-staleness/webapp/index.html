@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Memory: What to Store, How to Compress, and Prevent Staleness</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #e0e6ed; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 2rem; text-align: center; }
+header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+header p { opacity: 0.9; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: var(--card); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 1.5rem; border: 1px solid var(--border); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { max-height: 350px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid var(--accent); }
+.stat-card .value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+.stat-card .label { font-size: 0.85rem; color: #7f8c8d; margin-top: 0.3rem; }
+</style>
+</head>
+<body>
+<header>
+<h1>Agent Memory: What to Store, How to Compress, and Prevent Staleness</h1>
+<p>Interactive visualization of memory design experiments for LLM-based agents</p>
+</header>
+<div class="container">
+<div class="stats">
+<div class="stat-card"><div class="value">0.746</div><div class="label">Best Agent Score</div></div>
+<div class="stat-card"><div class="value">0.589</div><div class="label">Best Allocation Score</div></div>
+<div class="stat-card"><div class="value">p &lt; 10<sup>-6</sup></div><div class="label">ANOVA Significance</div></div>
+</div>
+<div class="grid">
+<div class="card"><h2>Memory Allocation Performance</h2><canvas id="allocChart"></canvas></div>
+<div class="card"><h2>Agent Comparison</h2><canvas id="agentChart"></canvas></div>
+<div class="card"><h2>Compression vs Performance</h2><canvas id="compChart"></canvas></div>
+<div class="card"><h2>Staleness Over Time</h2><canvas id="staleChart"></canvas></div>
+</div>
+</div>
+<script>
+const allocNames = ["Episodic-dom.", "Semantic-dom.", "Procedural-dom.", "Uniform", "Balanced-ep.", "Balanced-sem.", "Optimized"];
+const allocScores = [0.576, 0.574, 0.551, 0.586, 0.589, 0.586, 0.588];
+new Chart(document.getElementById('allocChart'), {
+  type: 'bar', data: { labels: allocNames, datasets: [{ label: 'Performance', data: allocScores, backgroundColor: allocScores.map((v,i) => i===4 ? '#e74c3c' : '#2980b9'), borderRadius: 4 }] },
+  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false, min: 0.52 } } }
+});
+
+const agentNames = ["Baseline", "Ep.+Uniform", "Sem.+Adaptive", "Bal.+Hier.", "Proc.+Adapt.", "Optimal"];
+const agentScores = [0.691, 0.562, 0.746, 0.626, 0.580, 0.627];
+new Chart(document.getElementById('agentChart'), {
+  type: 'bar', data: { labels: agentNames, datasets: [{ label: 'Score', data: agentScores, backgroundColor: agentScores.map((v,i) => i===2 ? '#27ae60' : '#3498db'), borderRadius: 4 }] },
+  options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { min: 0.5 } } }
+});
+
+const ratios = [0.1, 0.2, 0.3, 0.5, 0.7, 1.0];
+const compData = {
+  none: [0.651, 0.651, 0.651, 0.651, 0.651, 0.651],
+  adaptive: [0.60, 0.61, 0.62, 0.63, 0.64, 0.65],
+  hierarchical: [0.58, 0.59, 0.60, 0.61, 0.62, 0.63]
+};
+new Chart(document.getElementById('compChart'), {
+  type: 'line', data: { labels: ratios, datasets: [
+    { label: 'None', data: compData.none, borderColor: '#e74c3c', tension: 0.3, fill: false },
+    { label: 'Adaptive', data: compData.adaptive, borderColor: '#3498db', tension: 0.3, fill: false },
+    { label: 'Hierarchical', data: compData.hierarchical, borderColor: '#9b59b6', tension: 0.3, fill: false }
+  ] }, options: { responsive: true, scales: { x: { title: { display: true, text: 'Compression Ratio' } }, y: { title: { display: true, text: 'Performance' } } } }
+});
+
+const steps = Array.from({length: 20}, (_, i) => i * 25);
+const staleData = {
+  none: steps.map(s => 0.0),
+  decay: steps.map(s => 1 - Math.exp(-0.05 * s / 10)),
+  provenance: steps.map(s => (1 - Math.exp(-0.025 * s / 10)) * 0.7)
+};
+new Chart(document.getElementById('staleChart'), {
+  type: 'line', data: { labels: steps, datasets: [
+    { label: 'None', data: staleData.none, borderColor: '#e74c3c', tension: 0.3, fill: false },
+    { label: 'Decay', data: staleData.decay, borderColor: '#3498db', tension: 0.3, fill: false },
+    { label: 'Provenance', data: staleData.provenance, borderColor: '#9b59b6', tension: 0.3, fill: false }
+  ] }, options: { responsive: true, scales: { x: { title: { display: true, text: 'Task Step' } }, y: { title: { display: true, text: 'Mean Staleness' } } } }
+});
+</script>
+</body>
+</html>

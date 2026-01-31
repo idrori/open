@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prevalence of Security Vulnerabilities in Agent Skills</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #1a1a2e;
+  --secondary: #16213e;
+  --accent: #e94560;
+  --accent2: #0f3460;
+  --text: #eee;
+  --text-muted: #aab;
+  --card-bg: #1e2a3a;
+  --border: #2a3a4a;
+  --success: #2ecc71;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --info: #3498db;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--primary);
+  color: var(--text);
+  line-height: 1.6;
+}
+a { color: var(--info); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 40%, var(--accent2) 100%);
+  padding: 60px 20px 50px;
+  text-align: center;
+  border-bottom: 3px solid var(--accent);
+}
+.hero h1 {
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 700;
+  max-width: 900px;
+  margin: 0 auto 16px;
+}
+.hero .subtitle {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  max-width: 750px;
+  margin: 0 auto 24px;
+}
+.hero .venue {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 18px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.hero .meta {
+  margin-top: 14px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+/* Stats banner */
+.stats-banner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  max-width: 1200px;
+  margin: -30px auto 30px;
+  padding: 0 20px;
+  position: relative;
+  z-index: 2;
+}
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  transition: transform 0.2s;
+}
+.stat-card:hover { transform: translateY(-3px); }
+.stat-card .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.stat-card .label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+section {
+  margin-bottom: 40px;
+}
+section h2 {
+  font-size: 1.55rem;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;
+}
+section .section-desc {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+/* Cards and chart containers */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.card h3 {
+  font-size: 1.15rem;
+  margin-bottom: 14px;
+  color: var(--info);
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  gap: 24px;
+}
+@media (max-width: 540px) {
+  .chart-grid { grid-template-columns: 1fr; }
+}
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-height: 400px;
+}
+canvas { max-width: 100%; }
+
+/* Tables */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+thead th {
+  background: var(--secondary);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--accent);
+}
+tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Findings */
+.findings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.finding-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 18px;
+}
+.finding-card h4 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: var(--warning);
+}
+.finding-card p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.tab-btn.active {
+  background: var(--card-bg);
+  color: var(--text);
+  border-bottom-color: var(--card-bg);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Severity badges */
+.sev-crit { color: #e74c3c; font-weight: 600; }
+.sev-high { color: #e67e22; font-weight: 600; }
+.sev-med  { color: #f1c40f; }
+.sev-low  { color: #2ecc71; }
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 30px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 40px;
+}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+  <h1>Prevalence of Security Vulnerabilities in Agent Skills</h1>
+  <p class="subtitle">A large-scale simulation study of 2,500 synthetic agent skill packages across 8 categories and 10 vulnerability classes, calibrated to publicly reported ecosystem properties.</p>
+  <span class="venue">KDD 2026 - Research Track</span>
+  <p class="meta">Category: cs.CR - Cryptography and Security</p>
+</header>
+
+<!-- Key Stats Banner -->
+<div class="stats-banner">
+  <div class="stat-card"><div class="value">75.96%</div><div class="label">Overall Prevalence</div></div>
+  <div class="stat-card"><div class="value">2,500</div><div class="label">Skills Scanned</div></div>
+  <div class="stat-card"><div class="value">3,863</div><div class="label">Total Vulnerabilities</div></div>
+  <div class="stat-card"><div class="value">27.48%</div><div class="label">Critical Prevalence</div></div>
+  <div class="stat-card"><div class="value">1.5452</div><div class="label">Mean Vulns / Skill</div></div>
+</div>
+
+<div class="container">
+
+<!-- Problem & Methods -->
+<section id="problem">
+  <h2>Problem &amp; Methods</h2>
+  <p class="section-desc">Agent skills are modular packages containing SKILL.md instructions and optional bundled scripts distributed via public marketplaces. Despite rapid adoption, the security posture of these skill packages remains largely uncharacterized.</p>
+  <div class="card">
+    <h3>Simulation Framework</h3>
+    <p>We model a marketplace of N = 2,500 agent skill packages. Each skill is characterized by its category, code complexity, number of bundled scripts, requested permissions, popularity tier, and vetting status. A simulated multi-layer vulnerability scanner evaluates each skill against 10 vulnerability classes. The simulation uses a fixed random seed for full reproducibility.</p>
+    <br>
+    <p>For each skill-vulnerability pair, the detection probability is computed as: <strong>p_v = min(0.95, r_v * m_{c,v} * log(complexity+1)/log(101) * (1 + 0.08 * n_perms) * f_vet)</strong>, where r_v is the base rate for vulnerability class v, m_{c,v} is the category-specific multiplier, and f_vet is the vetting reduction factor (1.0 for unreviewed, 0.65 for auto-scanned, 0.30 for human-reviewed).</p>
+  </div>
+</section>
+
+<!-- Charts Section -->
+<section id="charts">
+  <h2>Interactive Results</h2>
+  <p class="section-desc">Explore vulnerability prevalence across multiple dimensions: vulnerability classes, skill categories, vetting status, popularity tiers, and code complexity.</p>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('tab-vuln')">By Vulnerability Class</button>
+    <button class="tab-btn" onclick="showTab('tab-cat')">By Category</button>
+    <button class="tab-btn" onclick="showTab('tab-vet')">By Vetting</button>
+    <button class="tab-btn" onclick="showTab('tab-pop')">By Popularity</button>
+    <button class="tab-btn" onclick="showTab('tab-complex')">By Complexity</button>
+    <button class="tab-btn" onclick="showTab('tab-severity')">Severity Breakdown</button>
+    <button class="tab-btn" onclick="showTab('tab-cooccur')">Co-occurrence</button>
+  </div>
+
+  <!-- Tab: Vulnerability Class -->
+  <div id="tab-vuln" class="tab-pane active">
+    <div class="chart-grid">
+      <div class="card">
+        <h3>Prevalence by Vulnerability Class</h3>
+        <div class="chart-container"><canvas id="chartVulnPrev"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Instance Count by Vulnerability Class</h3>
+        <div class="chart-container"><canvas id="chartVulnCount"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Category -->
+  <div id="tab-cat" class="tab-pane">
+    <div class="chart-grid">
+      <div class="card">
+        <h3>Prevalence by Skill Category</h3>
+        <div class="chart-container"><canvas id="chartCatPrev"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Mean Vulnerabilities per Skill by Category</h3>
+        <div class="chart-container"><canvas id="chartCatMean"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Vetting -->
+  <div id="tab-vet" class="tab-pane">
+    <div class="chart-grid">
+      <div class="card">
+        <h3>Prevalence by Vetting Status</h3>
+        <div class="chart-container"><canvas id="chartVetPrev"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Vetting Pipeline Distribution</h3>
+        <div class="chart-container"><canvas id="chartVetDist"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Popularity -->
+  <div id="tab-pop" class="tab-pane">
+    <div class="card">
+      <h3>Prevalence by Popularity Tier</h3>
+      <div class="chart-container"><canvas id="chartPopPrev"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Complexity -->
+  <div id="tab-complex" class="tab-pane">
+    <div class="card">
+      <h3>Prevalence by Code Complexity</h3>
+      <div class="chart-container"><canvas id="chartComplexPrev"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Severity -->
+  <div id="tab-severity" class="tab-pane">
+    <div class="card">
+      <h3>Severity Distribution per Vulnerability Class</h3>
+      <div class="chart-container" style="max-height:500px"><canvas id="chartSeverity"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Co-occurrence -->
+  <div id="tab-cooccur" class="tab-pane">
+    <div class="card">
+      <h3>Top Vulnerability Co-occurrence Pairs (Conditional Probability)</h3>
+      <div class="chart-container" style="max-height:500px"><canvas id="chartCooccur"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<!-- Data Tables -->
+<section id="tables">
+  <h2>Data Tables</h2>
+  <p class="section-desc">Detailed numerical results from the simulation study.</p>
+
+  <div class="card">
+    <h3>Overall Vulnerability Prevalence (N = 2,500)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metric</th><th class="num">Value</th></tr></thead>
+        <tbody>
+          <tr><td>Skills scanned</td><td class="num">2,500</td></tr>
+          <tr><td>Vulnerable skills</td><td class="num">1,899</td></tr>
+          <tr><td>Overall prevalence</td><td class="num">0.7596</td></tr>
+          <tr><td>Critical prevalence</td><td class="num">0.2748</td></tr>
+          <tr><td>High-or-critical prevalence</td><td class="num">0.5216</td></tr>
+          <tr><td>Total vulnerabilities</td><td class="num">3,863</td></tr>
+          <tr><td>Mean vulns per skill</td><td class="num">1.5452</td></tr>
+          <tr><td>Mean vulns per vulnerable skill</td><td class="num">2.0342</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Prevalence and Severity by Vulnerability Class</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Vulnerability Class</th><th class="num">Prevalence</th><th class="num">Critical</th><th class="num">High</th><th class="num">Medium</th><th class="num">Low</th><th class="num">Count</th></tr></thead>
+        <tbody>
+          <tr><td>Missing input validation</td><td class="num">0.2992</td><td class="num sev-crit">0.0481</td><td class="num sev-high">0.1832</td><td class="num sev-med">0.4398</td><td class="num sev-low">0.3289</td><td class="num">748</td></tr>
+          <tr><td>Excessive permissions</td><td class="num">0.2932</td><td class="num sev-crit">0.1173</td><td class="num sev-high">0.2606</td><td class="num sev-med">0.3752</td><td class="num sev-low">0.2469</td><td class="num">733</td></tr>
+          <tr><td>Supply chain integrity</td><td class="num">0.2044</td><td class="num sev-crit">0.2505</td><td class="num sev-high">0.3190</td><td class="num sev-med">0.3190</td><td class="num sev-low">0.1115</td><td class="num">511</td></tr>
+          <tr><td>Prompt injection</td><td class="num">0.1680</td><td class="num sev-crit">0.2405</td><td class="num sev-high">0.3810</td><td class="num sev-med">0.2929</td><td class="num sev-low">0.0857</td><td class="num">420</td></tr>
+          <tr><td>Credential leakage</td><td class="num">0.1636</td><td class="num sev-crit">0.3374</td><td class="num sev-high">0.3227</td><td class="num sev-med">0.2445</td><td class="num sev-low">0.0954</td><td class="num">409</td></tr>
+          <tr><td>Path traversal</td><td class="num">0.1216</td><td class="num sev-crit">0.1842</td><td class="num sev-high">0.3487</td><td class="num sev-med">0.3026</td><td class="num sev-low">0.1645</td><td class="num">304</td></tr>
+          <tr><td>Data exfiltration</td><td class="num">0.1196</td><td class="num sev-crit">0.3579</td><td class="num sev-high">0.2408</td><td class="num sev-med">0.2843</td><td class="num sev-low">0.1171</td><td class="num">299</td></tr>
+          <tr><td>Arbitrary code execution</td><td class="num">0.0860</td><td class="num sev-crit">0.4186</td><td class="num sev-high">0.3442</td><td class="num sev-med">0.2093</td><td class="num sev-low">0.0279</td><td class="num">215</td></tr>
+          <tr><td>Dependency confusion</td><td class="num">0.0572</td><td class="num sev-crit">0.3077</td><td class="num sev-high">0.3217</td><td class="num sev-med">0.2937</td><td class="num sev-low">0.0769</td><td class="num">143</td></tr>
+          <tr><td>Insecure deserialization</td><td class="num">0.0324</td><td class="num sev-crit">0.3333</td><td class="num sev-high">0.2593</td><td class="num sev-med">0.2963</td><td class="num sev-low">0.1111</td><td class="num">81</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vulnerability Prevalence by Skill Category</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Category</th><th class="num">N</th><th class="num">Vulnerable</th><th class="num">Prevalence</th><th class="num">Critical</th><th class="num">Mean Vulns</th></tr></thead>
+        <tbody>
+          <tr><td>Security tools</td><td class="num">153</td><td class="num">124</td><td class="num">0.8105</td><td class="num sev-crit">0.3203</td><td class="num">1.7386</td></tr>
+          <tr><td>System admin</td><td class="num">292</td><td class="num">233</td><td class="num">0.7979</td><td class="num sev-crit">0.3185</td><td class="num">1.8014</td></tr>
+          <tr><td>Web automation</td><td class="num">361</td><td class="num">284</td><td class="num">0.7867</td><td class="num sev-crit">0.2659</td><td class="num">1.6205</td></tr>
+          <tr><td>Data analysis</td><td class="num">408</td><td class="num">314</td><td class="num">0.7696</td><td class="num sev-crit">0.2794</td><td class="num">1.6152</td></tr>
+          <tr><td>File management</td><td class="num">243</td><td class="num">183</td><td class="num">0.7531</td><td class="num sev-crit">0.2551</td><td class="num">1.4897</td></tr>
+          <tr><td>Misc</td><td class="num">232</td><td class="num">172</td><td class="num">0.7414</td><td class="num sev-crit">0.2457</td><td class="num">1.4828</td></tr>
+          <tr><td>Communication</td><td class="num">247</td><td class="num">183</td><td class="num">0.7409</td><td class="num sev-crit">0.2794</td><td class="num">1.4170</td></tr>
+          <tr><td>Coding</td><td class="num">564</td><td class="num">406</td><td class="num">0.7199</td><td class="num sev-crit">0.2606</td><td class="num">1.3670</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vulnerability Prevalence by Vetting Status</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Vetting Status</th><th class="num">N</th><th class="num">Prevalence</th><th class="num">Critical</th></tr></thead>
+        <tbody>
+          <tr><td>Unreviewed</td><td class="num">1,386</td><td class="num">0.8586</td><td class="num sev-crit">0.3341</td></tr>
+          <tr><td>Auto-scanned</td><td class="num">771</td><td class="num">0.7302</td><td class="num sev-crit">0.2374</td></tr>
+          <tr><td>Human-reviewed</td><td class="num">343</td><td class="num">0.4257</td><td class="num sev-crit">0.1195</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vulnerability Prevalence by Popularity Tier</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Popularity</th><th class="num">N</th><th class="num">Prevalence</th><th class="num">Critical</th></tr></thead>
+        <tbody>
+          <tr><td>Low</td><td class="num">1,403</td><td class="num">0.8076</td><td class="num">0.2937</td></tr>
+          <tr><td>Medium</td><td class="num">698</td><td class="num">0.7249</td><td class="num">0.2564</td></tr>
+          <tr><td>High</td><td class="num">272</td><td class="num">0.6691</td><td class="num">0.2537</td></tr>
+          <tr><td>Very High</td><td class="num">127</td><td class="num">0.6142</td><td class="num">0.2126</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vulnerability Prevalence by Code Complexity</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Complexity Tier</th><th class="num">N</th><th class="num">Prevalence</th></tr></thead>
+        <tbody>
+          <tr><td>Tiny (&lt;50 lines)</td><td class="num">774</td><td class="num">0.6370</td></tr>
+          <tr><td>Small (50-200)</td><td class="num">1,124</td><td class="num">0.7891</td></tr>
+          <tr><td>Medium (200-500)</td><td class="num">391</td><td class="num">0.8568</td></tr>
+          <tr><td>Large (500-2000)</td><td class="num">194</td><td class="num">0.8608</td></tr>
+          <tr><td>Very Large (2000+)</td><td class="num">17</td><td class="num">1.0000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Key Findings -->
+<section id="findings">
+  <h2>Key Findings</h2>
+  <p class="section-desc">Primary findings from the simulation-based measurement study of agent skill security.</p>
+  <div class="findings-grid">
+    <div class="finding-card">
+      <h4>High Overall Prevalence</h4>
+      <p>75.96% of all skills contain at least one vulnerability, with a mean of 1.5452 vulnerabilities per skill. This is substantially worse than mature package ecosystems such as npm (10-15%).</p>
+    </div>
+    <div class="finding-card">
+      <h4>Critical Severity Concentration</h4>
+      <p>27.48% of skills contain critical-severity vulnerabilities, and 52.16% contain high or critical issues. Arbitrary code execution has the highest critical rate at 41.86%.</p>
+    </div>
+    <div class="finding-card">
+      <h4>Dominant Vulnerability Classes</h4>
+      <p>Missing input validation (29.92% prevalence) and excessive permissions (29.32%) are the most common. Supply chain integrity gaps affect 20.44% of skills.</p>
+    </div>
+    <div class="finding-card">
+      <h4>Category Risk Variation</h4>
+      <p>Security tools (81.05%) and system administration (79.79%) skills are the most vulnerable. Paradoxically, security tools have the highest vulnerability rate in the ecosystem.</p>
+    </div>
+    <div class="finding-card">
+      <h4>Vetting Effectiveness</h4>
+      <p>Human-reviewed skills show 42.57% prevalence vs. 85.86% for unreviewed -- a 43.29 percentage-point absolute reduction. However, only 13.7% of marketplace skills have human review.</p>
+    </div>
+    <div class="finding-card">
+      <h4>Complexity-Prevalence Gradient</h4>
+      <p>Prevalence increases from 63.70% for tiny skills (&lt;50 lines) to 86.08% for large skills (500-2000 lines), and 100% for very large skills (2000+ lines).</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>KDD 2026 Research Track | cs.CR - Cryptography and Security | Simulation study of 2,500 agent skill packages</p>
+</footer>
+
+<script>
+// === Embedded Data ===
+const vulnClasses = [
+  {name:'Missing Input Valid.', key:'missing_input_validation', prev:0.2992, count:748, crit:0.0481, high:0.1832, med:0.4398, low:0.3289},
+  {name:'Excessive Permissions', key:'excessive_permissions', prev:0.2932, count:733, crit:0.1173, high:0.2606, med:0.3752, low:0.2469},
+  {name:'Supply Chain Integrity', key:'supply_chain_integrity', prev:0.2044, count:511, crit:0.2505, high:0.3190, med:0.3190, low:0.1115},
+  {name:'Prompt Injection', key:'prompt_injection', prev:0.1680, count:420, crit:0.2405, high:0.3810, med:0.2929, low:0.0857},
+  {name:'Credential Leakage', key:'credential_leakage', prev:0.1636, count:409, crit:0.3374, high:0.3227, med:0.2445, low:0.0954},
+  {name:'Path Traversal', key:'path_traversal', prev:0.1216, count:304, crit:0.1842, high:0.3487, med:0.3026, low:0.1645},
+  {name:'Data Exfiltration', key:'data_exfiltration', prev:0.1196, count:299, crit:0.3579, high:0.2408, med:0.2843, low:0.1171},
+  {name:'Arbitrary Code Exec.', key:'arbitrary_code_exec', prev:0.0860, count:215, crit:0.4186, high:0.3442, med:0.2093, low:0.0279},
+  {name:'Dependency Confusion', key:'dependency_confusion', prev:0.0572, count:143, crit:0.3077, high:0.3217, med:0.2937, low:0.0769},
+  {name:'Insecure Deserializ.', key:'insecure_deserialization', prev:0.0324, count:81, crit:0.3333, high:0.2593, med:0.2963, low:0.1111}
+];
+
+const categories = [
+  {name:'Security Tools', n:153, vuln:124, prev:0.8105, crit:0.3203, mean:1.7386},
+  {name:'System Admin', n:292, vuln:233, prev:0.7979, crit:0.3185, mean:1.8014},
+  {name:'Web Automation', n:361, vuln:284, prev:0.7867, crit:0.2659, mean:1.6205},
+  {name:'Data Analysis', n:408, vuln:314, prev:0.7696, crit:0.2794, mean:1.6152},
+  {name:'File Management', n:243, vuln:183, prev:0.7531, crit:0.2551, mean:1.4897},
+  {name:'Misc', n:232, vuln:172, prev:0.7414, crit:0.2457, mean:1.4828},
+  {name:'Communication', n:247, vuln:183, prev:0.7409, crit:0.2794, mean:1.4170},
+  {name:'Coding', n:564, vuln:406, prev:0.7199, crit:0.2606, mean:1.3670}
+];
+
+const vetting = [
+  {name:'Unreviewed', n:1386, prev:0.8586, crit:0.3341},
+  {name:'Auto-scanned', n:771, prev:0.7302, crit:0.2374},
+  {name:'Human-reviewed', n:343, prev:0.4257, crit:0.1195}
+];
+
+const popularity = [
+  {name:'Low', n:1403, prev:0.8076, crit:0.2937},
+  {name:'Medium', n:698, prev:0.7249, crit:0.2564},
+  {name:'High', n:272, prev:0.6691, crit:0.2537},
+  {name:'Very High', n:127, prev:0.6142, crit:0.2126}
+];
+
+const complexity = [
+  {name:'Tiny (<50)', n:774, prev:0.6370},
+  {name:'Small (50-200)', n:1124, prev:0.7891},
+  {name:'Medium (200-500)', n:391, prev:0.8568},
+  {name:'Large (500-2k)', n:194, prev:0.8608},
+  {name:'Very Large (2k+)', n:17, prev:1.0}
+];
+
+const cooccurrenceLabels = [
+  'Prompt Inj.','Arb. Code Exec.','Path Traversal','Cred. Leakage',
+  'Excess. Perms.','Dep. Confusion','Data Exfil.','Insec. Deser.',
+  'Missing Valid.','Supply Chain'
+];
+const cooccurrenceMatrix = [
+  [1.0,0.1071,0.1619,0.2048,0.3595,0.0571,0.15,0.0238,0.3738,0.2524],
+  [0.2093,1.0,0.1442,0.2,0.3302,0.0791,0.1581,0.0372,0.3349,0.2372],
+  [0.2237,0.102,1.0,0.1546,0.3487,0.0658,0.1447,0.0329,0.3684,0.2566],
+  [0.2103,0.1051,0.1149,1.0,0.3716,0.0831,0.1296,0.022,0.3521,0.2176],
+  [0.206,0.0969,0.1446,0.2074,1.0,0.0668,0.1583,0.0396,0.3793,0.2524],
+  [0.1678,0.1189,0.1399,0.2378,0.3427,1.0,0.1469,0.035,0.3706,0.2448],
+  [0.2107,0.1137,0.1472,0.1773,0.388,0.0702,1.0,0.0435,0.3445,0.2609],
+  [0.1235,0.0988,0.1235,0.1111,0.358,0.0617,0.1605,1.0,0.4568,0.1852],
+  [0.2099,0.0963,0.1497,0.1925,0.3717,0.0709,0.1377,0.0495,1.0,0.2353],
+  [0.2074,0.0998,0.1526,0.1742,0.362,0.0685,0.1526,0.0294,0.3444,1.0]
+];
+
+// === Chart Defaults ===
+Chart.defaults.color = '#aab';
+Chart.defaults.borderColor = '#2a3a4a';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+const accentPalette = ['#e94560','#0f3460','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e74c3c','#34495e'];
+
+// === Tab Switching ===
+function showTab(id) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  // Lazy-init charts
+  if (id === 'tab-cat' && !window._catInit) { initCatCharts(); window._catInit = true; }
+  if (id === 'tab-vet' && !window._vetInit) { initVetCharts(); window._vetInit = true; }
+  if (id === 'tab-pop' && !window._popInit) { initPopChart(); window._popInit = true; }
+  if (id === 'tab-complex' && !window._cplxInit) { initComplexChart(); window._cplxInit = true; }
+  if (id === 'tab-severity' && !window._sevInit) { initSeverityChart(); window._sevInit = true; }
+  if (id === 'tab-cooccur' && !window._coInit) { initCooccurChart(); window._coInit = true; }
+}
+
+// === Chart: Vulnerability Prevalence ===
+new Chart(document.getElementById('chartVulnPrev'), {
+  type: 'bar',
+  data: {
+    labels: vulnClasses.map(v => v.name),
+    datasets: [{
+      label: 'Prevalence',
+      data: vulnClasses.map(v => v.prev),
+      backgroundColor: accentPalette,
+      borderRadius: 4,
+      borderSkipped: false
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: ctx => (ctx.raw * 100).toFixed(1) + '% prevalence' }}
+    },
+    scales: {
+      x: { beginAtZero: true, max: 0.35, ticks: { callback: v => (v*100)+'%' }, title: { display: true, text: 'Prevalence' }},
+      y: { ticks: { font: { size: 11 }}}
+    }
+  }
+});
+
+new Chart(document.getElementById('chartVulnCount'), {
+  type: 'bar',
+  data: {
+    labels: vulnClasses.map(v => v.name),
+    datasets: [{
+      label: 'Instances',
+      data: vulnClasses.map(v => v.count),
+      backgroundColor: '#3498db',
+      borderRadius: 4,
+      borderSkipped: false
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ctx.raw + ' instances' }}
+    },
+    scales: {
+      x: { beginAtZero: true, title: { display: true, text: 'Instance Count' }},
+      y: { ticks: { font: { size: 11 }}}
+    }
+  }
+});
+
+// === Chart: Category ===
+function initCatCharts() {
+  new Chart(document.getElementById('chartCatPrev'), {
+    type: 'bar',
+    data: {
+      labels: categories.map(c => c.name),
+      datasets: [
+        { label: 'Overall Prevalence', data: categories.map(c => c.prev), backgroundColor: '#e94560', borderRadius: 4 },
+        { label: 'Critical Prevalence', data: categories.map(c => c.crit), backgroundColor: '#f39c12', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw*100).toFixed(1) + '%' }}},
+      scales: {
+        x: { ticks: { font: { size: 11 }}},
+        y: { beginAtZero: true, max: 1, ticks: { callback: v => (v*100)+'%' }}
+      }
+    }
+  });
+  new Chart(document.getElementById('chartCatMean'), {
+    type: 'bar',
+    data: {
+      labels: categories.map(c => c.name),
+      datasets: [{
+        label: 'Mean Vulns/Skill',
+        data: categories.map(c => c.mean),
+        backgroundColor: '#0f3460',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }},
+      scales: {
+        x: { ticks: { font: { size: 11 }}},
+        y: { beginAtZero: true, title: { display: true, text: 'Mean Vulnerabilities per Skill' }}
+      }
+    }
+  });
+}
+
+// === Chart: Vetting ===
+function initVetCharts() {
+  new Chart(document.getElementById('chartVetPrev'), {
+    type: 'bar',
+    data: {
+      labels: vetting.map(v => v.name),
+      datasets: [
+        { label: 'Overall', data: vetting.map(v => v.prev), backgroundColor: '#e94560', borderRadius: 4 },
+        { label: 'Critical', data: vetting.map(v => v.crit), backgroundColor: '#f39c12', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw*100).toFixed(1) + '%' }}},
+      scales: { y: { beginAtZero: true, max: 1, ticks: { callback: v => (v*100)+'%' }}}
+    }
+  });
+  new Chart(document.getElementById('chartVetDist'), {
+    type: 'doughnut',
+    data: {
+      labels: vetting.map(v => v.name + ' (n=' + v.n + ')'),
+      datasets: [{ data: vetting.map(v => v.n), backgroundColor: ['#e74c3c','#f39c12','#2ecc71'] }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' }}
+    }
+  });
+}
+
+// === Chart: Popularity ===
+function initPopChart() {
+  new Chart(document.getElementById('chartPopPrev'), {
+    type: 'bar',
+    data: {
+      labels: popularity.map(p => p.name + ' (n=' + p.n + ')'),
+      datasets: [
+        { label: 'Overall', data: popularity.map(p => p.prev), backgroundColor: '#3498db', borderRadius: 4 },
+        { label: 'Critical', data: popularity.map(p => p.crit), backgroundColor: '#e74c3c', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw*100).toFixed(1) + '%' }}},
+      scales: { y: { beginAtZero: true, max: 1, ticks: { callback: v => (v*100)+'%' }}}
+    }
+  });
+}
+
+// === Chart: Complexity ===
+function initComplexChart() {
+  new Chart(document.getElementById('chartComplexPrev'), {
+    type: 'line',
+    data: {
+      labels: complexity.map(c => c.name),
+      datasets: [{
+        label: 'Prevalence',
+        data: complexity.map(c => c.prev),
+        borderColor: '#e94560',
+        backgroundColor: 'rgba(233,69,96,0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 6,
+        pointBackgroundColor: '#e94560'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: ctx => (ctx.raw*100).toFixed(1) + '% prevalence' }}
+      },
+      scales: {
+        y: { beginAtZero: true, max: 1.05, ticks: { callback: v => (v*100)+'%' }, title: { display: true, text: 'Prevalence' }},
+        x: { title: { display: true, text: 'Code Complexity Tier' }}
+      }
+    }
+  });
+}
+
+// === Chart: Severity Stacked ===
+function initSeverityChart() {
+  new Chart(document.getElementById('chartSeverity'), {
+    type: 'bar',
+    data: {
+      labels: vulnClasses.map(v => v.name),
+      datasets: [
+        { label: 'Critical', data: vulnClasses.map(v => v.crit), backgroundColor: '#e74c3c' },
+        { label: 'High', data: vulnClasses.map(v => v.high), backgroundColor: '#e67e22' },
+        { label: 'Medium', data: vulnClasses.map(v => v.med), backgroundColor: '#f1c40f' },
+        { label: 'Low', data: vulnClasses.map(v => v.low), backgroundColor: '#2ecc71' }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw*100).toFixed(1) + '%' }}
+      },
+      scales: {
+        x: { stacked: true, max: 1, ticks: { callback: v => (v*100)+'%' }},
+        y: { stacked: true, ticks: { font: { size: 11 }}}
+      }
+    }
+  });
+}
+
+// === Chart: Co-occurrence top pairs ===
+function initCooccurChart() {
+  // Extract top co-occurrence pairs (excluding diagonal)
+  const pairs = [];
+  for (let i = 0; i < 10; i++) {
+    for (let j = 0; j < 10; j++) {
+      if (i !== j) {
+        pairs.push({
+          label: cooccurrenceLabels[j] + ' | ' + cooccurrenceLabels[i],
+          value: cooccurrenceMatrix[i][j]
+        });
+      }
+    }
+  }
+  pairs.sort((a, b) => b.value - a.value);
+  const top15 = pairs.slice(0, 15);
+
+  new Chart(document.getElementById('chartCooccur'), {
+    type: 'bar',
+    data: {
+      labels: top15.map(p => p.label),
+      datasets: [{
+        label: 'P(col | row)',
+        data: top15.map(p => p.value),
+        backgroundColor: '#9b59b6',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => 'P = ' + ctx.raw.toFixed(4) }}
+      },
+      scales: {
+        x: { beginAtZero: true, max: 0.5, ticks: { callback: v => v.toFixed(2) }, title: { display: true, text: 'Conditional Probability' }},
+        y: { ticks: { font: { size: 10 }}}
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>

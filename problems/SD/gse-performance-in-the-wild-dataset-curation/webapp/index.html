@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSE Performance in the Wild - Dataset Curation</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0e1a; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 30px; text-align: center; }
+.header h1 { font-size: 1.7em; color: #fff; margin-bottom: 8px; }
+.header p { color: #b0d4f1; font-size: 0.95em; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.card { background: #1a1f2e; border-radius: 12px; padding: 20px; border: 1px solid #2a3040; }
+.card h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.1em; }
+.full-width { grid-column: 1 / -1; }
+.stats-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+.stat-box { background: #1a1f2e; border-radius: 10px; padding: 20px 25px; text-align: center; border: 1px solid #2a3040; min-width: 150px; }
+.stat-box .value { font-size: 1.7em; font-weight: bold; color: var(--accent); }
+.stat-box .label { font-size: 0.82em; color: #90a4ae; margin-top: 5px; }
+canvas { max-height: 350px; }
+.controls { margin-bottom: 15px; }
+.controls label { margin-right: 10px; color: #90a4ae; }
+.controls input[type=range] { width: 200px; vertical-align: middle; }
+.controls span { color: var(--accent); font-weight: bold; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid #2a3040; }
+th { color: var(--accent); font-weight: 600; }
+td { color: #cfd8dc; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Generative Speech Enhancement for In-the-Wild TTS Dataset Curation</h1>
+<p>Evaluating GSE Performance Beyond Curated Corpora | Yamauchi et al., arXiv:2601.12254</p>
+</div>
+<div class="container">
+<div class="stats-row">
+<div class="stat-box"><div class="value">+0.46</div><div class="label">PESQ Gain (In-the-Wild)</div></div>
+<div class="stat-box"><div class="value">15.0%</div><div class="label">Hallucination Rate (Wild)</div></div>
+<div class="stat-box"><div class="value">8.6%</div><div class="label">Hallucination Rate (Curated)</div></div>
+<div class="stat-box"><div class="value">28%</div><div class="label">Retention at Thresh 0.7</div></div>
+<div class="stat-box"><div class="value">5 dB</div><div class="label">Min SNR for Reliable GSE</div></div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h3>Enhancement Quality (PESQ) by Condition and Model</h3>
+<canvas id="pesqChart"></canvas>
+</div>
+<div class="card">
+<h3>Hallucination Rates</h3>
+<canvas id="hallucChart"></canvas>
+</div>
+<div class="card">
+<h3>Confidence Filtering Trade-off</h3>
+<div class="controls">
+<label>Threshold: <span id="threshVal">0.5</span></label>
+<input type="range" id="threshSlider" min="0" max="4" step="1" value="2" oninput="updateThresh()">
+</div>
+<canvas id="filterChart"></canvas>
+</div>
+<div class="card">
+<h3>SNR Dependence (In-the-Wild, Generative SE)</h3>
+<canvas id="snrChart"></canvas>
+</div>
+<div class="card">
+<h3>Quality Summary Table</h3>
+<table>
+<thead><tr><th>Condition</th><th>Raw PESQ</th><th>GSE PESQ</th><th>Improvement</th><th>Halluc. Rate</th></tr></thead>
+<tbody>
+<tr><td>Curated</td><td>3.60</td><td>3.81</td><td>+0.21</td><td>8.6%</td></tr>
+<tr><td>Semi-Wild</td><td>2.43</td><td>2.87</td><td>+0.44</td><td>11.0%</td></tr>
+<tr><td>In-the-Wild</td><td>1.38</td><td>1.84</td><td>+0.46</td><td>15.0%</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<script>
+Chart.defaults.color = '#b0bec5';
+Chart.defaults.borderColor = '#2a3040';
+
+const conditions = ['Curated', 'Semi-Wild', 'In-the-Wild'];
+const models = ['Baseline SE', 'Neural SE', 'Generative SE'];
+const mColors = ['#7f8c8d', '#2980b9', '#1a3a5c'];
+
+const rawPesq = [3.60, 2.43, 1.38];
+const enhPesq = {
+  'Baseline SE': [3.72, 2.52, 1.45],
+  'Neural SE': [3.88, 2.65, 1.58],
+  'Generative SE': [3.81, 2.87, 1.84]
+};
+
+const datasets = [{ label: 'Raw', data: rawPesq, backgroundColor: '#95a5a6', borderRadius: 6 }];
+models.forEach((m, i) => datasets.push({ label: m, data: enhPesq[m], backgroundColor: mColors[i], borderRadius: 6 }));
+
+new Chart(document.getElementById('pesqChart'), {
+  type: 'bar',
+  data: { labels: conditions, datasets: datasets },
+  options: { responsive: true, scales: { y: { min: 1.0, max: 4.5, title: { display: true, text: 'PESQ' } } } }
+});
+
+const hallucData = {
+  'Baseline SE': [0.0, 0.0, 0.0],
+  'Neural SE': [0.02, 0.03, 0.05],
+  'Generative SE': [0.086, 0.11, 0.15]
+};
+new Chart(document.getElementById('hallucChart'), {
+  type: 'bar',
+  data: { labels: conditions, datasets: models.map((m, i) => ({
+    label: m, data: hallucData[m].map(v => v * 100), backgroundColor: mColors[i], borderRadius: 6
+  })) },
+  options: { responsive: true, scales: { y: { title: { display: true, text: 'Hallucination Rate (%)' } } } }
+});
+
+const thresholds = [0.0, 0.3, 0.5, 0.7, 0.9];
+const filterData = {
+  curated: { retention: [1.0, 0.92, 0.82, 0.68, 0.35], pesq: [3.81, 3.85, 3.91, 4.00, 4.15] },
+  semi_wild: { retention: [1.0, 0.78, 0.60, 0.42, 0.15], pesq: [2.87, 2.95, 3.10, 3.30, 3.60] },
+  in_the_wild: { retention: [1.0, 0.62, 0.45, 0.28, 0.08], pesq: [1.84, 1.95, 2.10, 2.33, 2.80] }
+};
+const condColors = ['#27ae60', '#e67e22', '#e74c3c'];
+const condKeys = ['curated', 'semi_wild', 'in_the_wild'];
+
+let filterChart;
+function updateThresh() {
+  const idx = parseInt(document.getElementById('threshSlider').value);
+  document.getElementById('threshVal').textContent = thresholds[idx].toFixed(1);
+  if (filterChart) filterChart.destroy();
+  const data = condKeys.map((k, i) => ({
+    label: conditions[i],
+    x: filterData[k].retention[idx] * 100,
+    y: filterData[k].pesq[idx]
+  }));
+  filterChart = new Chart(document.getElementById('filterChart'), {
+    type: 'bar',
+    data: { labels: conditions, datasets: [
+      { label: 'Retention %', data: condKeys.map((k) => filterData[k].retention[idx]*100), backgroundColor: condColors, borderRadius: 6, yAxisID: 'y' },
+      { label: 'Mean PESQ', data: condKeys.map((k) => filterData[k].pesq[idx]), backgroundColor: condColors.map(c=>c+'88'), borderRadius: 6, yAxisID: 'y1' }
+    ] },
+    options: { responsive: true, scales: {
+      y: { position: 'left', min: 0, max: 100, title: { display: true, text: 'Retention (%)' } },
+      y1: { position: 'right', min: 1.0, max: 4.5, title: { display: true, text: 'PESQ' }, grid: { display: false } }
+    } }
+  });
+}
+updateThresh();
+
+const snrBins = ['-5-0', '0-5', '5-10', '10-15', '15-20'];
+const snrPesq = [1.25, 1.45, 1.72, 2.05, 2.35];
+const snrHalluc = [0.25, 0.20, 0.14, 0.10, 0.07];
+new Chart(document.getElementById('snrChart'), {
+  type: 'line',
+  data: { labels: snrBins, datasets: [
+    { label: 'PESQ', data: snrPesq, borderColor: '#2980b9', backgroundColor: '#2980b933', tension: 0.3, yAxisID: 'y', pointRadius: 5 },
+    { label: 'Halluc. Rate', data: snrHalluc.map(v=>v*100), borderColor: '#e74c3c', backgroundColor: '#e74c3c33', tension: 0.3, yAxisID: 'y1', pointRadius: 5 }
+  ] },
+  options: { responsive: true, scales: {
+    y: { position: 'left', min: 1.0, max: 3.0, title: { display: true, text: 'PESQ' } },
+    y1: { position: 'right', min: 0, max: 30, title: { display: true, text: 'Halluc. Rate (%)' }, grid: { display: false } },
+    x: { title: { display: true, text: 'Input SNR (dB)' } }
+  } }
+});
+</script>
+</body>
+</html>

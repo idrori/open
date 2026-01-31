@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Effectiveness and Auditability of Latent Agentic Reasoning</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.8; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
+.card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; height: 300px !important; }
+.metric { display: inline-block; background: #eef2f7; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.25rem; font-size: 0.9rem; }
+.metric .val { font-weight: bold; color: var(--primary); }
+.controls { margin: 1rem 0; }
+.controls label { font-size: 0.9rem; color: var(--primary); font-weight: 600; }
+.controls input[type="range"] { width: 100%; margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Effectiveness and Auditability of Latent Agentic Reasoning</h1>
+<p>Interactive exploration of probing performance, Pareto frontiers, and layer-wise analysis</p>
+</div>
+<div class="container">
+<div class="grid">
+<div class="card">
+<h2>Pareto Frontier: Effectiveness vs Auditability</h2>
+<canvas id="paretoChart"></canvas>
+</div>
+<div class="card">
+<h2>Layer-wise Probe Accuracy</h2>
+<canvas id="layerChart"></canvas>
+</div>
+<div class="card">
+<h2>Probe Performance Summary</h2>
+<canvas id="probeChart"></canvas>
+</div>
+<div class="card">
+<h2>Signal Strength Sensitivity</h2>
+<canvas id="signalChart"></canvas>
+<div class="controls">
+<label>Planning Signal Strength: <span id="ssVal">0.80</span></label>
+<input type="range" id="ssSlider" min="0" max="5" value="4">
+</div>
+</div>
+</div>
+</div>
+<script>
+const PRIMARY = '#1a3a5c', ACCENT = '#2980b9', RED = '#e74c3c', GREEN = '#27ae60', ORANGE = '#f39c12';
+// Pareto data
+const alphas = [0,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0];
+const eff = [0.85,0.84,0.83,0.82,0.81,0.79,0.78,0.76,0.74,0.72,0.70,0.68,0.65,0.62,0.59,0.55,0.51,0.47,0.42,0.37,0.31];
+const aud = [0.27,0.32,0.40,0.48,0.55,0.60,0.65,0.69,0.72,0.75,0.77,0.79,0.81,0.82,0.84,0.85,0.86,0.87,0.88,0.89,0.89];
+new Chart(document.getElementById('paretoChart'), {
+  type: 'scatter', data: { datasets: [{
+    label: 'Alpha sweep', data: eff.map((e,i) => ({x:e,y:aud[i]})),
+    backgroundColor: alphas.map(a => `rgba(41,128,185,${0.3+a*0.7})`),
+    pointRadius: 6, borderColor: PRIMARY, borderWidth: 1
+  }]}, options: { responsive: true, plugins: { legend: {display:false} },
+    scales: { x: {title:{display:true,text:'Task Effectiveness'}}, y: {title:{display:true,text:'Auditability Score'}} }
+  }
+});
+// Layer-wise
+const layers = Array.from({length:12}, (_,i) => i);
+const plan = [0.51,0.55,0.62,0.72,0.80,0.86,0.89,0.90,0.88,0.84,0.78,0.72];
+const goal = [0.42,0.44,0.48,0.55,0.63,0.71,0.78,0.83,0.86,0.85,0.82,0.78];
+const quality = [0.31,0.38,0.45,0.51,0.56,0.61,0.65,0.69,0.72,0.75,0.77,0.79];
+const collab = [0.35,0.37,0.41,0.47,0.53,0.59,0.64,0.69,0.73,0.77,0.80,0.83];
+new Chart(document.getElementById('layerChart'), {
+  type: 'line', data: { labels: layers,
+    datasets: [
+      {label:'Plan Detection',data:plan,borderColor:PRIMARY,fill:false,tension:0.3},
+      {label:'Goal Detection',data:goal,borderColor:ACCENT,fill:false,tension:0.3},
+      {label:'Decision Quality',data:quality,borderColor:RED,fill:false,tension:0.3},
+      {label:'Collaboration',data:collab,borderColor:GREEN,fill:false,tension:0.3}
+    ]}, options: { responsive: true, scales: { x: {title:{display:true,text:'Layer'}}, y: {title:{display:true,text:'Probe R2'},min:0,max:1} } }
+});
+// Probe bars
+new Chart(document.getElementById('probeChart'), {
+  type: 'bar', data: { labels: ['Quality\n(Linear)','Quality\n(MLP)','Goal','Plan','Coordination','Success'],
+    datasets: [{ label: 'Accuracy/R2', data: [0.45,0.52,0.60,0.30,0.48,0.58],
+      backgroundColor: [PRIMARY,ACCENT,RED,GREEN,ORANGE,'#8e44ad'] }]
+  }, options: { responsive: true, plugins:{legend:{display:false}}, scales: {y:{min:0,max:1,title:{display:true,text:'Score'}}} }
+});
+// Signal strength
+const ss = [0.1,0.2,0.4,0.6,0.8,1.0];
+const r2s = [0.12,0.22,0.41,0.55,0.65,0.72];
+const sels = [1.1,1.5,2.8,4.2,5.8,7.1];
+let sigChart = new Chart(document.getElementById('signalChart'), {
+  type: 'line', data: { labels: ss,
+    datasets: [
+      {label:'Probe R2',data:r2s,borderColor:PRIMARY,yAxisID:'y',fill:false,tension:0.3},
+      {label:'Selectivity',data:sels,borderColor:RED,yAxisID:'y1',fill:false,tension:0.3,borderDash:[5,5]}
+    ]}, options: { responsive:true, scales: {
+      y:{position:'left',title:{display:true,text:'R2'},min:0,max:1},
+      y1:{position:'right',title:{display:true,text:'Selectivity'},min:0,max:8,grid:{drawOnChartArea:false}}
+    }}
+});
+document.getElementById('ssSlider').addEventListener('input', function(e) {
+  const idx = parseInt(e.target.value);
+  document.getElementById('ssVal').textContent = ss[idx].toFixed(2);
+  sigChart.data.datasets[0].data = r2s.map((v,i) => i<=idx?v:null);
+  sigChart.data.datasets[1].data = sels.map((v,i) => i<=idx?v:null);
+  sigChart.update();
+});
+</script>
+</body>
+</html>

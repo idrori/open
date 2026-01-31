@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLM Robustness for Robotics Reward Modeling</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0e1a; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 30px; text-align: center; }
+.header h1 { font-size: 1.8em; color: #fff; margin-bottom: 8px; }
+.header p { color: #b0d4f1; font-size: 0.95em; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.card { background: #1a1f2e; border-radius: 12px; padding: 20px; border: 1px solid #2a3040; }
+.card h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.1em; }
+.full-width { grid-column: 1 / -1; }
+.stats-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+.stat-box { background: #1a1f2e; border-radius: 10px; padding: 20px 25px; text-align: center; border: 1px solid #2a3040; min-width: 150px; }
+.stat-box .value { font-size: 1.7em; font-weight: bold; color: var(--accent); }
+.stat-box .label { font-size: 0.82em; color: #90a4ae; margin-top: 5px; }
+canvas { max-height: 350px; }
+.controls { margin-bottom: 15px; }
+.controls label { margin-right: 10px; color: #90a4ae; }
+.controls select { padding: 5px 10px; background: #2a3040; color: #e0e0e0; border: 1px solid #3a4050; border-radius: 5px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid #2a3040; }
+th { color: var(--accent); font-weight: 600; }
+td { color: #cfd8dc; }
+.warn { color: #e67e22; }
+.good { color: #27ae60; }
+.bad { color: #e74c3c; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Robustness of VLMs for Robotics Reward Modeling</h1>
+<p>Perturbation-Based Evaluation of Vision-Language Reward Models | Lee et al., arXiv:2601.00675</p>
+</div>
+<div class="container">
+<div class="stats-row">
+<div class="stat-box"><div class="value">92.7%</div><div class="label">General VLM (Clean)</div></div>
+<div class="stat-box"><div class="value">80.9%</div><div class="label">General VLM (Worst)</div></div>
+<div class="stat-box"><div class="value">96.5%</div><div class="label">Tuned VLM (Clean)</div></div>
+<div class="stat-box"><div class="value">92.6%</div><div class="label">Ensemble (Worst Visual)</div></div>
+<div class="stat-box"><div class="value">0.70</div><div class="label">Reliability Threshold</div></div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h3>Accuracy Degradation Under Perturbations</h3>
+<div class="controls">
+<label>Perturbation Type:</label>
+<select id="pertSelect" onchange="updateDegradation()">
+<option value="0">Visual</option>
+<option value="1">Semantic</option>
+<option value="2">Temporal</option>
+<option value="3">Domain Shift</option>
+</select>
+</div>
+<canvas id="degradationChart"></canvas>
+</div>
+<div class="card">
+<h3>Worst-Case Accuracy (Severity 4)</h3>
+<canvas id="worstChart"></canvas>
+</div>
+<div class="card">
+<h3>Rank Correlation Preservation</h3>
+<canvas id="tauChart"></canvas>
+</div>
+<div class="card full-width">
+<h3>Reliability Thresholds (Max Severity Before Unreliable)</h3>
+<table>
+<thead><tr><th>Model</th><th>Visual</th><th>Semantic</th><th>Temporal</th><th>Domain Shift</th></tr></thead>
+<tbody>
+<tr><td>General VLM</td><td class="bad">1</td><td class="bad">1</td><td class="bad">1</td><td class="bad">1</td></tr>
+<tr><td>Robotics-tuned VLM</td><td class="good">4</td><td class="warn">3</td><td class="good">5</td><td class="good">4</td></tr>
+<tr><td>Ensemble VLM</td><td class="good">5</td><td class="good">5</td><td class="good">5</td><td class="good">4</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<script>
+Chart.defaults.color = '#b0bec5';
+Chart.defaults.borderColor = '#2a3040';
+
+const models = ['General VLM', 'Robotics-tuned VLM', 'Ensemble VLM'];
+const severities = [0, 1, 2, 3, 4];
+const colors = ['#7f8c8d', '#2980b9', '#1a3a5c'];
+const pertTypes = ['visual', 'semantic', 'temporal', 'domain_shift'];
+
+const accProfiles = {
+  visual: [[0.927, 0.898, 0.863, 0.832, 0.809],[0.965, 0.953, 0.941, 0.929, 0.918],[0.959, 0.949, 0.940, 0.933, 0.926]],
+  semantic: [[0.927, 0.915, 0.904, 0.894, 0.884],[0.965, 0.935, 0.905, 0.875, 0.841],[0.959, 0.950, 0.941, 0.931, 0.920]],
+  temporal: [[0.928, 0.903, 0.879, 0.855, 0.832],[0.965, 0.956, 0.948, 0.941, 0.938],[0.959, 0.951, 0.943, 0.938, 0.931]],
+  domain_shift: [[0.927, 0.893, 0.860, 0.838, 0.815],[0.965, 0.943, 0.921, 0.904, 0.889],[0.959, 0.942, 0.925, 0.906, 0.883]]
+};
+
+const tauData = [[0.97, 0.94, 0.91, 0.87, 0.82],[0.98, 0.97, 0.96, 0.95, 0.94],[0.98, 0.97, 0.96, 0.95, 0.93]];
+
+let degradationChart;
+function updateDegradation() {
+  const idx = parseInt(document.getElementById('pertSelect').value);
+  const pt = pertTypes[idx];
+  if (degradationChart) degradationChart.destroy();
+  degradationChart = new Chart(document.getElementById('degradationChart'), {
+    type: 'line',
+    data: { labels: severities, datasets: models.map((m, i) => ({
+      label: m, data: accProfiles[pt][i], borderColor: colors[i], backgroundColor: colors[i]+'33', tension: 0.3, pointRadius: 5, borderWidth: 2
+    })) },
+    options: { responsive: true, scales: { y: { min: 0.7, max: 1.0, title: { display: true, text: 'Accuracy' } }, x: { title: { display: true, text: 'Severity Level' } } } }
+  });
+}
+updateDegradation();
+
+const worstData = {
+  labels: pertTypes.map(p => p.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())),
+  datasets: models.map((m, i) => ({
+    label: m, data: pertTypes.map(p => accProfiles[p][i][4]),
+    backgroundColor: colors[i], borderRadius: 6
+  }))
+};
+new Chart(document.getElementById('worstChart'), {
+  type: 'bar', data: worstData,
+  options: { responsive: true, scales: { y: { min: 0.7, max: 1.0, title: { display: true, text: 'Accuracy' } } } }
+});
+
+new Chart(document.getElementById('tauChart'), {
+  type: 'line',
+  data: { labels: severities, datasets: models.map((m, i) => ({
+    label: m, data: tauData[i], borderColor: colors[i], backgroundColor: colors[i]+'33', tension: 0.3, pointRadius: 5, borderWidth: 2
+  })) },
+  options: { responsive: true, scales: { y: { min: 0.7, max: 1.0, title: { display: true, text: "Kendall's Tau" } }, x: { title: { display: true, text: 'Severity Level' } } } }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Benefits of Text Diffusion Sampling Beyond Code</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
+.container{max-width:1300px;margin:0 auto;padding:20px}
+header{text-align:center;padding:40px 20px;background:linear-gradient(135deg,#1e293b,#0f172a);border-bottom:2px solid #334155}
+h1{font-size:1.8rem;color:#f8fafc;margin-bottom:10px}
+.subtitle{color:#94a3b8;font-size:1rem;max-width:900px;margin:0 auto}
+.section{margin:30px 0;padding:25px;background:#1e293b;border-radius:12px;border:1px solid #334155}
+.section h2{color:#a78bfa;font-size:1.3rem;margin-bottom:15px;border-bottom:1px solid #334155;padding-bottom:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+.chart-box{background:#0f172a;border-radius:8px;padding:15px;border:1px solid #334155}
+.chart-box h3{color:#e2e8f0;font-size:0.95rem;margin-bottom:10px;text-align:center}
+canvas{max-height:320px}
+.tabs{display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap}
+.tab{padding:8px 16px;background:#334155;color:#e2e8f0;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;transition:all 0.2s}
+.tab:hover,.tab.active{background:#a78bfa;color:#0f172a}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:8px 12px;text-align:center;border-bottom:1px solid #334155}
+th{background:#334155;color:#a78bfa;font-weight:600}
+tr:hover{background:#1a2744}
+.key-result{display:inline-block;background:#2e1065;color:#c4b5fd;padding:4px 12px;border-radius:20px;font-size:0.8rem;margin:3px}
+.pos{color:#4ade80}.neg{color:#f87171}
+@media(max-width:768px){.grid2,.grid3{grid-template-columns:1fr}h1{font-size:1.3rem}}
+</style>
+</head>
+<body>
+<header>
+<h1>Beyond Code: Quantifying the Domain-Dependent Benefits of Text Diffusion Sampling</h1>
+<p class="subtitle">Investigating whether text diffusion advantages extend beyond code to mathematical reasoning, structured text, general prose, and translation through bidirectionality analysis, augmentation estimation, and simulated decoding comparison.</p>
+</header>
+<div class="container">
+
+<div class="section">
+<h2>Problem Statement</h2>
+<p style="color:#94a3b8">Stable-DiffCoder demonstrated that diffusion-based LLMs outperform autoregressive baselines on code generation. The open question: do these benefits extend to other domains? This work answers affirmatively through three complementary analyses across five domains.</p>
+<div style="margin-top:12px">
+<div class="key-result">Translation: +10.1% accuracy gain</div>
+<div class="key-result">General Text: +7.5% accuracy gain</div>
+<div class="key-result">4/5 domains favor diffusion at 50% masking</div>
+<div class="key-result">Oracle gap: +1.4% to +8.8% at k=8</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Bidirectionality Index by Domain</h2>
+<div class="grid2">
+<div class="chart-box"><h3>Bidirectionality Index (beta)</h3><canvas id="bidirChart"></canvas></div>
+<div class="chart-box"><h3>Domain Structural Properties</h3><canvas id="domainPropsChart"></canvas></div>
+</div>
+<p style="margin-top:10px;color:#94a3b8;font-size:0.9rem">Values near 1.0 indicate symmetric forward/backward dependencies. General text and translation show perfect symmetry (beta=1.0). Code and math show slight forward dominance. Structured text has strongest asymmetry (beta=0.926).</p>
+</div>
+
+<div class="section">
+<h2>Diffusion Augmentation Factor</h2>
+<div class="grid2">
+<div class="chart-box"><h3>Constraint Density by Domain</h3><canvas id="densityChart"></canvas></div>
+<div class="chart-box"><h3>Effective Augmentation Multiplier (log scale)</h3><canvas id="augChart"></canvas></div>
+</div>
+<table style="margin-top:15px">
+<tr><th>Domain</th><th>Mean Length</th><th>Unique Tokens</th><th>Constraint Density</th><th>Eff. Multiplier</th></tr>
+<tr><td>Code</td><td>24.3</td><td>124</td><td>0.104</td><td>177,169x</td></tr>
+<tr><td>Math Reasoning</td><td>18.1</td><td>162</td><td>0.086</td><td>5,156x</td></tr>
+<tr><td>Structured Text</td><td>14.4</td><td>160</td><td>0.089</td><td>562x</td></tr>
+<tr><td>General Text</td><td>14.4</td><td>195</td><td>0.010</td><td>487x</td></tr>
+<tr><td>Translation</td><td>11.9</td><td>153</td><td>0.034</td><td>99x</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Decoding Accuracy: Diffusion vs. Autoregressive</h2>
+<div class="tabs" id="maskTabs">
+<button class="tab active" onclick="switchMask('0.3')">30% Mask</button>
+<button class="tab" onclick="switchMask('0.5')">50% Mask</button>
+<button class="tab" onclick="switchMask('0.7')">70% Mask</button>
+</div>
+<div class="grid2">
+<div class="chart-box"><h3>Accuracy Comparison</h3><canvas id="decodingChart"></canvas></div>
+<div class="chart-box"><h3>Accuracy Gap (Diffusion - AR)</h3><canvas id="gapChart"></canvas></div>
+</div>
+</div>
+
+<div class="section">
+<h2>Accuracy Gap Across Mask Fractions</h2>
+<div class="chart-box"><h3>Diffusion Advantage by Mask Fraction</h3><canvas id="maskSweepChart"></canvas></div>
+</div>
+
+<div class="section">
+<h2>Sample Diversity &amp; Oracle Accuracy (k=8, 50% mask)</h2>
+<div class="grid2">
+<div class="chart-box"><h3>Pairwise Diversity</h3><canvas id="diversityChart"></canvas></div>
+<div class="chart-box"><h3>Best-of-k Oracle Accuracy</h3><canvas id="oracleChart"></canvas></div>
+</div>
+</div>
+
+<div class="section">
+<h2>Denoising Steps Sensitivity (50% mask)</h2>
+<div class="chart-box"><h3>Diffusion Accuracy vs. Denoising Steps</h3><canvas id="stepsChart"></canvas></div>
+</div>
+
+<div class="section">
+<h2>Key Findings</h2>
+<div class="grid2">
+<div>
+<ul style="padding-left:20px;color:#94a3b8">
+<li>Diffusion benefits extend beyond code -- 4/5 domains show gains at 50% masking.</li>
+<li>Largest gains in translation (+10.1%) and general text (+7.5%), where local context is weakest.</li>
+<li>Diversity advantage: 25-33% more diverse samples across all domains.</li>
+<li>Oracle gap of +1.4% to +8.8% at k=8 favors diffusion universally.</li>
+</ul>
+</div>
+<div>
+<ul style="padding-left:20px;color:#94a3b8">
+<li>Moderate denoising steps (5-8) suffice -- diminishing returns beyond that.</li>
+<li>Code benefits most from additional steps (+5.2% relative improvement).</li>
+<li>Pearson r=0.530 between bidirectionality and accuracy gap.</li>
+<li>Composite ranking: General Text > Translation > Code > Math > Structured Text.</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+const domains = ['Code','Math','Structured','General','Translation'];
+const domKeys = ['code','math_reasoning','structured_text','general_text','translation'];
+const bidir = [0.981,0.981,0.926,1.000,1.000];
+const density = [0.104,0.086,0.089,0.010,0.034];
+const augMult = [177169,5156,562,487,99];
+const meanLen = [24.3,18.1,14.4,14.4,11.9];
+const dColors = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444'];
+
+const decoding = {
+  '0.3':{diff:[0.848,0.828,0.866,0.924,0.877],ar:[0.828,0.771,0.745,0.729,0.695]},
+  '0.5':{diff:[0.722,0.672,0.703,0.727,0.700],ar:[0.709,0.686,0.686,0.652,0.599]},
+  '0.7':{diff:[0.569,0.518,0.542,0.563,0.542],ar:[0.560,0.545,0.557,0.538,0.552]}
+};
+const diversity8 = {diff:[0.499,0.551,0.542,0.605,0.608],ar:[0.397,0.449,0.425,0.477,0.456]};
+const oracle8 = {diff:[0.786,0.762,0.786,0.733,0.745],ar:[0.772,0.699,0.734,0.655,0.657]};
+const noiseSteps = [1,2,3,5,8,10,15,20];
+const noiseData = {
+  code:[0.686,0.710,0.706,0.722,0.715,0.721,0.721,0.722],
+  math:[0.643,0.677,0.676,0.672,0.682,0.682,0.682,0.682],
+  struct:[0.674,0.687,0.710,0.703,0.701,0.701,0.701,0.701],
+  general:[0.727,0.727,0.730,0.727,0.727,0.727,0.727,0.727],
+  translation:[0.696,0.700,0.700,0.700,0.700,0.700,0.700,0.700]
+};
+const cOpts = (yTitle) => ({responsive:true,plugins:{legend:{labels:{color:'#e2e8f0'}}},scales:{x:{ticks:{color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},title:{display:!!yTitle,text:yTitle||'',color:'#94a3b8'}}}});
+
+new Chart(document.getElementById('bidirChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Bidirectionality Index',data:bidir,backgroundColor:dColors}]},options:{...cOpts('Beta'),scales:{...cOpts('Beta').scales,y:{...cOpts('Beta').scales.y,min:0.85,max:1.05}}}});
+new Chart(document.getElementById('domainPropsChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Mean Length',data:meanLen,backgroundColor:'rgba(139,92,246,0.7)'},{label:'Density x100',data:density.map(v=>v*100),backgroundColor:'rgba(245,158,11,0.7)'}]},options:cOpts()});
+new Chart(document.getElementById('densityChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Constraint Density',data:density,backgroundColor:dColors}]},options:cOpts('Density')});
+new Chart(document.getElementById('augChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Log10(Multiplier)',data:augMult.map(v=>Math.log10(v)),backgroundColor:dColors}]},options:cOpts('Log10(Multiplier)')});
+
+let decodingChart, gapChart;
+function renderDecoding(mask) {
+  const d = decoding[mask];
+  const gap = d.diff.map((v,i)=>+(v-d.ar[i]).toFixed(3));
+  if(decodingChart) decodingChart.destroy();
+  if(gapChart) gapChart.destroy();
+  decodingChart = new Chart(document.getElementById('decodingChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Diffusion',data:d.diff,backgroundColor:'rgba(139,92,246,0.7)'},{label:'AR',data:d.ar,backgroundColor:'rgba(100,116,139,0.7)'}]},options:cOpts('Accuracy')});
+  gapChart = new Chart(document.getElementById('gapChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Gap (Diff-AR)',data:gap,backgroundColor:gap.map(v=>v>=0?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)')}]},options:cOpts('Accuracy Gap')});
+}
+function switchMask(m) {
+  document.querySelectorAll('#maskTabs .tab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  renderDecoding(m);
+}
+renderDecoding('0.5');
+
+// Mask sweep
+const masks = ['0.3','0.5','0.7'];
+new Chart(document.getElementById('maskSweepChart').getContext('2d'),{type:'line',data:{labels:['30%','50%','70%'],datasets:domKeys.map((k,i)=>({label:domains[i],data:masks.map(m=>{const d=decoding[m];return +(d.diff[i]-d.ar[i]).toFixed(3)}),borderColor:dColors[i],backgroundColor:dColors[i]+'33',fill:false,tension:0.3}))},options:{...cOpts('Accuracy Gap (Diff-AR)'),scales:{...cOpts().scales,y:{...cOpts().scales.y,title:{display:true,text:'Gap',color:'#94a3b8'}}}}});
+
+// Diversity
+new Chart(document.getElementById('diversityChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Diffusion',data:diversity8.diff,backgroundColor:'rgba(139,92,246,0.7)'},{label:'AR',data:diversity8.ar,backgroundColor:'rgba(100,116,139,0.7)'}]},options:cOpts('Pairwise Diversity')});
+new Chart(document.getElementById('oracleChart').getContext('2d'),{type:'bar',data:{labels:domains,datasets:[{label:'Diffusion',data:oracle8.diff,backgroundColor:'rgba(139,92,246,0.7)'},{label:'AR',data:oracle8.ar,backgroundColor:'rgba(100,116,139,0.7)'}]},options:cOpts('Oracle Accuracy')});
+
+// Steps
+new Chart(document.getElementById('stepsChart').getContext('2d'),{type:'line',data:{labels:noiseSteps,datasets:[{label:'Code',data:noiseData.code,borderColor:dColors[0],fill:false,tension:0.3},{label:'Math',data:noiseData.math,borderColor:dColors[1],fill:false,tension:0.3},{label:'Structured',data:noiseData.struct,borderColor:dColors[2],fill:false,tension:0.3},{label:'General',data:noiseData.general,borderColor:dColors[3],fill:false,tension:0.3},{label:'Translation',data:noiseData.translation,borderColor:dColors[4],fill:false,tension:0.3}]},options:{...cOpts('Accuracy'),scales:{...cOpts().scales,x:{...cOpts().scales.x,title:{display:true,text:'Denoising Steps',color:'#94a3b8'}}}}});
+</script>
+</body>
+</html>

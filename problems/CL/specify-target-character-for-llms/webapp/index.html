@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Specify Target Character for LLMs</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#222;--muted:#666;--border:#dde3ea}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;max-width:900px;margin:0 auto}
+header p{opacity:.85;margin-top:.5rem;font-size:.95rem}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+.card{background:var(--card);border-radius:10px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);border:1px solid var(--border)}
+.card h2{font-size:1.1rem;color:var(--primary);margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+.stat-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--bg);border-radius:8px;padding:1rem 1.25rem;flex:1;min-width:130px;text-align:center}
+.stat .val{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat .lbl{font-size:.78rem;color:var(--muted);margin-top:.25rem}
+canvas{max-height:340px}
+</style>
+</head>
+<body>
+<header>
+<h1>Specify Target Character for LLMs</h1>
+<p>Target Character Integrity (TCI) framework for specifying and measuring LLM character alignment</p>
+</header>
+<div class="container">
+<div class="stat-row">
+<div class="stat"><div class="val">0.864</div><div class="lbl">Best TCI (Constitutional AI)</div></div>
+<div class="stat"><div class="val">0.696</div><div class="lbl">Worst TCI (Sycophantic)</div></div>
+<div class="stat"><div class="val">8</div><div class="lbl">Character Traits</div></div>
+<div class="stat"><div class="val">6</div><div class="lbl">Archetypes Tested</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>TCI Scores by Archetype</h2>
+<canvas id="tciChart"></canvas>
+</div>
+<div class="card">
+<h2>Trait Scores Across Pipeline Stages</h2>
+<canvas id="pipelineChart"></canvas>
+</div>
+<div class="card">
+<h2>Trait-Level Target vs Achieved (RLHF)</h2>
+<canvas id="radarChart"></canvas>
+</div>
+<div class="card">
+<h2>Pipeline Stage Mean Trait Scores</h2>
+<canvas id="stageChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+const archetypes=['Balanced Ideal','Safety First','Helpfulness Max','Sycophantic','Adversarial Robust','Constitutional AI'];
+const tciScores=[0.858,0.860,0.804,0.696,0.842,0.864];
+new Chart(document.getElementById('tciChart'),{type:'bar',data:{labels:archetypes,datasets:[{label:'TCI Score',data:tciScores,backgroundColor:['#3498db','#2ecc71','#e67e22','#e74c3c','#9b59b6','#1abc9c'],borderRadius:6}]},options:{responsive:true,indexAxis:'horizontal',plugins:{legend:{display:false}},scales:{y:{min:0.6,max:0.9,title:{display:true,text:'TCI Score'}}}}});
+const traits=['Honesty','Helpfulness','Harmlessness','Humility','Transparency','Fairness','Corrigibility','Robustness'];
+const target=[0.9,0.85,0.9,0.75,0.85,0.85,0.8,0.85];
+const pretrain=[0.797,0.965,0.686,0.605,0.861,0.871,0.621,0.583];
+const sft=[0.847,1.0,0.826,0.639,0.916,0.996,0.701,0.532];
+const rlhf=[0.826,1.0,0.854,0.590,0.927,1.0,0.759,0.537];
+new Chart(document.getElementById('pipelineChart'),{type:'line',data:{labels:traits,datasets:[{label:'Target',data:target,borderColor:'#1a3a5c',borderDash:[5,5],fill:false,tension:.2,pointRadius:4},{label:'Pretrain',data:pretrain,borderColor:'#95a5a6',fill:false,tension:.2},{label:'SFT',data:sft,borderColor:'#e67e22',fill:false,tension:.2},{label:'RLHF',data:rlhf,borderColor:'#2980b9',fill:false,tension:.2}]},options:{responsive:true,scales:{y:{min:0.4,max:1.05,title:{display:true,text:'Score'}}}}});
+new Chart(document.getElementById('radarChart'),{type:'radar',data:{labels:traits,datasets:[{label:'Target',data:[0.905,0.801,0.883,0.779,0.886,0.848,0.782,0.843],borderColor:'#1a3a5c',backgroundColor:'rgba(26,58,92,0.1)',pointRadius:4},{label:'RLHF Achieved',data:[0.823,0.938,0.835,0.613,0.946,0.963,0.754,0.498],borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.15)',pointRadius:4}]},options:{responsive:true,scales:{r:{min:0.3,max:1.0}}}});
+const stageLabels=['Target','Pretrain','SFT','RLHF'];
+const means=[0.841,0.732,0.788,0.796];
+new Chart(document.getElementById('stageChart'),{type:'bar',data:{labels:stageLabels,datasets:[{label:'Mean Trait Score',data:means,backgroundColor:['#1a3a5c','#95a5a6','#e67e22','#2980b9'],borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0.6,max:0.9,title:{display:true,text:'Mean Score'}}}}});
+</script>
+</body>
+</html>

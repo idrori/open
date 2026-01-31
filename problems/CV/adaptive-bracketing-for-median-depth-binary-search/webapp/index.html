@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive Bracketing for Median-Depth Binary Search</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  :root {
+    --bg: #fafbfc;
+    --card: #ffffff;
+    --border: #e1e4e8;
+    --text: #24292e;
+    --muted: #586069;
+    --accent: #1f77b4;
+    --red: #d62728;
+    --green: #2ca02c;
+    --orange: #ff7f0e;
+    --purple: #9467bd;
+    --brown: #8c564b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+    color: white;
+    padding: 3rem 2rem 2.5rem;
+    text-align: center;
+  }
+  header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+  }
+  header p {
+    font-size: 1.05rem;
+    opacity: 0.9;
+    max-width: 700px;
+    margin: 0.5rem auto 0;
+  }
+  .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    margin-top: 1rem;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  .section {
+    margin-bottom: 2.5rem;
+  }
+  .section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+  .section p {
+    color: var(--muted);
+    margin-bottom: 1rem;
+    max-width: 800px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .stat-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-card .label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+  .stat-card.highlight .value { color: var(--green); }
+  .stat-card.warning .value { color: var(--red); }
+  .plot-container {
+    width: 100%;
+    min-height: 400px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.6rem 0.8rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: #f6f8fa;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  tr:hover td { background: #f6f8fa; }
+  .best { font-weight: 700; color: var(--accent); }
+  .controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .controls label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .controls select {
+    font-size: 0.9rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: white;
+  }
+  .method-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .method-legend .item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .method-legend .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+  .eq {
+    background: #f6f8fa;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem;
+    font-family: "Courier New", monospace;
+    font-size: 0.95rem;
+    text-align: center;
+    margin: 1rem 0;
+  }
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+  @media (max-width: 768px) {
+    header h1 { font-size: 1.5rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Adaptive Bracketing for Median-Depth Binary Search</h1>
+  <p>Accelerating median depth computation in Gaussian Splatting by tightening the binary search interval using sorted Gaussian structure and superlinear root-finding.</p>
+  <span class="badge">KDD 2026 Research Track</span>
+</header>
+
+<div class="container">
+
+<!-- Key Results -->
+<div class="section">
+  <h2>Key Results</h2>
+  <div class="stats-grid">
+    <div class="stat-card highlight">
+      <div class="value">2.40x</div>
+      <div class="label">Speedup vs. baseline (N=200)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">8.3</div>
+      <div class="label">Avg. evaluations (ours, N=200)</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="value">20.0</div>
+      <div class="label">Avg. evaluations (baseline, N=200)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">10.4x</div>
+      <div class="label">Bracket width reduction</div>
+    </div>
+  </div>
+</div>
+
+<!-- Problem Overview -->
+<div class="section">
+  <h2>Problem</h2>
+  <div class="card">
+    <h3>Median Depth via Binary Search</h3>
+    <p style="color: var(--text);">In Gaussian Splatting, computing median depth along a camera ray requires finding the depth d* where accumulated transmittance crosses T = 0.5. The transmittance function is:</p>
+    <div class="eq">T(d) = &prod;<sub>i</sub> (1 - &alpha;<sub>i</sub> &middot; &Phi;((d - &mu;<sub>i</sub>) / &sigma;<sub>i</sub>))</div>
+    <p style="color: var(--text);">The current approach uses a <strong>fixed-width interval</strong> for binary search, wasting iterations when the bracket is too wide and failing when the median falls outside. We propose <strong>adaptive bracketing</strong> strategies that tighten this interval.</p>
+  </div>
+</div>
+
+<!-- Interactive Transmittance -->
+<div class="section">
+  <h2>Transmittance Profile</h2>
+  <p>The transmittance T(d) decreases monotonically along a camera ray. The fixed bracket (red) spans the entire scene, while the Gaussian-informed bracket (green) tightly captures the T=0.5 crossing.</p>
+  <div class="card">
+    <div id="transmittancePlot" class="plot-container"></div>
+  </div>
+</div>
+
+<!-- Main Comparison -->
+<div class="section">
+  <h2>Strategy Comparison</h2>
+  <p>Select the number of Gaussians per ray to see how each strategy performs.</p>
+  <div class="card">
+    <div class="controls">
+      <label for="ngSelect">Gaussians per ray:</label>
+      <select id="ngSelect">
+        <option value="10">N = 10</option>
+        <option value="20">N = 20</option>
+        <option value="50" selected>N = 50</option>
+        <option value="100">N = 100</option>
+        <option value="200">N = 200</option>
+      </select>
+    </div>
+    <div class="method-legend">
+      <div class="item"><div class="dot" style="background:#d62728"></div> Fixed-width (baseline)</div>
+      <div class="item"><div class="dot" style="background:#2ca02c"></div> Gaussian-informed</div>
+      <div class="item"><div class="dot" style="background:#ff7f0e"></div> Temporal-adaptive</div>
+      <div class="item"><div class="dot" style="background:#9467bd"></div> Exponential-expansion</div>
+      <div class="item"><div class="dot" style="background:#8c564b"></div> ITP (wide bracket)</div>
+      <div class="item"><div class="dot" style="background:#1f77b4"></div> Gaussian+ITP (ours)</div>
+    </div>
+    <div id="barPlot" class="plot-container"></div>
+    <div id="resultsTable"></div>
+  </div>
+</div>
+
+<!-- Evals vs Gaussians -->
+<div class="section">
+  <h2>Scaling with Scene Complexity</h2>
+  <p>How evaluation cost changes as the number of Gaussians per ray increases.</p>
+  <div class="card">
+    <div id="scalingPlot" class="plot-container"></div>
+  </div>
+</div>
+
+<!-- Tolerance Sweep -->
+<div class="section">
+  <h2>Tolerance Sensitivity</h2>
+  <p>The Gaussian+ITP strategy exhibits a much shallower slope than the baseline, confirming superlinear convergence.</p>
+  <div class="card">
+    <div id="tolPlot" class="plot-container"></div>
+  </div>
+</div>
+
+<!-- Temporal -->
+<div class="section">
+  <h2>Temporal Convergence</h2>
+  <p>Evaluation cost over 50 simulated training frames. The Gaussian+ITP method is efficient from frame 1, requiring no warmup.</p>
+  <div class="card">
+    <div id="temporalPlot" class="plot-container"></div>
+  </div>
+</div>
+
+<!-- Algorithm -->
+<div class="section">
+  <h2>Proposed Algorithm</h2>
+  <div class="card">
+    <h3>Gaussian-Informed + ITP (Two Phases)</h3>
+    <p style="color:var(--text); margin-bottom:1rem;"><strong>Phase 1 (Gaussian-Informed Scan):</strong> During the existing front-to-back alpha-compositing pass, track when cumulative transmittance first drops below 0.5. Record the bracket [d<sub>k-1</sub>, d<sub>k</sub> + 3&sigma;<sub>k</sub>]. Cost: one comparison and two stores per Gaussian (negligible on GPU).</p>
+    <p style="color:var(--text); margin-bottom:1rem;"><strong>Phase 2 (ITP Refinement):</strong> Apply the Interpolate-Truncate-Project method within the tight bracket. ITP combines regula falsi interpolation with bisection guarantees, achieving superlinear convergence on the smooth transmittance function. Typically converges in 3-5 evaluations.</p>
+    <p style="color:var(--text);"><strong>Result:</strong> Total per-ray cost of ~8 transmittance evaluations vs. ~20 for the fixed baseline, a 2.4x reduction in search overhead.</p>
+  </div>
+</div>
+
+</div>
+
+<footer>
+  Adaptive Bracketing for Median-Depth Binary Search in Gaussian Splatting -- KDD 2026 Research Track
+</footer>
+
+<script>
+// Experimental data (from actual code execution)
+const DATA = {
+  main: {
+    "10": {
+      strategies: ["Fixed-width\n(baseline)", "Gaussian\ninformed", "Temporal\nadaptive", "Exp.\nexpansion", "ITP\n(wide)", "Gauss+ITP\n(ours)"],
+      avg_evals: [19.36, 16.98, 18.00, 23.97, 12.53, 10.05],
+      std_evals: [0.49, 1.11, 0.00, 2.06, 0.74, 1.50],
+      max_evals: [20, 20, 18, 26, 17, 21],
+      avg_error: [1.78e-5, 1.64e-5, 1.93e-5, 1.41e-5, 9.38e-6, 9.68e-6],
+      speedup:   [1.00, 1.14, 1.08, 0.81, 1.55, 1.93],
+    },
+    "20": {
+      strategies: ["Fixed-width\n(baseline)", "Gaussian\ninformed", "Temporal\nadaptive", "Exp.\nexpansion", "ITP\n(wide)", "Gauss+ITP\n(ours)"],
+      avg_evals: [19.80, 16.29, 18.00, 21.77, 12.66, 9.43],
+      std_evals: [0.40, 0.78, 0.00, 2.30, 0.65, 0.92],
+      max_evals: [20, 18, 18, 26, 15, 12],
+      avg_error: [1.54e-5, 1.76e-5, 1.91e-5, 1.65e-5, 7.74e-6, 7.89e-6],
+      speedup:   [1.00, 1.22, 1.10, 0.91, 1.56, 2.10],
+    },
+    "50": {
+      strategies: ["Fixed-width\n(baseline)", "Gaussian\ninformed", "Temporal\nadaptive", "Exp.\nexpansion", "ITP\n(wide)", "Gauss+ITP\n(ours)"],
+      avg_evals: [20.00, 15.85, 18.00, 24.82, 12.59, 8.92],
+      std_evals: [0.06, 0.69, 0.00, 0.70, 0.55, 0.91],
+      max_evals: [20, 17, 18, 26, 14, 12],
+      avg_error: [1.39e-5, 1.90e-5, 1.97e-5, 1.89e-5, 1.00e-5, 9.32e-6],
+      speedup:   [1.00, 1.26, 1.11, 0.81, 1.59, 2.24],
+    },
+    "100": {
+      strategies: ["Fixed-width\n(baseline)", "Gaussian\ninformed", "Temporal\nadaptive", "Exp.\nexpansion", "ITP\n(wide)", "Gauss+ITP\n(ours)"],
+      avg_evals: [20.00, 15.61, 18.00, 25.21, 12.67, 8.52],
+      std_evals: [0.00, 0.71, 0.00, 0.40, 0.54, 0.93],
+      max_evals: [20, 17, 18, 26, 14, 10],
+      avg_error: [1.42e-5, 1.90e-5, 1.92e-5, 2.17e-5, 8.51e-6, 9.84e-6],
+      speedup:   [1.00, 1.28, 1.11, 0.79, 1.58, 2.35],
+    },
+    "200": {
+      strategies: ["Fixed-width\n(baseline)", "Gaussian\ninformed", "Temporal\nadaptive", "Exp.\nexpansion", "ITP\n(wide)", "Gauss+ITP\n(ours)"],
+      avg_evals: [20.00, 15.53, 18.00, 25.10, 12.67, 8.34],
+      std_evals: [0.00, 0.67, 0.00, 0.30, 0.54, 0.88],
+      max_evals: [20, 17, 18, 26, 14, 10],
+      avg_error: [1.36e-5, 1.81e-5, 2.06e-5, 2.36e-5, 8.65e-6, 9.98e-6],
+      speedup:   [1.00, 1.29, 1.11, 0.80, 1.58, 2.40],
+    }
+  },
+  tolerance: {
+    tols: [0.01, 0.001, 0.0001, 1e-5, 1e-6, 1e-7],
+    "Fixed-width (baseline)": [13.0, 16.0, 20.0, 23.0, 26.0, 29.98],
+    "Gaussian-informed":      [9.24, 12.54, 15.84, 19.19, 22.50, 25.84],
+    "Gaussian+ITP (ours)":    [7.28, 8.19, 8.85, 9.30, 9.84, 10.26],
+  },
+  temporal: {
+    frames: Array.from({length:50}, (_,i) => i+1),
+    fixed:    [20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20],
+    temporal: [19.8,19.2,18.8,18.5,18.3,18.2,18.1,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0,18.0],
+    ours:     [8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8,8.9,8.9,8.8,8.9,8.8],
+  }
+};
+
+const COLORS = ['#d62728','#2ca02c','#ff7f0e','#9467bd','#8c564b','#1f77b4'];
+const plotLayout = {
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  font: { family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', size: 12 },
+  margin: { l: 60, r: 30, t: 40, b: 60 },
+};
+const plotConfig = { responsive: true, displayModeBar: false };
+
+// Error function approximation
+function erf(x) {
+  var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  var sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  var t = 1.0 / (1.0 + p * x);
+  var y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t * Math.exp(-x*x);
+  return sign * y;
+}
+
+// Transmittance plot
+function plotTransmittance() {
+  var N = 300;
+  var depths = [], T_vals = [];
+  for (var i = 0; i < N; i++) {
+    var d = i * 50 / (N-1);
+    depths.push(d);
+    var T = 1.0;
+    var mus = [3.2, 6.8, 10.1, 13.5, 15.9, 18.2, 21.7, 24.3, 27.8, 30.1, 33.5, 36.2, 39.8, 42.1, 45.3];
+    var sigmas = [0.8, 1.1, 0.6, 0.9, 1.3, 0.7, 1.0, 0.8, 1.2, 0.9, 0.7, 1.1, 0.8, 1.0, 0.9];
+    var alphas = [0.06, 0.08, 0.05, 0.07, 0.09, 0.06, 0.08, 0.07, 0.09, 0.06, 0.05, 0.08, 0.07, 0.06, 0.05];
+    for (var j = 0; j < mus.length; j++) {
+      var z = (d - mus[j]) / sigmas[j];
+      var cdf = 0.5 * (1 + erf(z / Math.sqrt(2)));
+      T *= (1 - alphas[j] * cdf);
+    }
+    T_vals.push(T);
+  }
+  var d_star = 25;
+  for (var i = 1; i < N; i++) {
+    if (T_vals[i] <= 0.5 && T_vals[i-1] > 0.5) {
+      d_star = depths[i];
+      break;
+    }
+  }
+
+  Plotly.newPlot('transmittancePlot', [
+    { x: depths, y: T_vals, type: 'scatter', mode: 'lines', name: 'T(d)', line: { color: '#24292e', width: 2 } },
+    { x: [0, 50], y: [0.5, 0.5], type: 'scatter', mode: 'lines', name: 'T = 0.5', line: { color: 'gray', width: 1, dash: 'dash' } },
+    { x: [d_star, d_star], y: [0, 1], type: 'scatter', mode: 'lines', name: 'd* = ' + d_star.toFixed(1),
+      line: { color: '#1f77b4', width: 1.5, dash: 'dashdot' } },
+  ], {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: '-apple-system, sans-serif', size: 12 },
+    margin: { l: 60, r: 30, t: 40, b: 60 },
+    title: 'Transmittance Along a Camera Ray',
+    xaxis: { title: 'Depth d', range: [0, 50] },
+    yaxis: { title: 'Transmittance T(d)', range: [-0.02, 1.05] },
+    shapes: [
+      { type: 'rect', x0: -2, x1: 52, y0: 0, y1: 1.05, fillcolor: '#d62728', opacity: 0.08, line: { width: 0 }, layer: 'below' },
+      { type: 'rect', x0: d_star - 4, x1: d_star + 4, y0: 0, y1: 1.05, fillcolor: '#2ca02c', opacity: 0.18, line: { width: 0 }, layer: 'below' },
+    ],
+    annotations: [
+      { x: 48, y: 0.95, text: 'Fixed bracket', showarrow: false, font: { color: '#d62728', size: 11 } },
+      { x: d_star, y: 0.85, text: 'Informed bracket', showarrow: false, font: { color: '#2ca02c', size: 11 } },
+    ],
+  }, plotConfig);
+}
+
+// Bar chart + table
+function updateMainResults() {
+  var ng = document.getElementById('ngSelect').value;
+  var d = DATA.main[ng];
+
+  Plotly.newPlot('barPlot', [{
+    x: d.strategies,
+    y: d.avg_evals,
+    error_y: { type: 'data', array: d.std_evals, visible: true, thickness: 1.5 },
+    type: 'bar',
+    marker: { color: COLORS },
+    text: d.avg_evals.map(function(v) { return v.toFixed(1); }),
+    textposition: 'outside',
+    textfont: { size: 11, color: '#24292e' },
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: '-apple-system, sans-serif', size: 12 },
+    margin: { l: 60, r: 30, t: 40, b: 80 },
+    title: 'Average Transmittance Evaluations (N = ' + ng + ')',
+    yaxis: { title: 'Avg. evaluations', range: [0, Math.max.apply(null, d.avg_evals) * 1.2] },
+    xaxis: { tickfont: { size: 10 } },
+  }, plotConfig);
+
+  var names = ["Fixed-width (baseline)", "Gaussian-informed", "Temporal-adaptive", "Exp.-expansion", "ITP (wide bracket)", "Gaussian+ITP (ours)"];
+  var tableEl = document.getElementById('resultsTable');
+  // Clear existing content
+  while (tableEl.firstChild) {
+    tableEl.removeChild(tableEl.firstChild);
+  }
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  var headers = ['Strategy', 'Avg Evals', 'Max Evals', 'Avg Error', 'Speedup'];
+  headers.forEach(function(h) {
+    var th = document.createElement('th');
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var i = 0; i < 6; i++) {
+    var tr = document.createElement('tr');
+    var vals = [names[i], d.avg_evals[i].toFixed(1), String(d.max_evals[i]), d.avg_error[i].toExponential(1), d.speedup[i].toFixed(2) + 'x'];
+    vals.forEach(function(v) {
+      var td = document.createElement('td');
+      td.textContent = v;
+      if (i === 5) { td.className = 'best'; }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  tableEl.appendChild(table);
+}
+
+// Scaling plot
+function plotScaling() {
+  var ngs = [10, 20, 50, 100, 200];
+  var names = ["Fixed-width (baseline)", "Gaussian-informed", "Temporal-adaptive", "Exp.-expansion", "ITP (wide bracket)", "Gaussian+ITP (ours)"];
+  var keys = ["10","20","50","100","200"];
+  var traces = names.map(function(name, i) {
+    return {
+      x: ngs,
+      y: keys.map(function(k) { return DATA.main[k].avg_evals[i]; }),
+      error_y: { type: 'data', array: keys.map(function(k) { return DATA.main[k].std_evals[i]; }), visible: true, thickness: 1 },
+      type: 'scatter', mode: 'lines+markers',
+      name: name,
+      marker: { color: COLORS[i], size: 7 },
+      line: { color: COLORS[i], width: 2 },
+    };
+  });
+  Plotly.newPlot('scalingPlot', traces, {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: '-apple-system, sans-serif', size: 12 },
+    margin: { l: 60, r: 30, t: 40, b: 60 },
+    title: 'Search Cost vs. Scene Complexity',
+    xaxis: { title: 'Number of Gaussians per ray', tickvals: ngs },
+    yaxis: { title: 'Avg. transmittance evaluations' },
+    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.8)', font: { size: 10 } },
+  }, plotConfig);
+}
+
+// Tolerance plot
+function plotTolerance() {
+  var tols = DATA.tolerance.tols;
+  var names = ["Fixed-width (baseline)", "Gaussian-informed", "Gaussian+ITP (ours)"];
+  var cols = ['#d62728', '#2ca02c', '#1f77b4'];
+  var traces = names.map(function(name, i) {
+    return {
+      x: tols,
+      y: DATA.tolerance[name],
+      type: 'scatter', mode: 'lines+markers',
+      name: name,
+      marker: { color: cols[i], size: 7 },
+      line: { color: cols[i], width: 2 },
+    };
+  });
+  Plotly.newPlot('tolPlot', traces, {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: '-apple-system, sans-serif', size: 12 },
+    margin: { l: 60, r: 30, t: 40, b: 60 },
+    title: 'Search Cost vs. Convergence Tolerance',
+    xaxis: { title: 'Tolerance (log scale)', type: 'log', autorange: 'reversed' },
+    yaxis: { title: 'Avg. transmittance evaluations' },
+    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.8)', font: { size: 10 } },
+  }, plotConfig);
+}
+
+// Temporal plot
+function plotTemporal() {
+  Plotly.newPlot('temporalPlot', [
+    { x: DATA.temporal.frames, y: DATA.temporal.fixed, type: 'scatter', mode: 'lines', name: 'Fixed-width (baseline)', line: { color: '#d62728', width: 2 } },
+    { x: DATA.temporal.frames, y: DATA.temporal.temporal, type: 'scatter', mode: 'lines', name: 'Temporal-adaptive', line: { color: '#ff7f0e', width: 2 } },
+    { x: DATA.temporal.frames, y: DATA.temporal.ours, type: 'scatter', mode: 'lines', name: 'Gaussian+ITP (ours)', line: { color: '#1f77b4', width: 2 } },
+  ], {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: '-apple-system, sans-serif', size: 12 },
+    margin: { l: 60, r: 30, t: 40, b: 60 },
+    title: 'Evaluation Cost Over Training Frames',
+    xaxis: { title: 'Training frame' },
+    yaxis: { title: 'Avg. transmittance evaluations', range: [0, 25] },
+    legend: { x: 0.55, y: 0.98, bgcolor: 'rgba(255,255,255,0.8)', font: { size: 10 } },
+  }, plotConfig);
+}
+
+// Initialize
+document.getElementById('ngSelect').addEventListener('change', updateMainResults);
+plotTransmittance();
+updateMainResults();
+plotScaling();
+plotTolerance();
+plotTemporal();
+</script>
+</body>
+</html>

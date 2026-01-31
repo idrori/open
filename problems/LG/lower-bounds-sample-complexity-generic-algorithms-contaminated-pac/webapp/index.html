@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sample Complexity Lower Bounds in Contaminated PAC Learning</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --card: #ffffff;
+    --text: #212529;
+    --muted: #6c757d;
+    --primary: #1f77b4;
+    --accent: #d62728;
+    --border: #dee2e6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #fff;
+    padding: 2rem 1rem;
+    text-align: center;
+  }
+  header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; font-weight: 600; }
+  header p { font-size: 0.95rem; opacity: 0.85; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
+  .controls {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    align-items: end;
+  }
+  .control-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+  .control-group input[type=range] { width: 100%; }
+  .control-group .value {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+  .chart-card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+  .chart-card canvas { max-height: 360px; }
+  .key-findings {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .key-findings h3 { font-size: 1.1rem; margin-bottom: 0.75rem; }
+  .findings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+  .finding-item {
+    padding: 0.75rem;
+    border-left: 3px solid var(--primary);
+    background: #f0f6ff;
+    border-radius: 0 6px 6px 0;
+  }
+  .finding-item .label { font-size: 0.8rem; color: var(--muted); }
+  .finding-item .val { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
+  .finding-item .desc { font-size: 0.82rem; color: var(--text); margin-top: 0.2rem; }
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+  }
+  .table-card h3 { font-size: 1.1rem; margin-bottom: 0.75rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.4rem 0.6rem; text-align: right; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); background: #f8f9fa; }
+  td:first-child, th:first-child { text-align: left; }
+  footer {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+  .math { font-family: 'Times New Roman', serif; font-style: italic; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sample Complexity Lower Bounds for Generic Algorithms in Contaminated PAC Learning</h1>
+  <p>Interactive exploration of information-theoretic lower bounds in the iterative contaminated PAC model. Adjust parameters to see how bounds, channel capacity, and empirical errors change.</p>
+</header>
+
+<div class="container">
+
+  <div class="controls">
+    <div class="control-group">
+      <label>VC Dimension <span class="math">d</span></label>
+      <input type="range" id="sliderD" min="1" max="10" value="5" step="1">
+      <span class="value" id="valD">5</span>
+    </div>
+    <div class="control-group">
+      <label>Contamination Rate <span class="math">&alpha;</span></label>
+      <input type="range" id="sliderAlpha" min="0.01" max="0.99" value="0.30" step="0.01">
+      <span class="value" id="valAlpha">0.30</span>
+    </div>
+    <div class="control-group">
+      <label>Samples per Round <span class="math">n</span></label>
+      <input type="range" id="sliderN" min="10" max="200" value="50" step="10">
+      <span class="value" id="valN">50</span>
+    </div>
+    <div class="control-group">
+      <label>Number of Rounds <span class="math">T</span></label>
+      <input type="range" id="sliderT" min="5" max="200" value="50" step="5">
+      <span class="value" id="valT">50</span>
+    </div>
+  </div>
+
+  <div id="findingsContainer" class="key-findings">
+    <h3>Key Quantities</h3>
+    <div class="findings-grid">
+      <div class="finding-item">
+        <div class="label">Fano Lower Bound</div>
+        <div class="val" id="fanoVal">--</div>
+        <div class="desc"><span class="math">d / (nT H(&alpha;))</span></div>
+      </div>
+      <div class="finding-item">
+        <div class="label">Channel Capacity Bound</div>
+        <div class="val" id="infoVal">--</div>
+        <div class="desc"><span class="math">d / (nT C(&alpha;))</span></div>
+      </div>
+      <div class="finding-item">
+        <div class="label">Conjectured Tight Bound</div>
+        <div class="val" id="conjVal">--</div>
+        <div class="desc"><span class="math">&radic;(d / ((1-&alpha;)nT))</span></div>
+      </div>
+      <div class="finding-item">
+        <div class="label">Channel Capacity</div>
+        <div class="val" id="capVal">--</div>
+        <div class="desc"><span class="math">C(&alpha;) = 1 - H(&alpha;)</span> bits</div>
+      </div>
+      <div class="finding-item">
+        <div class="label">Gap Factor</div>
+        <div class="val" id="gapVal">--</div>
+        <div class="desc">Upper / Best lower bound</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Bounds vs. Round Number</h3>
+      <canvas id="chartRounds"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Phase Transition: Bounds vs. Contamination Rate</h3>
+      <canvas id="chartAlpha"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Channel Capacity &amp; Entropy</h3>
+      <canvas id="chartChannel"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Scaling: Bounds vs. Total Samples <span class="math">nT</span></h3>
+      <canvas id="chartScaling"></canvas>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <h3>Bound Comparison Table</h3>
+    <table id="boundsTable">
+      <thead>
+        <tr>
+          <th>&alpha;</th><th>T</th><th>Fano LB</th><th>Info LB</th><th>Le Cam LB</th><th>Conjectured</th><th>Upper Bound</th><th>Gap</th>
+        </tr>
+      </thead>
+      <tbody id="boundsTableBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<footer>
+  Sample Complexity Lower Bounds in Contaminated PAC Learning &mdash; Based on information-theoretic analysis of the model by Amin et al. (2026).
+</footer>
+
+<script>
+// ========== Computation functions ==========
+function binaryEntropy(p) {
+  if (p <= 0 || p >= 1) return 0;
+  return -p * Math.log2(p) - (1 - p) * Math.log2(1 - p);
+}
+
+function binaryEntropyNats(p) {
+  if (p <= 0 || p >= 1) return 0;
+  return -p * Math.log(p) - (1 - p) * Math.log(1 - p);
+}
+
+function channelCapacity(alpha) {
+  return 1 - binaryEntropy(alpha);
+}
+
+function fanoLB(d, alpha, n, T) {
+  if (alpha <= 0) return d / (n * T);
+  if (alpha >= 1) return 0.5;
+  var h = binaryEntropyNats(alpha);
+  return Math.min(d / (n * T * h), 0.5);
+}
+
+function infoLB(d, alpha, n, T) {
+  if (alpha <= 0) return d / (n * T);
+  if (alpha >= 1) return 0.5;
+  var cap = channelCapacity(alpha);
+  if (cap <= 0) return 0.5;
+  return Math.min(d / (n * T * cap), 0.5);
+}
+
+function lecamLB(alpha, n, T, eps) {
+  if (alpha >= 1) return 0.5;
+  var h2 = 2 * (1 - 2 * Math.sqrt(alpha * (1 - alpha)));
+  var h2Total = n * T * eps * h2;
+  if (h2Total > 50) return 0;
+  return 0.5 * (1 - Math.sqrt(Math.max(0, 1 - Math.exp(-2 * h2Total))));
+}
+
+function lecamEps(alpha, n, T) {
+  var lo = 0, hi = 0.5;
+  for (var i = 0; i < 80; i++) {
+    var mid = (lo + hi) / 2;
+    if (lecamLB(alpha, n, T, mid) >= 0.25) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function conjLB(d, alpha, n, T) {
+  if (alpha >= 1) return 0.5;
+  var eff = (1 - alpha) * n * T;
+  if (eff <= 0) return 0.5;
+  return Math.min(Math.sqrt(d / eff), 0.5);
+}
+
+function upperBound(d, alpha, n, T) {
+  return Math.sqrt(d / (Math.max(1 - alpha, 0.01) * n * T));
+}
+
+// ========== Chart setup ==========
+var COLORS = {
+  fano: '#ff7f0e',
+  info: '#9467bd',
+  lecam: '#8c564b',
+  conj: '#e377c2',
+  upper: '#7f7f7f',
+  cap: '#1f77b4',
+  entropy: '#ff7f0e',
+};
+
+var commonOpts = {
+  responsive: true,
+  maintainAspectRatio: true,
+  animation: { duration: 200 },
+  plugins: { legend: { position: 'top', labels: { font: { size: 11 }, usePointStyle: true, pointStyle: 'line' } } },
+  scales: {
+    x: { grid: { color: 'rgba(0,0,0,0.06)' } },
+    y: { grid: { color: 'rgba(0,0,0,0.06)' }, beginAtZero: true }
+  }
+};
+
+function mkDataset(label, color, dash) {
+  return { label: label, borderColor: color, backgroundColor: color + '22', borderWidth: 2, borderDash: dash || [], pointRadius: 0, fill: false, data: [] };
+}
+
+// Chart 1: Bounds vs Round
+var ctx1 = document.getElementById('chartRounds').getContext('2d');
+var chart1 = new Chart(ctx1, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    mkDataset('Fano LB', COLORS.fano, [6,3]),
+    mkDataset('Info LB (Channel Cap)', COLORS.info, [4,4]),
+    mkDataset('Le Cam LB', COLORS.lecam, [2,2]),
+    mkDataset('Conjectured LB', COLORS.conj, [8,3]),
+    mkDataset('Upper Bound (Thm 7)', COLORS.upper, [1,3]),
+  ]},
+  options: JSON.parse(JSON.stringify(commonOpts))
+});
+chart1.options.scales.x.title = { display: true, text: 'Round T' };
+chart1.options.scales.y.title = { display: true, text: 'Generalization Error' };
+
+// Chart 2: Phase transition
+var ctx2 = document.getElementById('chartAlpha').getContext('2d');
+var chart2 = new Chart(ctx2, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    mkDataset('Fano LB', COLORS.fano),
+    mkDataset('Info LB', COLORS.info),
+    mkDataset('Le Cam LB', COLORS.lecam),
+    mkDataset('Conjectured LB', COLORS.conj, [6,3]),
+    mkDataset('Upper Bound', COLORS.upper, [3,3]),
+  ]},
+  options: JSON.parse(JSON.stringify(commonOpts))
+});
+chart2.options.scales.x.title = { display: true, text: 'Contamination Rate alpha' };
+chart2.options.scales.y.title = { display: true, text: 'Generalization Error' };
+
+// Chart 3: Channel capacity
+var ctx3 = document.getElementById('chartChannel').getContext('2d');
+var chart3 = new Chart(ctx3, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    mkDataset('Channel Capacity C(alpha)', COLORS.cap),
+    mkDataset('Binary Entropy H(alpha)', COLORS.entropy),
+  ]},
+  options: JSON.parse(JSON.stringify(commonOpts))
+});
+chart3.options.scales.x.title = { display: true, text: 'Contamination Rate alpha' };
+chart3.options.scales.y.title = { display: true, text: 'Bits' };
+chart3.options.scales.y.max = 1.05;
+
+// Chart 4: Scaling
+var ctx4 = document.getElementById('chartScaling').getContext('2d');
+var chart4 = new Chart(ctx4, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    mkDataset('Info LB: O(d/(nT))', COLORS.info, [4,4]),
+    mkDataset('Conjectured: O(sqrt(d/(nT)))', COLORS.conj, [8,3]),
+    mkDataset('Upper Bound', COLORS.upper, [3,3]),
+  ]},
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: { duration: 200 },
+    plugins: { legend: { position: 'top', labels: { font: { size: 11 }, usePointStyle: true, pointStyle: 'line' } } },
+    scales: {
+      x: { type: 'logarithmic', title: { display: true, text: 'Total Samples nT' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+      y: { type: 'logarithmic', title: { display: true, text: 'Generalization Error' }, grid: { color: 'rgba(0,0,0,0.06)' } }
+    }
+  }
+});
+
+// ========== Update logic ==========
+function updateAll() {
+  var d = +document.getElementById('sliderD').value;
+  var alpha = +document.getElementById('sliderAlpha').value;
+  var n = +document.getElementById('sliderN').value;
+  var T = +document.getElementById('sliderT').value;
+
+  document.getElementById('valD').textContent = d;
+  document.getElementById('valAlpha').textContent = alpha.toFixed(2);
+  document.getElementById('valN').textContent = n;
+  document.getElementById('valT').textContent = T;
+
+  // Key findings
+  var fv = fanoLB(d, alpha, n, T);
+  var iv = infoLB(d, alpha, n, T);
+  var cv = conjLB(d, alpha, n, T);
+  var cap = channelCapacity(alpha);
+  var uv = upperBound(d, alpha, n, T);
+  var bestLB = Math.max(fv, iv, lecamEps(alpha, n, T));
+  var gap = bestLB > 1e-10 ? (uv / bestLB) : Infinity;
+
+  document.getElementById('fanoVal').textContent = fv.toFixed(6);
+  document.getElementById('infoVal').textContent = iv.toFixed(6);
+  document.getElementById('conjVal').textContent = cv.toFixed(6);
+  document.getElementById('capVal').textContent = cap.toFixed(4);
+  document.getElementById('gapVal').textContent = gap < 1000 ? gap.toFixed(1) + 'x' : 'Inf';
+
+  // Chart 1: Bounds vs Round
+  var rounds = [];
+  var step1 = Math.max(1, Math.floor(T / 40));
+  for (var t = 1; t <= T; t += step1) rounds.push(t);
+  if (rounds[rounds.length - 1] !== T) rounds.push(T);
+  chart1.data.labels = rounds;
+  chart1.data.datasets[0].data = rounds.map(function(t) { return fanoLB(d, alpha, n, t); });
+  chart1.data.datasets[1].data = rounds.map(function(t) { return infoLB(d, alpha, n, t); });
+  chart1.data.datasets[2].data = rounds.map(function(t) { return lecamEps(alpha, n, t); });
+  chart1.data.datasets[3].data = rounds.map(function(t) { return conjLB(d, alpha, n, t); });
+  chart1.data.datasets[4].data = rounds.map(function(t) { return upperBound(d, alpha, n, t); });
+  chart1.update();
+
+  // Chart 2: Phase transition
+  var alphas = [];
+  for (var a = 0.02; a <= 0.98; a += 0.02) alphas.push(+(a.toFixed(2)));
+  chart2.data.labels = alphas;
+  chart2.data.datasets[0].data = alphas.map(function(a) { return fanoLB(d, a, n, T); });
+  chart2.data.datasets[1].data = alphas.map(function(a) { return infoLB(d, a, n, T); });
+  chart2.data.datasets[2].data = alphas.map(function(a) { return lecamEps(a, n, T); });
+  chart2.data.datasets[3].data = alphas.map(function(a) { return conjLB(d, a, n, T); });
+  chart2.data.datasets[4].data = alphas.map(function(a) { return upperBound(d, a, n, T); });
+  chart2.update();
+
+  // Chart 3: Channel capacity
+  chart3.data.labels = alphas;
+  chart3.data.datasets[0].data = alphas.map(function(a) { return channelCapacity(a); });
+  chart3.data.datasets[1].data = alphas.map(function(a) { return binaryEntropy(a); });
+  chart3.update();
+
+  // Chart 4: Scaling
+  var nTs = [50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  chart4.data.labels = nTs;
+  chart4.data.datasets[0].data = nTs.map(function(nt) { return infoLB(d, alpha, 1, nt); });
+  chart4.data.datasets[1].data = nTs.map(function(nt) { return conjLB(d, alpha, 1, nt); });
+  chart4.data.datasets[2].data = nTs.map(function(nt) { return upperBound(d, alpha, 1, nt); });
+  chart4.update();
+
+  // Table
+  var tbody = document.getElementById('boundsTableBody');
+  while (tbody.firstChild) { tbody.removeChild(tbody.firstChild); }
+  var tAlphas = [0.1, 0.3, 0.5, 0.7, 0.9];
+  var tTs = [10, 25, 50, 100];
+  for (var ai = 0; ai < tAlphas.length; ai++) {
+    for (var ti = 0; ti < tTs.length; ti++) {
+      var ta = tAlphas[ai];
+      var tt = tTs[ti];
+      var f = fanoLB(d, ta, n, tt);
+      var inf = infoLB(d, ta, n, tt);
+      var lc = lecamEps(ta, n, tt);
+      var cj = conjLB(d, ta, n, tt);
+      var ub = upperBound(d, ta, n, tt);
+      var bl = Math.max(f, inf, lc);
+      var g = bl > 1e-10 ? (ub / bl).toFixed(1) : 'Inf';
+      var row = document.createElement('tr');
+
+      var cells = [
+        ta.toFixed(1), tt.toString(), f.toFixed(6), inf.toFixed(6),
+        lc.toFixed(6), cj.toFixed(6), ub.toFixed(6), g + 'x'
+      ];
+      for (var ci = 0; ci < cells.length; ci++) {
+        var td = document.createElement('td');
+        td.textContent = cells[ci];
+        row.appendChild(td);
+      }
+      tbody.appendChild(row);
+    }
+  }
+}
+
+// Wire up sliders
+var sliderIds = ['sliderD', 'sliderAlpha', 'sliderN', 'sliderT'];
+for (var si = 0; si < sliderIds.length; si++) {
+  document.getElementById(sliderIds[si]).addEventListener('input', updateAll);
+}
+
+// Initial render
+updateAll();
+</script>
+</body>
+</html>

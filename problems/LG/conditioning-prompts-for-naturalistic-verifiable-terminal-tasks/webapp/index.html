@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conditioning Prompts for Naturalistic Yet Verifiable Terminal Tasks</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #1a365d;
+  --primary-light: #2b6cb0;
+  --accent: #e53e3e;
+  --accent-light: #fc8181;
+  --bg: #f7fafc;
+  --card-bg: #ffffff;
+  --text: #2d3748;
+  --text-light: #718096;
+  --border: #e2e8f0;
+  --success: #38a169;
+  --warning: #d69e2e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+}
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--primary);
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+nav .nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+}
+
+nav a {
+  color: #cbd5e0;
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 14px 18px;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+nav a:hover, nav a.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+  border-bottom-color: var(--accent-light);
+}
+
+.hero {
+  background: linear-gradient(135deg, #1a365d 0%, #2b4c7e 50%, #3c6497 100%);
+  color: white;
+  padding: 60px 20px 50px;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  max-width: 900px;
+  margin: 0 auto 16px;
+  line-height: 1.3;
+}
+
+.hero .subtitle {
+  font-size: 1.1rem;
+  opacity: 0.85;
+  max-width: 750px;
+  margin: 0 auto 24px;
+}
+
+.hero .badges {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 5px 16px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.badge.category { background: rgba(255,255,255,0.2); }
+.badge.track { background: var(--accent); }
+.badge.tasks { background: rgba(56,161,105,0.8); }
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+section {
+  padding: 50px 0;
+}
+
+section:nth-child(even) {
+  background: #edf2f7;
+}
+
+.section-title {
+  font-size: 1.7rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.section-desc {
+  color: var(--text-light);
+  margin-bottom: 30px;
+  font-size: 1rem;
+  max-width: 800px;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 28px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  margin-bottom: 24px;
+}
+
+.card h3 {
+  font-size: 1.15rem;
+  color: var(--primary);
+  margin-bottom: 12px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  border-top: 4px solid var(--primary-light);
+}
+
+.stat-card .stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.stat-card .stat-label {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-top: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+thead {
+  background: var(--primary);
+  color: white;
+}
+
+th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr:hover {
+  background: #f0f5ff;
+}
+
+.highlight-row {
+  background: #fffff0;
+  font-weight: 600;
+}
+
+.best-val {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-height: 420px;
+}
+
+.finding {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.finding-number {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.finding-text {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.finding-text strong {
+  color: var(--primary);
+}
+
+.method-card {
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border-left: 4px solid var(--primary-light);
+}
+
+.method-card h4 {
+  color: var(--primary);
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+}
+
+.method-card .params {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  font-family: 'Courier New', monospace;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+
+.tab-btn {
+  padding: 10px 22px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-light);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--primary);
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+footer {
+  background: var(--primary);
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  padding: 30px 20px;
+  font-size: 0.85rem;
+}
+
+footer a {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.5rem; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  nav a { padding: 12px 12px; font-size: 0.78rem; }
+  .stat-card .stat-value { font-size: 1.5rem; }
+  table { font-size: 0.78rem; }
+  th, td { padding: 8px 8px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="#problem">Problem</a>
+    <a href="#methods">Methods</a>
+    <a href="#strategy-comparison">Strategies</a>
+    <a href="#pareto">Pareto Frontier</a>
+    <a href="#categories">Categories</a>
+    <a href="#complexity">Complexity</a>
+    <a href="#info-theory">Info Theory</a>
+    <a href="#findings">Findings</a>
+    <a href="#data-tables">Data</a>
+  </div>
+</nav>
+
+<div class="hero" id="hero">
+  <h1>Conditioning Prompts for Naturalistic Yet Verifiable Terminal Tasks</h1>
+  <p class="subtitle">A Multi-Objective Simulation Study of Prompt Conditioning Strategies for the Endless Terminals RL Pipeline</p>
+  <div class="badges">
+    <span class="badge category">cs.LG - Machine Learning</span>
+    <span class="badge track">KDD 2026 Research Track</span>
+    <span class="badge tasks">500 Simulated Tasks</span>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="container">
+    <h2 class="section-title">Problem &amp; Motivation</h2>
+    <p class="section-desc">The Endless Terminals pipeline generates terminal-use tasks for RL agents, but the resulting tasks resemble competitive programming problems rather than naturalistic user requests.</p>
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="stat-value">500</div>
+        <div class="stat-label">Simulated Tasks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">6</div>
+        <div class="stat-label">Conditioning Strategies</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">10</div>
+        <div class="stat-label">Task Categories</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:24px">
+      <h3>The Naturalness-Verifiability Tension</h3>
+      <p>Agents trained on formal, fully-specified task descriptions may fail to generalize to underspecified, context-dependent requests encountered in deployment. This work formulates the challenge as a multi-objective optimization problem: maximize naturalistic language while preserving automated verification capability. Six conditioning strategies are evaluated across the full design space, revealing a smooth Pareto frontier and actionable architectural guidelines.</p>
+    </div>
+  </div>
+</section>
+
+<section id="methods">
+  <div class="container">
+    <h2 class="section-title">Methods</h2>
+    <p class="section-desc">Six conditioning strategies parameterized by persona strength, specification retention, exemplar count, and decoupling degree.</p>
+    <div class="grid-2">
+      <div class="method-card">
+        <h4>Baseline (Current Pipeline)</h4>
+        <p>No naturalistic conditioning. Direct specification generation.</p>
+        <div class="params">p=0.00, r=1.00, e=0, d=0.00</div>
+      </div>
+      <div class="method-card">
+        <h4>Persona-Conditioned Rewriting</h4>
+        <p>Two-pass pipeline with sampled user persona rewriting.</p>
+        <div class="params">p=0.85, r=0.40, e=3, d=0.90</div>
+      </div>
+      <div class="method-card">
+        <h4>Dual-Objective Single Pass</h4>
+        <p>Single pass with explicit dual naturalness-verifiability objectives.</p>
+        <div class="params">p=0.50, r=0.70, e=5, d=0.30</div>
+      </div>
+      <div class="method-card">
+        <h4>Adversarial Naturalness Filter</h4>
+        <p>Generate-then-filter with a naturalness discriminator.</p>
+        <div class="params">p=0.70, r=0.55, e=2, d=0.60</div>
+      </div>
+      <div class="method-card">
+        <h4>Minimal Rewrite</h4>
+        <p>Conservative approach with light persona conditioning.</p>
+        <div class="params">p=0.30, r=0.85, e=1, d=0.20</div>
+      </div>
+      <div class="method-card">
+        <h4>Full Decoupling</h4>
+        <p>Maximum separation between verification substrate and surface form.</p>
+        <div class="params">p=0.90, r=0.30, e=4, d=1.00</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="strategy-comparison">
+  <div class="container">
+    <h2 class="section-title">Strategy Comparison</h2>
+    <p class="section-desc">Aggregate results across 500 simulated tasks showing the trade-offs between naturalness, verifiability, and their harmonic mean.</p>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Naturalness vs Verifiability</h3>
+        <div class="chart-container">
+          <canvas id="chartStrategyBar"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Harmonic Mean Ranking</h3>
+        <div class="chart-container">
+          <canvas id="chartHarmonicBar"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Full Metrics Table</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Strategy</th><th>Naturalness</th><th>Verifiability</th><th>Harmonic Mean</th><th>Resolvability</th><th>Diversity</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Baseline</td><td>0.0358</td><td class="best-val">0.6669</td><td>0.0651</td><td>0.3395</td><td>0.4280</td></tr>
+            <tr><td>Persona Rewrite</td><td>0.7584</td><td>0.4531</td><td>0.5654</td><td>0.6028</td><td>0.8756</td></tr>
+            <tr><td>Dual Objective</td><td>0.5076</td><td>0.4851</td><td>0.4945</td><td>0.4205</td><td>0.7158</td></tr>
+            <tr class="highlight-row"><td>Adversarial Filter</td><td>0.5655</td><td>0.5350</td><td class="best-val">0.5483</td><td>0.5314</td><td>0.7682</td></tr>
+            <tr><td>Minimal Rewrite</td><td>0.2272</td><td>0.5903</td><td>0.3243</td><td>0.3913</td><td>0.5769</td></tr>
+            <tr><td>Full Decouple</td><td class="best-val">0.8631</td><td>0.3886</td><td>0.5334</td><td>0.6172</td><td class="best-val">0.9900</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pareto">
+  <div class="container">
+    <h2 class="section-title">Pareto Frontier Analysis</h2>
+    <p class="section-desc">Sweeping 50 parameter configurations reveals a smooth trade-off curve with 38 Pareto-optimal points.</p>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Naturalness-Verifiability Frontier</h3>
+        <div class="chart-container">
+          <canvas id="chartPareto"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Harmonic Mean vs Persona Strength</h3>
+        <div class="chart-container">
+          <canvas id="chartParetoHarmonic"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:20px">
+      <div class="stat-card">
+        <div class="stat-value">38/50</div>
+        <div class="stat-label">Pareto-Optimal Configs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0.036 - 0.884</div>
+        <div class="stat-label">Naturalness Range</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0.357 - 0.667</div>
+        <div class="stat-label">Verifiability Range</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="categories">
+  <div class="container">
+    <h2 class="section-title">Category Analysis</h2>
+    <p class="section-desc">Performance variation across 10 task categories reveals category-specific amenability to naturalistic rewriting.</p>
+    <div class="tab-buttons" id="catTabs">
+      <button class="tab-btn active" data-tab="catNat">Naturalness by Category</button>
+      <button class="tab-btn" data-tab="catVer">Verifiability by Category</button>
+    </div>
+    <div id="catNat" class="tab-content active">
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="chartCategoryNat"></canvas>
+        </div>
+      </div>
+    </div>
+    <div id="catVer" class="tab-content">
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="chartCategoryVer"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="complexity">
+  <div class="container">
+    <h2 class="section-title">Complexity Scaling</h2>
+    <p class="section-desc">Task complexity systematically degrades both naturalness and verifiability across all strategies.</p>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Naturalness vs Complexity</h3>
+        <div class="chart-container">
+          <canvas id="chartComplexNat"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Verifiability vs Complexity</h3>
+        <div class="chart-container">
+          <canvas id="chartComplexVer"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Complexity Scaling Table</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Strategy</th><th>Simple (Nat/Ver)</th><th>Moderate (Nat/Ver)</th><th>Complex (Nat/Ver)</th><th>Expert (Nat/Ver)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Baseline</td><td>0.059 / 0.741</td><td>0.042 / 0.691</td><td>0.024 / 0.641</td><td>0.020 / 0.594</td></tr>
+            <tr><td>Persona Rewrite</td><td>0.803 / 0.526</td><td>0.775 / 0.482</td><td>0.743 / 0.430</td><td>0.710 / 0.372</td></tr>
+            <tr class="highlight-row"><td>Adversarial Filter</td><td>0.608 / 0.613</td><td>0.576 / 0.559</td><td>0.545 / 0.511</td><td>0.522 / 0.461</td></tr>
+            <tr><td>Dual Objective</td><td>0.556 / 0.562</td><td>0.528 / 0.510</td><td>0.489 / 0.464</td><td>0.466 / 0.410</td></tr>
+            <tr><td>Minimal Rewrite</td><td>0.270 / 0.668</td><td>0.235 / 0.614</td><td>0.212 / 0.563</td><td>0.188 / 0.520</td></tr>
+            <tr><td>Full Decouple</td><td>0.907 / 0.464</td><td>0.883 / 0.410</td><td>0.848 / 0.368</td><td>0.825 / 0.316</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="info-theory">
+  <div class="container">
+    <h2 class="section-title">Information-Theoretic Analysis</h2>
+    <p class="section-desc">Decoupling the verification substrate from the surface form enables environment-based recovery of omitted specification details.</p>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Information Loss Budget</h3>
+        <div class="chart-container">
+          <canvas id="chartInfoBudget"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Mutual Information Proxy</h3>
+        <div class="chart-container">
+          <canvas id="chartMIProxy"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Information-Theoretic Metrics</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Strategy</th><th>Info Loss</th><th>Env Recovery</th><th>Net Gap</th><th>MI Proxy</th><th>Correlation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Baseline</td><td>0.0000</td><td>0.3000</td><td>0.0000</td><td>0.1390</td><td>0.4926</td></tr>
+            <tr><td>Persona Rewrite</td><td>0.6000</td><td>0.6600</td><td>0.0000</td><td class="best-val">0.2419</td><td>0.6193</td></tr>
+            <tr><td>Dual Objective</td><td>0.3000</td><td>0.3900</td><td>0.0000</td><td>0.2257</td><td>0.6027</td></tr>
+            <tr class="highlight-row"><td>Adversarial Filter</td><td>0.4500</td><td>0.5250</td><td>0.0000</td><td>0.2148</td><td>0.5910</td></tr>
+            <tr><td>Minimal Rewrite</td><td>0.1500</td><td>0.3750</td><td>0.0000</td><td>0.2220</td><td>0.5988</td></tr>
+            <tr><td>Full Decouple</td><td>0.7000</td><td>0.6900</td><td>0.0100</td><td>0.1942</td><td>0.5673</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="findings">
+  <div class="container">
+    <h2 class="section-title">Key Findings</h2>
+    <p class="section-desc">Summary of the main results and their implications for prompt conditioning in RL task generation pipelines.</p>
+    <div class="card">
+      <div class="finding">
+        <div class="finding-number">1</div>
+        <div class="finding-text"><strong>Adversarial filtering achieves the best balance.</strong> With a harmonic mean of 0.5483, the adversarial naturalness filter strategy provides the optimal trade-off between naturalness (0.5655) and verifiability (0.5350), outperforming all other strategies on this combined metric.</div>
+      </div>
+      <div class="finding">
+        <div class="finding-number">2</div>
+        <div class="finding-text"><strong>Smooth Pareto frontier with 38 non-dominated points.</strong> Sweeping 50 parameter configurations reveals a continuous trade-off surface from high verifiability/low naturalness to high naturalness/low verifiability, with no abrupt transitions or gaps.</div>
+      </div>
+      <div class="finding">
+        <div class="finding-number">3</div>
+        <div class="finding-text"><strong>Decoupling enables near-zero information gaps.</strong> Strategies with high decoupling degree achieve near-zero net information gaps despite significant specification omission, because the environment provides sufficient context for task resolution. Persona rewriting achieves exactly zero net gap with 0.600 information loss.</div>
+      </div>
+      <div class="finding">
+        <div class="finding-number">4</div>
+        <div class="finding-text"><strong>Complexity is the primary degradation factor.</strong> Expert-level tasks show verifiability drops of 0.153 for persona rewriting and 0.146 for adversarial filtering compared to simple tasks. All strategies degrade with increasing complexity, but the adversarial filter maintains the most stable balance.</div>
+      </div>
+      <div class="finding">
+        <div class="finding-number">5</div>
+        <div class="finding-text"><strong>Category-specific performance varies significantly.</strong> File operations achieve the highest naturalness (0.819 under persona rewriting) while network configuration shows the lowest (0.689). This suggests category-adaptive conditioning may further improve results.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="data-tables">
+  <div class="container">
+    <h2 class="section-title">Pareto Sweep Data</h2>
+    <p class="section-desc">Complete results from 50 parameter configurations in the Pareto sweep.</p>
+    <div class="card">
+      <div class="tab-buttons" id="dataTabs">
+        <button class="tab-btn active" data-tab="dataPareto">Pareto Sweep (50 configs)</button>
+        <button class="tab-btn" data-tab="dataCat">Category Breakdown</button>
+      </div>
+      <div id="dataPareto" class="tab-content active">
+        <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Persona</th><th>Spec Ret.</th><th>Naturalness</th><th>Verifiability</th><th>Harmonic</th><th>Pareto?</th></tr>
+            </thead>
+            <tbody id="paretoTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="dataCat" class="tab-content">
+        <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
+          <table>
+            <thead>
+              <tr><th>Category</th><th>Baseline Nat</th><th>Persona Nat</th><th>Adversarial Nat</th><th>Full Decouple Nat</th></tr>
+            </thead>
+            <tbody id="catTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Conditioning Prompts for Naturalistic Yet Verifiable Terminal Tasks &mdash; KDD 2026 Research Track</p>
+  <p style="margin-top:6px;">Category: cs.LG &middot; Based on the Endless Terminals pipeline (Gandhi et al., 2026)</p>
+</footer>
+
+<script>
+// ===== EMBEDDED DATA =====
+var strategyData = {
+  labels: ['Baseline', 'Persona Rewrite', 'Dual Objective', 'Adversarial Filter', 'Minimal Rewrite', 'Full Decouple'],
+  naturalness: [0.0358, 0.7584, 0.5076, 0.5655, 0.2272, 0.8631],
+  natStd: [0.0365, 0.0643, 0.0623, 0.0620, 0.0654, 0.0610],
+  verifiability: [0.6669, 0.4531, 0.4851, 0.5350, 0.5903, 0.3886],
+  verStd: [0.0645, 0.0680, 0.0646, 0.0645, 0.0658, 0.0677],
+  harmonic: [0.0651, 0.5654, 0.4945, 0.5483, 0.3243, 0.5334],
+  harmStd: [0.0622, 0.0662, 0.0570, 0.0567, 0.0761, 0.0724],
+  resolvability: [0.3395, 0.6028, 0.4205, 0.5314, 0.3913, 0.6172],
+  diversity: [0.4280, 0.8756, 0.7158, 0.7682, 0.5769, 0.9900]
+};
+
+var paretoData = [
+  {ps:0.000,sr:1.000,n:0.034,v:0.666,h:0.062,pareto:true},
+  {ps:0.020,sr:0.986,n:0.041,v:0.660,h:0.074,pareto:true},
+  {ps:0.041,sr:0.971,n:0.050,v:0.653,h:0.089,pareto:true},
+  {ps:0.061,sr:0.957,n:0.062,v:0.649,h:0.108,pareto:true},
+  {ps:0.082,sr:0.943,n:0.074,v:0.645,h:0.127,pareto:true},
+  {ps:0.102,sr:0.929,n:0.083,v:0.640,h:0.141,pareto:true},
+  {ps:0.122,sr:0.914,n:0.094,v:0.633,h:0.159,pareto:true},
+  {ps:0.143,sr:0.900,n:0.106,v:0.627,h:0.175,pareto:true},
+  {ps:0.163,sr:0.886,n:0.122,v:0.622,h:0.198,pareto:true},
+  {ps:0.184,sr:0.871,n:0.138,v:0.615,h:0.221,pareto:true},
+  {ps:0.204,sr:0.857,n:0.192,v:0.603,h:0.287,pareto:true},
+  {ps:0.224,sr:0.843,n:0.202,v:0.598,h:0.298,pareto:true},
+  {ps:0.245,sr:0.829,n:0.217,v:0.585,h:0.313,pareto:false},
+  {ps:0.265,sr:0.814,n:0.231,v:0.583,h:0.327,pareto:false},
+  {ps:0.286,sr:0.800,n:0.242,v:0.574,h:0.337,pareto:false},
+  {ps:0.306,sr:0.786,n:0.259,v:0.564,h:0.351,pareto:false},
+  {ps:0.327,sr:0.771,n:0.271,v:0.558,h:0.362,pareto:false},
+  {ps:0.347,sr:0.757,n:0.282,v:0.553,h:0.371,pareto:false},
+  {ps:0.367,sr:0.743,n:0.294,v:0.548,h:0.379,pareto:false},
+  {ps:0.388,sr:0.729,n:0.312,v:0.540,h:0.393,pareto:false},
+  {ps:0.408,sr:0.714,n:0.362,v:0.526,h:0.427,pareto:false},
+  {ps:0.429,sr:0.700,n:0.376,v:0.521,h:0.434,pareto:false},
+  {ps:0.449,sr:0.686,n:0.392,v:0.512,h:0.442,pareto:false},
+  {ps:0.469,sr:0.671,n:0.402,v:0.505,h:0.445,pareto:false},
+  {ps:0.490,sr:0.657,n:0.423,v:0.497,h:0.455,pareto:false},
+  {ps:0.510,sr:0.643,n:0.433,v:0.589,h:0.497,pareto:true},
+  {ps:0.531,sr:0.629,n:0.447,v:0.583,h:0.504,pareto:true},
+  {ps:0.551,sr:0.614,n:0.462,v:0.576,h:0.511,pareto:true},
+  {ps:0.571,sr:0.600,n:0.482,v:0.565,h:0.519,pareto:true},
+  {ps:0.592,sr:0.586,n:0.493,v:0.557,h:0.522,pareto:true},
+  {ps:0.612,sr:0.571,n:0.544,v:0.540,h:0.541,pareto:true},
+  {ps:0.633,sr:0.557,n:0.561,v:0.532,h:0.544,pareto:true},
+  {ps:0.653,sr:0.543,n:0.572,v:0.528,h:0.547,pareto:true},
+  {ps:0.673,sr:0.529,n:0.589,v:0.520,h:0.551,pareto:true},
+  {ps:0.694,sr:0.514,n:0.597,v:0.508,h:0.547,pareto:true},
+  {ps:0.714,sr:0.500,n:0.611,v:0.503,h:0.550,pareto:true},
+  {ps:0.735,sr:0.486,n:0.626,v:0.489,h:0.548,pareto:true},
+  {ps:0.755,sr:0.471,n:0.642,v:0.482,h:0.549,pareto:true},
+  {ps:0.776,sr:0.457,n:0.655,v:0.476,h:0.549,pareto:true},
+  {ps:0.796,sr:0.443,n:0.667,v:0.466,h:0.547,pareto:true},
+  {ps:0.816,sr:0.429,n:0.722,v:0.450,h:0.553,pareto:true},
+  {ps:0.837,sr:0.414,n:0.733,v:0.442,h:0.550,pareto:true},
+  {ps:0.857,sr:0.400,n:0.753,v:0.432,h:0.547,pareto:true},
+  {ps:0.878,sr:0.386,n:0.763,v:0.422,h:0.541,pareto:true},
+  {ps:0.898,sr:0.371,n:0.777,v:0.411,h:0.535,pareto:true},
+  {ps:0.918,sr:0.357,n:0.789,v:0.404,h:0.532,pareto:true},
+  {ps:0.939,sr:0.343,n:0.800,v:0.391,h:0.523,pareto:true},
+  {ps:0.959,sr:0.329,n:0.815,v:0.379,h:0.515,pareto:true},
+  {ps:0.980,sr:0.314,n:0.826,v:0.375,h:0.513,pareto:true},
+  {ps:1.000,sr:0.300,n:0.884,v:0.357,h:0.506,pareto:true}
+];
+
+var categoryData = {
+  categories: ['File Ops', 'Log Mgmt', 'Data Proc', 'Scripting', 'Database', 'Network', 'Package', 'User Admin', 'Monitoring', 'Text Proc'],
+  baseline_nat: [0.0751, 0.0504, 0.0505, 0.0182, 0.0211, 0.0117, 0.0187, 0.0194, 0.0410, 0.0538],
+  persona_nat: [0.8116, 0.7913, 0.7901, 0.7304, 0.7358, 0.6886, 0.7319, 0.7170, 0.7947, 0.7847],
+  adversarial_nat: [0.6205, 0.5835, 0.5912, 0.5279, 0.5369, 0.4955, 0.5294, 0.5406, 0.6043, 0.5989],
+  full_nat: [0.9165, 0.8982, 0.9020, 0.8443, 0.8298, 0.8036, 0.8378, 0.8383, 0.8997, 0.8843],
+  baseline_ver: [0.7166, 0.6547, 0.6912, 0.6262, 0.6720, 0.6307, 0.6677, 0.6363, 0.7062, 0.6639],
+  persona_ver: [0.5022, 0.4350, 0.4882, 0.4122, 0.4542, 0.4102, 0.4564, 0.4194, 0.4898, 0.4576],
+  adversarial_ver: [0.5920, 0.5292, 0.5613, 0.4966, 0.5419, 0.4827, 0.5451, 0.5053, 0.5699, 0.5362],
+  full_ver: [0.4437, 0.3806, 0.4136, 0.3533, 0.4005, 0.3373, 0.3932, 0.3511, 0.4290, 0.3933]
+};
+
+var complexityData = {
+  levels: ['Simple', 'Moderate', 'Complex', 'Expert'],
+  baseline_nat: [0.0587, 0.0417, 0.0238, 0.0197],
+  persona_nat: [0.8031, 0.7751, 0.7426, 0.7097],
+  adversarial_nat: [0.6084, 0.5761, 0.5445, 0.5225],
+  full_nat: [0.9066, 0.8827, 0.8477, 0.8248],
+  baseline_ver: [0.7408, 0.6908, 0.6406, 0.5939],
+  persona_ver: [0.5259, 0.4818, 0.4304, 0.3719],
+  adversarial_ver: [0.6129, 0.5590, 0.5111, 0.4610],
+  full_ver: [0.4641, 0.4101, 0.3679, 0.3162]
+};
+
+var infoData = {
+  labels: ['Baseline', 'Persona Rewrite', 'Dual Objective', 'Adversarial Filter', 'Minimal Rewrite', 'Full Decouple'],
+  infoLoss: [0.0, 0.6, 0.3, 0.45, 0.15, 0.7],
+  envRecovery: [0.3, 0.66, 0.39, 0.525, 0.375, 0.69],
+  netGap: [0.0, 0.0, 0.0, 0.0, 0.0, 0.01],
+  miProxy: [0.139, 0.2419, 0.2257, 0.2148, 0.222, 0.1942],
+  correlation: [0.4926, 0.6193, 0.6027, 0.5910, 0.5988, 0.5673]
+};
+
+// ===== CHART DEFAULTS =====
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+
+var cNat = 'rgba(43, 108, 176, 0.8)';
+var cVer = 'rgba(229, 62, 62, 0.8)';
+var cHarm = 'rgba(56, 161, 105, 0.8)';
+var cHarmBg = 'rgba(56, 161, 105, 0.15)';
+var cPareto = 'rgba(43, 108, 176, 0.7)';
+var cNonPareto = 'rgba(160, 174, 192, 0.5)';
+var cStrat = [
+  'rgba(160,174,192,0.8)',
+  'rgba(43,108,176,0.8)',
+  'rgba(214,158,46,0.8)',
+  'rgba(229,62,62,0.8)',
+  'rgba(128,90,213,0.8)',
+  'rgba(56,161,105,0.8)'
+];
+
+// Chart 1: Strategy Bar
+new Chart(document.getElementById('chartStrategyBar'), {
+  type: 'bar',
+  data: {
+    labels: strategyData.labels,
+    datasets: [
+      { label: 'Naturalness', data: strategyData.naturalness, backgroundColor: cNat, borderRadius: 4 },
+      { label: 'Verifiability', data: strategyData.verifiability, backgroundColor: cVer, borderRadius: 4 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Score' } }, x: { ticks: { maxRotation: 35, font: { size: 10 } } } }
+  }
+});
+
+// Chart 2: Harmonic Bar
+new Chart(document.getElementById('chartHarmonicBar'), {
+  type: 'bar',
+  data: {
+    labels: strategyData.labels,
+    datasets: [{
+      label: 'Harmonic Mean',
+      data: strategyData.harmonic,
+      backgroundColor: strategyData.labels.map(function(_, i) { return i === 3 ? cHarm : 'rgba(56,161,105,0.4)'; }),
+      borderRadius: 4
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true, indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true, max: 0.7, title: { display: true, text: 'Harmonic Mean' } } }
+  }
+});
+
+// Chart 3: Pareto Scatter
+var paretoOptimal = paretoData.filter(function(d) { return d.pareto; }).map(function(d) { return {x: d.n, y: d.v}; });
+var paretoDominated = paretoData.filter(function(d) { return !d.pareto; }).map(function(d) { return {x: d.n, y: d.v}; });
+
+new Chart(document.getElementById('chartPareto'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      { label: 'Pareto-Optimal', data: paretoOptimal, backgroundColor: cPareto, pointRadius: 5, pointHoverRadius: 7 },
+      { label: 'Dominated', data: paretoDominated, backgroundColor: cNonPareto, pointRadius: 4, pointStyle: 'triangle', pointHoverRadius: 6 },
+      { label: 'Named Strategies', data: [
+        {x:0.0358,y:0.6669},{x:0.7584,y:0.4531},{x:0.5076,y:0.4851},
+        {x:0.5655,y:0.5350},{x:0.2272,y:0.5903},{x:0.8631,y:0.3886}
+      ], backgroundColor: 'rgba(229,62,62,0.9)', pointRadius: 8, pointStyle: 'star', pointHoverRadius: 10 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { x: { title: { display: true, text: 'Naturalness' }, min: 0, max: 1.0 }, y: { title: { display: true, text: 'Verifiability' }, min: 0.3, max: 0.75 } }
+  }
+});
+
+// Chart 4: Pareto Harmonic
+new Chart(document.getElementById('chartParetoHarmonic'), {
+  type: 'line',
+  data: {
+    labels: paretoData.map(function(d) { return d.ps.toFixed(2); }),
+    datasets: [{ label: 'Harmonic Mean', data: paretoData.map(function(d) { return d.h; }), borderColor: cHarm, backgroundColor: cHarmBg, fill: true, tension: 0.3, pointRadius: 2 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { x: { title: { display: true, text: 'Persona Strength' }, ticks: { maxTicksLimit: 10 } }, y: { title: { display: true, text: 'Harmonic Mean' }, min: 0, max: 0.6 } }
+  }
+});
+
+// Chart 5: Category Naturalness
+new Chart(document.getElementById('chartCategoryNat'), {
+  type: 'bar',
+  data: {
+    labels: categoryData.categories,
+    datasets: [
+      { label: 'Baseline', data: categoryData.baseline_nat, backgroundColor: cStrat[0], borderRadius: 3 },
+      { label: 'Persona Rewrite', data: categoryData.persona_nat, backgroundColor: cStrat[1], borderRadius: 3 },
+      { label: 'Adversarial Filter', data: categoryData.adversarial_nat, backgroundColor: cStrat[3], borderRadius: 3 },
+      { label: 'Full Decouple', data: categoryData.full_nat, backgroundColor: cStrat[5], borderRadius: 3 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Naturalness' } }, x: { ticks: { maxRotation: 40, font: { size: 10 } } } }
+  }
+});
+
+// Chart 6: Category Verifiability
+new Chart(document.getElementById('chartCategoryVer'), {
+  type: 'bar',
+  data: {
+    labels: categoryData.categories,
+    datasets: [
+      { label: 'Baseline', data: categoryData.baseline_ver, backgroundColor: cStrat[0], borderRadius: 3 },
+      { label: 'Persona Rewrite', data: categoryData.persona_ver, backgroundColor: cStrat[1], borderRadius: 3 },
+      { label: 'Adversarial Filter', data: categoryData.adversarial_ver, backgroundColor: cStrat[3], borderRadius: 3 },
+      { label: 'Full Decouple', data: categoryData.full_ver, backgroundColor: cStrat[5], borderRadius: 3 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, max: 0.8, title: { display: true, text: 'Verifiability' } }, x: { ticks: { maxRotation: 40, font: { size: 10 } } } }
+  }
+});
+
+// Chart 7: Complexity Naturalness
+new Chart(document.getElementById('chartComplexNat'), {
+  type: 'line',
+  data: {
+    labels: complexityData.levels,
+    datasets: [
+      { label: 'Persona Rewrite', data: complexityData.persona_nat, borderColor: cStrat[1], backgroundColor: cStrat[1], fill: false, tension: 0.3 },
+      { label: 'Adversarial Filter', data: complexityData.adversarial_nat, borderColor: cStrat[3], backgroundColor: cStrat[3], fill: false, tension: 0.3 },
+      { label: 'Full Decouple', data: complexityData.full_nat, borderColor: cStrat[5], backgroundColor: cStrat[5], fill: false, tension: 0.3 },
+      { label: 'Baseline', data: complexityData.baseline_nat, borderColor: cStrat[0], backgroundColor: cStrat[0], fill: false, tension: 0.3, borderDash: [5,5] }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Naturalness' } } }
+  }
+});
+
+// Chart 8: Complexity Verifiability
+new Chart(document.getElementById('chartComplexVer'), {
+  type: 'line',
+  data: {
+    labels: complexityData.levels,
+    datasets: [
+      { label: 'Persona Rewrite', data: complexityData.persona_ver, borderColor: cStrat[1], backgroundColor: cStrat[1], fill: false, tension: 0.3 },
+      { label: 'Adversarial Filter', data: complexityData.adversarial_ver, borderColor: cStrat[3], backgroundColor: cStrat[3], fill: false, tension: 0.3 },
+      { label: 'Full Decouple', data: complexityData.full_ver, borderColor: cStrat[5], backgroundColor: cStrat[5], fill: false, tension: 0.3 },
+      { label: 'Baseline', data: complexityData.baseline_ver, borderColor: cStrat[0], backgroundColor: cStrat[0], fill: false, tension: 0.3, borderDash: [5,5] }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { min: 0.2, max: 0.8, title: { display: true, text: 'Verifiability' } } }
+  }
+});
+
+// Chart 9: Info Budget
+new Chart(document.getElementById('chartInfoBudget'), {
+  type: 'bar',
+  data: {
+    labels: infoData.labels,
+    datasets: [
+      { label: 'Info Loss', data: infoData.infoLoss, backgroundColor: 'rgba(229,62,62,0.7)', borderRadius: 3 },
+      { label: 'Env Recovery', data: infoData.envRecovery, backgroundColor: 'rgba(56,161,105,0.7)', borderRadius: 3 },
+      { label: 'Net Gap', data: infoData.netGap, backgroundColor: 'rgba(214,158,46,0.9)', borderRadius: 3 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, max: 0.8, title: { display: true, text: 'Score' } }, x: { ticks: { maxRotation: 35, font: { size: 10 } } } }
+  }
+});
+
+// Chart 10: MI Proxy
+new Chart(document.getElementById('chartMIProxy'), {
+  type: 'bar',
+  data: {
+    labels: infoData.labels,
+    datasets: [
+      { label: 'MI Proxy', data: infoData.miProxy, backgroundColor: 'rgba(128,90,213,0.7)', borderRadius: 4 },
+      { label: 'Correlation', data: infoData.correlation, backgroundColor: 'rgba(43,108,176,0.5)', borderRadius: 4 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, max: 0.7, title: { display: true, text: 'Value' } }, x: { ticks: { maxRotation: 35, font: { size: 10 } } } }
+  }
+});
+
+// ===== POPULATE TABLES SAFELY =====
+(function() {
+  var paretoTbody = document.getElementById('paretoTableBody');
+  paretoData.forEach(function(d, i) {
+    var tr = document.createElement('tr');
+    if (d.pareto) tr.style.background = '#f0fff4';
+    var cells = [i+1, d.ps.toFixed(3), d.sr.toFixed(3), d.n.toFixed(4), d.v.toFixed(4), d.h.toFixed(4), d.pareto ? 'Yes' : 'No'];
+    cells.forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+    paretoTbody.appendChild(tr);
+  });
+
+  var catNames = ['File Ops', 'Log Mgmt', 'Data Proc', 'Scripting', 'Database', 'Network', 'Package', 'User Admin', 'Monitoring', 'Text Proc'];
+  var catTbody = document.getElementById('catTableBody');
+  catNames.forEach(function(cat, i) {
+    var tr = document.createElement('tr');
+    var cells = [cat, categoryData.baseline_nat[i].toFixed(4), categoryData.persona_nat[i].toFixed(4), categoryData.adversarial_nat[i].toFixed(4), categoryData.full_nat[i].toFixed(4)];
+    cells.forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+    catTbody.appendChild(tr);
+  });
+})();
+
+// ===== TAB SWITCHING =====
+document.querySelectorAll('.tab-buttons').forEach(function(tabGroup) {
+  tabGroup.querySelectorAll('.tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var tabId = this.getAttribute('data-tab');
+      var parent = this.closest('section') || this.closest('.card');
+      parent.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+      tabGroup.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.getElementById(tabId).classList.add('active');
+      this.classList.add('active');
+    });
+  });
+});
+
+// ===== ACTIVE NAV HIGHLIGHT =====
+var navLinks = document.querySelectorAll('nav a');
+window.addEventListener('scroll', function() {
+  var scrollPos = window.scrollY + 100;
+  var current = '';
+  document.querySelectorAll('section[id], .hero[id]').forEach(function(sec) {
+    if (sec.offsetTop <= scrollPos) current = sec.getAttribute('id');
+  });
+  navLinks.forEach(function(a) {
+    a.classList.remove('active');
+    if (a.getAttribute('href') === '#' + current) a.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Necessity of Linear Embedding Dimension for DE Retrieval</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary:#1a3a5c; --accent:#2980b9; --success:#27ae60; --warning:#f39c12; --danger:#e74c3c; --purple:#8e44ad; --bg:#f4f6f8; --card:#fff; --text:#2c3e50; --muted:#7f8c8d; --border:#e0e6ed; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+  .hero { background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%); color:#fff; padding:48px 24px 40px; text-align:center; }
+  .hero h1 { font-size:1.8em; font-weight:700; margin-bottom:10px; max-width:800px; margin-left:auto; margin-right:auto; }
+  .hero p { font-size:1.05em; opacity:.9; max-width:700px; margin:0 auto 16px; }
+  .badges { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { padding:4px 14px; border-radius:20px; font-size:.82em; font-weight:600; background:rgba(255,255,255,.2); color:#fff; }
+  .container { max-width:1100px; margin:0 auto; padding:0 20px; }
+  .nav-tabs { display:flex; gap:4px; background:var(--card); border-radius:12px; padding:6px; margin:-24px auto 24px; max-width:600px; box-shadow:0 4px 20px rgba(0,0,0,.1); position:relative; z-index:10; }
+  .nav-tab { flex:1; padding:10px 12px; text-align:center; border-radius:8px; cursor:pointer; font-weight:600; font-size:.85em; transition:all .2s; border:none; background:transparent; color:var(--muted); }
+  .nav-tab.active { background:var(--accent); color:#fff; }
+  .nav-tab:hover:not(.active) { background:#ebf5fb; color:var(--accent); }
+  .section { display:none; animation:fadeIn .3s ease; }
+  .section.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .card { background:var(--card); border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.08); border:1px solid var(--border); }
+  .card h2 { font-size:1.3em; margin-bottom:12px; color:var(--primary); }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media(max-width:768px) { .grid-2,.grid-3 { grid-template-columns:1fr; } }
+  .metric-box { text-align:center; padding:18px; border-radius:10px; background:#f8f9fa; }
+  .metric-value { font-size:2em; font-weight:800; }
+  .metric-label { font-size:.82em; color:var(--muted); margin-top:4px; }
+  .chart-box { position:relative; height:360px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:.92em; }
+  th { background:#f1f5f9; padding:10px 12px; text-align:left; font-weight:600; }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:hover td { background:#f8fafc; }
+  .insight { background:#eaf4fd; border-left:4px solid var(--accent); padding:14px 18px; border-radius:0 8px 8px 0; margin:14px 0; font-size:.95em; }
+  footer { text-align:center; padding:30px; color:var(--muted); font-size:.85em; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Necessity of Linear Embedding Dimension for Dual Encoder Retrieval Separation</h1>
+  <p>Must the embedding dimension grow linearly with the number of relevant documents?</p>
+  <div class="badges"><span class="badge">cs.IR</span><span class="badge">Dual Encoders</span><span class="badge">Theoretical + Empirical</span><span class="badge">n up to 50</span></div>
+</div>
+<div class="container">
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
+    <button class="nav-tab" onclick="showTab('scaling')">Linear Scaling</button>
+    <button class="nav-tab" onclick="showTab('margin')">Margin Analysis</button>
+    <button class="nav-tab" onclick="showTab('details')">Details</button>
+  </div>
+
+  <div id="overview" class="section active">
+    <div class="grid-3">
+      <div class="metric-box"><div class="metric-value" style="color:var(--accent);">d* = n</div><div class="metric-label">Lower Bound</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--danger);">0%</div><div class="metric-label">Sublinear Separation</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--success);">1.0</div><div class="metric-label">Ratio d*/n (all n)</div></div>
+    </div>
+    <div class="card">
+      <h2>Theoretical Lower Bounds</h2>
+      <table>
+        <thead><tr><th>n (Relevant Docs)</th><th>Lower Bound d*</th><th>Ratio d*/n</th><th>Constraints</th></tr></thead>
+        <tbody>
+          <tr><td>2</td><td>2</td><td>1.0</td><td>996</td></tr>
+          <tr><td>5</td><td>5</td><td>1.0</td><td>2,475</td></tr>
+          <tr><td>10</td><td>10</td><td>1.0</td><td>4,900</td></tr>
+          <tr><td>20</td><td>20</td><td>1.0</td><td>9,600</td></tr>
+          <tr><td>30</td><td>30</td><td>1.0</td><td>14,100</td></tr>
+          <tr><td>50</td><td>50</td><td>1.0</td><td>22,500</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">The embedding dimension must grow linearly with the number of relevant documents (d* = n). The ratio d*/n = 1.0 holds exactly across all tested values, and sublinear dimensions universally fail to achieve separation even at d = 2n.</div>
+    </div>
+  </div>
+
+  <div id="scaling" class="section">
+    <div class="card">
+      <h2>Lower Bound vs Number of Relevant Documents</h2>
+      <div class="chart-box" style="height:400px"><canvas id="chartBound"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Number of Constraints vs n</h2>
+      <div class="chart-box"><canvas id="chartConstraints"></canvas></div>
+    </div>
+  </div>
+
+  <div id="margin" class="section">
+    <div class="card">
+      <h2>Mean Margin vs Dimension Fraction (n=20)</h2>
+      <div class="chart-box" style="height:400px"><canvas id="chartMargin"></canvas></div>
+      <div class="insight">The mean separation margin (min relevant similarity - max irrelevant similarity) is consistently negative for all sublinear dimensions. Even at d = 2n (fraction = 2.0), the margin remains -0.77, confirming that sublinear dimensions cannot achieve separation.</div>
+    </div>
+    <div class="card">
+      <h2>Separation Rate vs Dimension</h2>
+      <div class="chart-box"><canvas id="chartSepRate"></canvas></div>
+    </div>
+  </div>
+
+  <div id="details" class="section">
+    <div class="card">
+      <h2>Problem Formulation</h2>
+      <p>A dual encoder maps queries and documents to d-dimensional embeddings. <strong>Retrieval separation</strong> requires that every relevant document has higher inner-product similarity with the query than every irrelevant document:</p>
+      <p style="text-align:center;margin:12px 0;font-size:1.1em;">&langle;q, r<sub>i</sub>&rangle; &gt; &langle;q, z<sub>j</sub>&rangle; for all i in [n], j in [m]</p>
+      <p>The question: must d grow linearly with n for this to be achievable?</p>
+    </div>
+    <div class="card">
+      <h2>Practical Implications</h2>
+      <ul style="padding-left:20px;">
+        <li><strong>Standard dimensions suffice:</strong> For typical queries with n &lt; 100 relevant docs, d=768 provides ample capacity.</li>
+        <li><strong>Faceted search risk:</strong> Tasks with many relevant documents per query may hit the dimension barrier.</li>
+        <li><strong>Multi-vector retrieval:</strong> ColBERT-style approaches that use multiple embeddings per document circumvent this limitation.</li>
+        <li><strong>Worst-case vs average-case:</strong> Natural document distributions may permit separation at smaller dimensions.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<footer>Linear Embedding Dimension Necessity | cs.IR | Open Problem from Emergent Mind</footer>
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const ns = [2,5,10,15,20,30,40,50];
+  const bounds = [2,5,10,15,20,30,40,50];
+  const constraints = [996,2475,4900,7275,9600,14100,18400,22500];
+
+  // Lower bound line (should be y=x)
+  new Chart(document.getElementById('chartBound'), {
+    type:'line',
+    data:{labels:ns.map(String),datasets:[
+      {label:'Lower Bound d*',data:bounds,borderColor:'#2980b9',backgroundColor:'#2980b920',borderWidth:3,pointRadius:6,tension:0},
+      {label:'d = n (reference)',data:ns,borderColor:'#e74c3c',borderDash:[8,4],borderWidth:2,pointRadius:0,tension:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Number of Relevant Documents (n)'}},y:{title:{display:true,text:'Required Dimension (d*)'},beginAtZero:true}}}
+  });
+
+  // Constraints
+  new Chart(document.getElementById('chartConstraints'), {
+    type:'bar',
+    data:{labels:ns.map(String),datasets:[{label:'Number of Constraints',data:constraints,backgroundColor:'#8e44adaa',borderColor:'#8e44ad',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'n'}},y:{title:{display:true,text:'Constraints (n*m)'}}}}
+  });
+
+  // Margin vs fraction (n=20)
+  const fracs = [0.25,0.5,0.75,1.0,1.25,1.5,2.0];
+  const margins = [-1.717,-1.354,-1.128,-1.043,-0.923,-0.863,-0.769];
+  new Chart(document.getElementById('chartMargin'), {
+    type:'line',
+    data:{labels:fracs.map(f=>f+'x'),datasets:[
+      {label:'Mean Margin',data:margins,borderColor:'#e74c3c',backgroundColor:'#e74c3c20',borderWidth:3,pointRadius:6,tension:.3,fill:true},
+      {label:'Separation Threshold (0)',data:fracs.map(()=>0),borderColor:'#27ae60',borderDash:[8,4],borderWidth:2,pointRadius:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Dimension Fraction (d/n)'}},y:{title:{display:true,text:'Mean Margin'},min:-2,max:0.5}}}
+  });
+
+  // Separation rate (all zero)
+  new Chart(document.getElementById('chartSepRate'), {
+    type:'bar',
+    data:{labels:fracs.map(f=>f+'n'),datasets:[{label:'Separation Rate (%)',data:fracs.map(()=>0),backgroundColor:'#e74c3caa'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Embedding Dimension (n=20)'}},y:{title:{display:true,text:'Separation Rate (%)'},beginAtZero:true,max:5}}}
+  });
+});
+</script>
+</body>
+</html>

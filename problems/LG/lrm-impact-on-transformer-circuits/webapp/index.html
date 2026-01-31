@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learnable Multipliers: Circuit-Specific Impact</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #fff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; --danger: #e74c3c; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+        .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; font-size: 0.9rem; max-width: 700px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+        .controls { background: var(--card); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
+        .control-group label { font-size: 0.85rem; font-weight: 600; color: var(--primary); display: block; margin-bottom: 0.2rem; }
+        .control-group input { width: 120px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: var(--card); border-radius: 10px; padding: 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .card h3 { color: var(--primary); margin-bottom: 0.8rem; font-size: 1rem; }
+        .chart-container { position: relative; height: 300px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Learnable Multipliers: Circuit-Specific Impact</h1>
+        <p>How per-matrix scalar multipliers differentially enhance reasoning vs knowledge circuits in transformers. Based on Velikanov et al. (2026).</p>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label>Reasoning Sensitivity</label>
+                <input type="range" id="reasonSens" min="0.1" max="3" value="1.5" step="0.1">
+                <span id="reasonVal">1.5</span>
+            </div>
+            <div class="control-group">
+                <label>Retrieval Sensitivity</label>
+                <input type="range" id="retSens" min="0.1" max="3" value="0.3" step="0.1">
+                <span id="retVal">0.3</span>
+            </div>
+            <div class="control-group">
+                <label>Training Epochs</label>
+                <input type="range" id="epochs" min="10" max="300" value="100" step="10">
+                <span id="epochVal">100</span>
+            </div>
+        </div>
+        <div class="grid">
+            <div class="card"><h3>Multiplier Deviation by Circuit Type</h3><div class="chart-container"><canvas id="deviationChart"></canvas></div></div>
+            <div class="card"><h3>Benchmark Impact</h3><div class="chart-container"><canvas id="benchChart"></canvas></div></div>
+            <div class="card"><h3>Training Dynamics</h3><div class="chart-container"><canvas id="dynamicsChart"></canvas></div></div>
+            <div class="card"><h3>Layer-wise Pattern</h3><div class="chart-container"><canvas id="layerChart"></canvas></div></div>
+        </div>
+    </div>
+    <script>
+        const P='#1a3a5c', A='#2980b9', D='#e74c3c', S='#27ae60', O='#e67e22';
+        let charts = {};
+        function init() {
+            const o = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } } };
+            charts.dev = new Chart(document.getElementById('deviationChart'), { type: 'bar', data: {}, options: { ...o, scales: { y: { title: { display: true, text: '|gamma-1|' } } } } });
+            charts.bench = new Chart(document.getElementById('benchChart'), { type: 'bar', data: {}, options: { ...o, scales: { y: { title: { display: true, text: 'Improvement' } } } } });
+            charts.dyn = new Chart(document.getElementById('dynamicsChart'), { type: 'line', data: {}, options: { ...o, scales: { x: { title: { display: true, text: 'Epoch' } }, y: { title: { display: true, text: 'Multiplier' } } } } });
+            charts.layer = new Chart(document.getElementById('layerChart'), { type: 'bar', data: {}, options: { ...o, scales: { y: { title: { display: true, text: 'Deviation' } } } } });
+        }
+        function simulate() {
+            const rs = parseFloat(document.getElementById('reasonSens').value);
+            const rt = parseFloat(document.getElementById('retSens').value);
+            const ep = parseInt(document.getElementById('epochs').value);
+            document.getElementById('reasonVal').textContent = rs.toFixed(1);
+            document.getElementById('retVal').textContent = rt.toFixed(1);
+            document.getElementById('epochVal').textContent = ep;
+
+            const sens = { retrieval: rt, reasoning: rs, composition: (rs+rt)/2, output: (rs+rt)/3 };
+            const types = ['retrieval', 'reasoning', 'composition', 'output'];
+            const devs = types.map(t => sens[t] * 0.3);
+
+            charts.dev.data = { labels: types.map(t => t[0].toUpperCase() + t.slice(1)),
+                datasets: [{ label: 'Deviation', data: devs, backgroundColor: [P, D, A, S] }] };
+            charts.dev.update();
+
+            const bw = { BBH: {reasoning:.5,composition:.3,retrieval:.1,output:.1}, MATH: {reasoning:.6,composition:.2,retrieval:.1,output:.1},
+                GSM8K: {reasoning:.4,composition:.3,retrieval:.1,output:.2}, MMLU: {reasoning:.1,composition:.1,retrieval:.6,output:.2},
+                ARC_C: {reasoning:.2,composition:.1,retrieval:.5,output:.2} };
+            const benches = Object.keys(bw);
+            const imps = benches.map(b => types.reduce((s, t) => s + bw[b][t] * devs[types.indexOf(t)] * 0.3, 0));
+            charts.bench.data = { labels: benches,
+                datasets: [{ label: 'Improvement', data: imps, backgroundColor: benches.map(b => ['BBH','MATH','GSM8K'].includes(b) ? D+'aa' : P+'aa') }] };
+            charts.bench.update();
+
+            const epochs = Array.from({length: ep+1}, (_, i) => i);
+            const dynData = types.map(t => {
+                const opt = 1 + sens[t] * 0.3;
+                return epochs.map(e => 1 + (opt - 1) * (1 - Math.exp(-e * 0.05)));
+            });
+            charts.dyn.data = { labels: epochs,
+                datasets: types.map((t, i) => ({ label: t[0].toUpperCase() + t.slice(1), data: dynData[i], borderColor: [P,D,A,S][i], pointRadius: 0 })) };
+            charts.dyn.update();
+
+            const layerDevs = [rt*0.3, rt*0.3, rs*0.25, (rs*0.3+sens.output*0.3)/2];
+            charts.layer.data = { labels: ['Layer 0', 'Layer 1', 'Layer 2', 'Layer 3'],
+                datasets: [{ label: 'Avg Deviation', data: layerDevs, backgroundColor: [P, P, D, O] }] };
+            charts.layer.update();
+        }
+        init(); simulate();
+        ['reasonSens','retSens','epochs'].forEach(id => document.getElementById(id).addEventListener('input', simulate));
+    </script>
+</body>
+</html>

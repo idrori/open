@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10Be Cold Cloud Crossing Detectability</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a2e; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, #1a1a4e, #2d1b69); padding: 2rem; text-align: center; border-bottom: 2px solid #4a3f8a; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: #a8c0ff; }
+.header p { font-size: 0.95rem; color: #8899bb; max-width: 800px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.controls { background: #151540; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+.control-group label { display: block; font-size: 0.85rem; color: #8899bb; margin-bottom: 4px; }
+.control-group input[type="range"] { width: 100%; accent-color: #6c63ff; }
+.control-group .value { font-size: 1.1rem; color: #a8c0ff; font-weight: bold; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.chart-box { background: #151540; border-radius: 10px; padding: 1.2rem; }
+.chart-box h3 { color: #a8c0ff; margin-bottom: 0.8rem; font-size: 1rem; }
+.results { background: #151540; border-radius: 10px; padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.metric { text-align: center; padding: 1rem; background: #1a1a50; border-radius: 8px; }
+.metric .val { font-size: 1.8rem; font-weight: bold; color: #6c63ff; }
+.metric .lbl { font-size: 0.8rem; color: #8899bb; margin-top: 4px; }
+.detectable { color: #4caf50 !important; }
+.marginal { color: #ff9800 !important; }
+.undetectable { color: #f44336 !important; }
+canvas { max-height: 320px; }
+@media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Detectability of 2-3 Mya Cold Cloud Crossing in 10Be Records</h1>
+<p>Interactive exploration of whether an interstellar cold cloud crossing produces detectable cosmogenic 10Be signals in marine archives. Adjust cloud and measurement parameters below.</p>
+</div>
+<div class="container">
+<div class="controls">
+<div class="control-group">
+<label>Cloud Density (cm<sup>-3</sup>)</label>
+<input type="range" id="density" min="1" max="5" step="0.1" value="3">
+<div class="value" id="densityVal">1000</div>
+</div>
+<div class="control-group">
+<label>Cloud Size (pc)</label>
+<input type="range" id="cloudSize" min="-2" max="1.7" step="0.05" value="0">
+<div class="value" id="cloudSizeVal">1.00</div>
+</div>
+<div class="control-group">
+<label>Crossing Velocity (km/s)</label>
+<input type="range" id="velocity" min="5" max="60" step="1" value="26">
+<div class="value" id="velocityVal">26</div>
+</div>
+<div class="control-group">
+<label>Measurement Error (%)</label>
+<input type="range" id="measErr" min="1" max="20" step="0.5" value="5">
+<div class="value" id="measErrVal">5.0</div>
+</div>
+</div>
+<div class="results">
+<div class="metric"><div class="val" id="snrVal">--</div><div class="lbl">Sediment SNR</div></div>
+<div class="metric"><div class="val" id="hpVal">--</div><div class="lbl">Heliopause (AU)</div></div>
+<div class="metric"><div class="val" id="durVal">--</div><div class="lbl">Crossing Duration (kyr)</div></div>
+<div class="metric"><div class="val" id="gcrVal">--</div><div class="lbl">GCR Enhancement</div></div>
+<div class="metric"><div class="val" id="detectVal">--</div><div class="lbl">Detection Verdict</div></div>
+</div>
+<div class="charts" style="margin-top:1.5rem;">
+<div class="chart-box"><h3>10Be Signal vs Time</h3><canvas id="signalChart"></canvas></div>
+<div class="chart-box"><h3>Heliopause Distance vs ISM Density</h3><canvas id="helioChart"></canvas></div>
+<div class="chart-box"><h3>SNR vs Cloud Size</h3><canvas id="snrChart"></canvas></div>
+<div class="chart-box"><h3>Detection Probability (Monte Carlo)</h3><canvas id="probChart"></canvas></div>
+</div>
+</div>
+<script>
+const AU=1.496e13,PC=3.086e18,KM=1e5,YR=3.156e7,MP=1.673e-24,KB=1.381e-16;
+function heliopauseDist(n,vsw=400,nsw=5,T=50,B=5e-6,vsun=26){
+  const psw=0.5*MP*nsw*(vsw*KM)**2;
+  const pram=0.5*1.3*MP*n*(vsun*KM)**2;
+  const pth=n*KB*T, pmag=B*B/(8*Math.PI);
+  const ptot=pram+pth+pmag;
+  return ptot>0?Math.sqrt(psw/ptot):122;
+}
+function modPot(Rhp){return Rhp<=1?0:Math.min(500*Rhp/122,1000);}
+function gcrFactor(phi){return Math.exp(-phi/300)/Math.exp(-500/300);}
+function crossDur(spc,v){return spc*PC/(v*KM)/YR;}
+
+let signalChart,helioChart,snrChart,probChart;
+function initCharts(){
+  const cfg=(id,lbl,xlab,ylab,color)=>new Chart(document.getElementById(id),{type:'line',data:{labels:[],datasets:[{label:lbl,data:[],borderColor:color,backgroundColor:color+'33',fill:true,tension:0.3,pointRadius:0}]},options:{responsive:true,scales:{x:{title:{display:true,text:xlab,color:'#8899bb'},ticks:{color:'#8899bb'},grid:{color:'#222255'}},y:{title:{display:true,text:ylab,color:'#8899bb'},ticks:{color:'#8899bb'},grid:{color:'#222255'}}},plugins:{legend:{labels:{color:'#a8c0ff'}}}}});
+  signalChart=cfg('signalChart','10Be Flux','Time (Myr ago)','Normalized Flux','#6c63ff');
+  helioChart=cfg('helioChart','Heliopause','log10 Density (cm^-3)','Distance (AU)','#ff6384');
+  snrChart=cfg('snrChart','Sediment SNR','Cloud Size (pc)','SNR','#4bc0c0');
+  probChart=cfg('probChart','Detection Prob','Cloud Size (pc)','Probability (%)','#ffce56');
+}
+function update(){
+  const logn=parseFloat(document.getElementById('density').value);
+  const n=Math.pow(10,logn);
+  const logS=parseFloat(document.getElementById('cloudSize').value);
+  const spc=Math.pow(10,logS);
+  const v=parseFloat(document.getElementById('velocity').value);
+  const me=parseFloat(document.getElementById('measErr').value)/100;
+  document.getElementById('densityVal').textContent=n.toFixed(0);
+  document.getElementById('cloudSizeVal').textContent=spc.toFixed(2);
+  document.getElementById('velocityVal').textContent=v;
+  document.getElementById('measErrVal').textContent=(me*100).toFixed(1);
+  const Rhp=heliopauseDist(n);
+  const phi=modPot(Rhp);
+  const gcr=gcrFactor(phi);
+  const dur=crossDur(spc,v);
+  const durKyr=dur/1000;
+  const enhancement=gcr-1;
+  const sedRes=10;
+  const eff=enhancement*Math.min(1,durKyr/sedRes);
+  const noise=Math.sqrt(me*me+0.01);
+  const snr=noise>0?eff/noise:0;
+  document.getElementById('snrVal').textContent=snr.toFixed(1);
+  document.getElementById('snrVal').className='val '+(snr>=3?'detectable':snr>=1?'marginal':'undetectable');
+  document.getElementById('hpVal').textContent=Rhp.toFixed(2);
+  document.getElementById('durVal').textContent=durKyr.toFixed(1);
+  document.getElementById('gcrVal').textContent=gcr.toFixed(2)+'x';
+  const det=snr>=3?'DETECTABLE':snr>=1?'MARGINAL':'NOT DETECTABLE';
+  document.getElementById('detectVal').textContent=det;
+  document.getElementById('detectVal').className='val '+(snr>=3?'detectable':snr>=1?'marginal':'undetectable');
+  // Signal chart
+  const tArr=[],sArr=[];
+  const tCenter=2500,durYr=dur,tEnter=tCenter-durKyr*1000/2;
+  for(let t=0;t<=5000;t+=10){
+    tArr.push((t/1000).toFixed(2));
+    const tEdge=0.1*durYr/3;
+    const ri=0.5*(1+Math.tanh((t*1000-tEnter*1000)/(tEdge>0?tEdge:1)));
+    const ro=0.5*(1+Math.tanh(((tEnter+durKyr)*1000-t*1000)/(tEdge>0?tEdge:1)));
+    const dens=0.1+(n-0.1)*ri*ro;
+    const rh=heliopauseDist(dens);
+    const p=modPot(rh);
+    const g=gcrFactor(p);
+    sArr.push(g);
+  }
+  signalChart.data.labels=tArr;
+  signalChart.data.datasets[0].data=sArr;
+  signalChart.update('none');
+  // Helio chart
+  const hLabels=[],hData=[];
+  for(let lg=-1;lg<=5;lg+=0.1){
+    hLabels.push(lg.toFixed(1));
+    hData.push(heliopauseDist(Math.pow(10,lg)));
+  }
+  helioChart.data.labels=hLabels;
+  helioChart.data.datasets[0].data=hData;
+  helioChart.update('none');
+  // SNR vs size
+  const sLabels=[],sData=[];
+  for(let ls=-2;ls<=2;ls+=0.05){
+    const sz=Math.pow(10,ls);
+    sLabels.push(sz.toFixed(2));
+    const d2=crossDur(sz,v)/1000;
+    const e2=(gcr-1)*Math.min(1,d2/sedRes);
+    sData.push(e2/noise);
+  }
+  snrChart.data.labels=sLabels;
+  snrChart.data.datasets[0].data=sData;
+  snrChart.update('none');
+  // Prob chart (approximate)
+  const pLabels=[],pData=[];
+  for(let ls=-1;ls<=1.7;ls+=0.1){
+    const sz=Math.pow(10,ls);
+    pLabels.push(sz.toFixed(1));
+    let cnt=0,trials=200;
+    for(let i=0;i<trials;i++){
+      const nd=Math.pow(10,2+Math.random()*2);
+      const vr=Math.max(5,26+8*(Math.random()+Math.random()+Math.random()-1.5));
+      const rr=heliopauseDist(nd);
+      const pp=modPot(rr);
+      const gg=gcrFactor(pp);
+      const dd=crossDur(sz,vr)/1000;
+      const ee=(gg-1)*Math.min(1,dd/sedRes);
+      const nn=Math.sqrt(me*me+0.01);
+      if(ee/nn>=3)cnt++;
+    }
+    pData.push((cnt/trials*100));
+  }
+  probChart.data.labels=pLabels;
+  probChart.data.datasets[0].data=pData;
+  probChart.update('none');
+}
+initCharts();
+update();
+document.querySelectorAll('input[type=range]').forEach(el=>el.addEventListener('input',update));
+</script>
+</body>
+</html>

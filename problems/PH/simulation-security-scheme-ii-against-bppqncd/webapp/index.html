@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulation Security of Scheme II Against BPP^QNC^d Adversaries</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #2980b9;
+  --accent-light: #3498db;
+  --text: #ecf0f1;
+  --text-dim: #95a5a6;
+  --card-bg: #1e3d5f;
+  --card-border: #2c5982;
+  --bg-dark: #0f2a44;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --purple: #8e44ad;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  line-height: 1.6;
+}
+a { color: var(--accent-light); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.hero {
+  background: linear-gradient(135deg, var(--bg-dark) 0%, var(--primary) 50%, var(--accent) 100%);
+  padding: 60px 20px 50px;
+  text-align: center;
+  border-bottom: 3px solid var(--accent);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle at 30% 70%, rgba(41,128,185,0.08) 0%, transparent 50%),
+              radial-gradient(circle at 70% 30%, rgba(142,68,173,0.06) 0%, transparent 50%);
+  animation: heroGlow 12s ease-in-out infinite;
+}
+@keyframes heroGlow {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-2%, 1%) rotate(1deg); }
+}
+.hero > * { position: relative; z-index: 1; }
+.hero h1 {
+  font-size: clamp(1.4rem, 3.5vw, 2.2rem);
+  font-weight: 700;
+  max-width: 900px;
+  margin: 0 auto 14px;
+  letter-spacing: -0.02em;
+}
+.hero .subtitle {
+  font-size: clamp(0.9rem, 2vw, 1.1rem);
+  color: var(--text-dim);
+  max-width: 750px;
+  margin: 0 auto 20px;
+}
+.hero .badges {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+}
+.badge {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.badge-cat { background: var(--accent); color: #fff; }
+.badge-paper { background: var(--purple); color: #fff; }
+.badge-date { background: rgba(255,255,255,0.12); color: var(--text-dim); border: 1px solid rgba(255,255,255,0.2); }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+}
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-card .value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--accent-light);
+}
+.stat-card .label {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.section-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 30px 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.chart-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.chart-card h3 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.chart-card canvas {
+  max-height: 350px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+th, td {
+  padding: 10px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 0.88rem;
+}
+th {
+  background: var(--primary);
+  font-weight: 600;
+  color: var(--accent-light);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+tr:hover { background: rgba(41,128,185,0.08); }
+.val-good { color: var(--success); font-weight: 600; }
+.val-warn { color: var(--warning); font-weight: 600; }
+.val-bad { color: var(--danger); font-weight: 600; }
+
+.method-box {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.method-box h3 {
+  color: var(--accent-light);
+  margin-bottom: 10px;
+}
+.method-box p {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+}
+.method-box code {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--accent-light);
+}
+
+.footer {
+  text-align: center;
+  padding: 30px 20px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  border-top: 1px solid var(--card-border);
+  margin-top: 40px;
+}
+
+@media (max-width: 600px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Simulation Security of Scheme II Against BPP<sup>QNC<sup>d</sup></sup> Adversaries</h1>
+  <p class="subtitle">Computational study of one-time memory security in the quantum random oracle model against bounded-depth quantum adversaries</p>
+  <div class="badges">
+    <span class="badge badge-cat">quant-ph</span>
+    <span class="badge badge-paper">arXiv:2601.13258</span>
+    <span class="badge badge-date">Jan 2026</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="stats-row">
+    <div class="stat-card"><div class="value">5.96e-8</div><div class="label">Lifting bound at lambda=128</div></div>
+    <div class="stat-card"><div class="value">4.44e-16</div><div class="label">Lifting bound at lambda=256</div></div>
+    <div class="stat-card"><div class="value">120</div><div class="label">Min lambda for 1e-6 security (d=16)</div></div>
+    <div class="stat-card"><div class="value">0.9239</div><div class="label">cos(pi/8) POVM rate</div></div>
+    <div class="stat-card"><div class="value">10</div><div class="label">Experiments conducted</div></div>
+  </div>
+
+  <h2 class="section-title">Problem Overview</h2>
+  <div class="method-box">
+    <h3>Conjecture 5.1 (Stambler, 2026)</h3>
+    <p>The one-time memory Scheme II is <strong>simulation-secure</strong> in the quantum random oracle model against adversaries in the class <code>BPP^QNC^d</code> for any polynomial depth d. The scheme uses <strong>conjugate coding</strong> (BB84 encoding) combined with <strong>hash-locking</strong> via a random oracle and <strong>conjunction obfuscation</strong> to hide the encoding basis.</p>
+  </div>
+
+  <h2 class="section-title">Lifting Framework Analysis</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Security Bound vs. Adversary Depth (by lambda)</h3>
+      <canvas id="chartLifting"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Security Bound vs. lambda (d=16, q=16)</h3>
+      <canvas id="chartLambda"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Monte Carlo Simulation Results</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Adversary Advantage vs. Depth (lambda_eff=10)</h3>
+      <canvas id="chartDepthSweep"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Oracle Query Sweep (d=16, lambda=64)</h3>
+      <canvas id="chartQuerySweep"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Component Analysis</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Conjunction Obfuscation: Distinguishing Probability</h3>
+      <canvas id="chartConjunction"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Sequential POVM Bound (k=1 measurement)</h3>
+      <canvas id="chartPOVM"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Depth Complexity Tradeoff</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Light Cone Fraction vs. Depth</h3>
+      <canvas id="chartLightCone"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Simulation Distance by Depth (lambda_eff=8)</h3>
+      <canvas id="chartSimDist"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Security Thresholds</h2>
+  <table>
+    <thead>
+      <tr><th>Depth d</th><th>Queries q</th><th>Min lambda (adv &lt; 1e-6)</th><th>Min lambda (adv &lt; 1e-9)</th><th>Min lambda (adv &lt; 1e-12)</th></tr>
+    </thead>
+    <tbody id="thresholdTable"></tbody>
+  </table>
+
+  <h2 class="section-title">Depth Sweep Results</h2>
+  <table>
+    <thead>
+      <tr><th>Depth d</th><th>Mean Advantage</th><th>Key Accuracy</th><th>P(Both Messages)</th><th>POVM Bound</th><th>Attack Success</th></tr>
+    </thead>
+    <tbody id="depthTable"></tbody>
+  </table>
+
+  <h2 class="section-title">POVM Bounds Matrix</h2>
+  <table>
+    <thead>
+      <tr><th>n \ k</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th><th>32</th><th>64</th><th>128</th></tr>
+    </thead>
+    <tbody id="povmTable"></tbody>
+  </table>
+
+  <div class="footer">
+    <p>Simulation Security of Scheme II Against BPP^QNC^d Adversaries | Open Problem from arXiv:2601.13258</p>
+    <p>Data generated with seed=42 for reproducibility | KDD 2026</p>
+  </div>
+</div>
+
+<script>
+// DATA
+var depthSweepData = {
+  depths: [1,4,7,10,14,17,20,24,27,30,34,37,40,44,47,50,54,57,60,64,67,70,74,77,80,84,87,90,94,97,101,104,107,111,114,118,121,124,128],
+  mean_advantage: [0.005524,0.088388,0.270689,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5],
+  key_accuracy: [0.73,0.74,0.772,0.742,0.782,0.756,0.762,0.756,0.756,0.734,0.754,0.728,0.734,0.724,0.726,0.762,0.758,0.748,0.746,0.758,0.736,0.748,0.752,0.756,0.758,0.716,0.754,0.746,0.744,0.744,0.734,0.734,0.740,0.728,0.728,0.748,0.756,0.750,0.734],
+  p_both: [0.000031,0.007812,0.073273,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25],
+  povm_bounds: [0.727,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  attack_success: [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+};
+
+var lambdaSweepData = {
+  lambdas: [4,10,17,23,30,36,43,49,56,62,69,75,82,88,95,101,108,114,121,128],
+  theoretical_bound: [1,1,1,1,1,0.5,0.149,0.0526,0.0156,0.00552,0.00164,0.000581,0.000173,6.1e-5,1.81e-5,6.42e-6,1.91e-6,6.74e-7,2.0e-7,5.96e-8]
+};
+
+var querySweepData = {
+  queries: [1,2,4,8,16,32,64,128,256,512],
+  lifting_losses: [5.24e-4,1.05e-3,2.10e-3,4.19e-3,8.39e-3,1.68e-2,3.36e-2,6.71e-2,0.134,0.268]
+};
+
+var conjunctionData = {
+  lengths: [8,16,32,64],
+  q10: [0.47,0.02,0,0],
+  q50: [0.89,0.12,0,0],
+  q100: [0.98,0.12,0,0],
+  q200: [0.99,0.26,0,0]
+};
+
+var povmBoundsData = {
+  n_values: [4,8,12,16,24,32,48,64],
+  k1_bounds: [0.864,0.765,0.693,0.641,0.575,0.540,0.511,0.503],
+  bounds_matrix: [
+    [0.864,1,1,1,1,1,1,1],
+    [0.765,1,1,1,1,1,1,1],
+    [0.693,0.887,1,1,1,1,1,1],
+    [0.641,0.782,1,1,1,1,1,1],
+    [0.575,0.650,0.799,1,1,1,1,1],
+    [0.540,0.579,0.659,0.818,1,1,1,1],
+    [0.511,0.522,0.545,0.589,0.679,0.858,1,1],
+    [0.503,0.506,0.513,0.525,0.550,0.601,0.702,0.903]
+  ]
+};
+
+var simDistData = {
+  depths: [2,4,8,16,32,64],
+  overall: [1.0,1.0,0.975,0.965,0.945,0.97],
+  matching: [0.08,0.17,0.115,0.155,0.165,0.11],
+  key_acc: [0.10,0.135,0.165,0.09,0.095,0.11]
+};
+
+// Compute lifting data
+var liftingDepths = [];
+var liftBounds32 = [], liftBounds64 = [], liftBounds128 = [], liftBounds256 = [];
+for (var d = 1; d <= 256; d += 5) {
+  liftingDepths.push(d);
+  liftBounds32.push(Math.min(32 * d / Math.pow(2, 32/4), 1));
+  liftBounds64.push(Math.min(32 * d / Math.pow(2, 64/4), 1));
+  liftBounds128.push(Math.min(32 * d / Math.pow(2, 128/4), 1));
+  liftBounds256.push(Math.min(32 * d / Math.pow(2, 256/4), 1));
+}
+
+var lcDepths = [];
+var lc32 = [], lc64 = [], lc128 = [];
+for (var d2 = 1; d2 <= 256; d2 += 5) {
+  lcDepths.push(d2);
+  lc32.push(Math.min((2*d2+1)/32, 1));
+  lc64.push(Math.min((2*d2+1)/64, 1));
+  lc128.push(Math.min((2*d2+1)/128, 1));
+}
+
+var thresholdRows = [
+  {d:4, q:16, t6:104, t9:128, t12:152},
+  {d:8, q:32, t6:108, t9:132, t12:152},
+  {d:16, q:64, t6:120, t9:140, t12:160},
+  {d:64, q:64, t6:128, t9:148, t12:168},
+  {d:128, q:128, t6:136, t9:156, t12:176},
+  {d:256, q:256, t6:144, t9:164, t12:184}
+];
+
+// Chart defaults
+var defaultOpts = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: { labels: { color: '#ecf0f1', font: {size: 11} } }
+  },
+  scales: {
+    x: { ticks: {color: '#95a5a6'}, grid: {color: 'rgba(255,255,255,0.06)'} },
+    y: { ticks: {color: '#95a5a6'}, grid: {color: 'rgba(255,255,255,0.06)'} }
+  }
+};
+
+function logOpts(xlabel, ylabel) {
+  return {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: '#ecf0f1', font: {size: 11} } } },
+    scales: {
+      x: { title: {display:true, text:xlabel, color:'#95a5a6'}, ticks: {color: '#95a5a6'}, grid: {color: 'rgba(255,255,255,0.06)'} },
+      y: { type:'logarithmic', title: {display:true, text:ylabel, color:'#95a5a6'}, ticks: {color:'#95a5a6'}, grid: {color: 'rgba(255,255,255,0.06)'} }
+    }
+  };
+}
+
+function linearOpts(xlabel, ylabel) {
+  return {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: '#ecf0f1', font: {size: 11} } } },
+    scales: {
+      x: { title: {display:true, text:xlabel, color:'#95a5a6'}, ticks: {color: '#95a5a6'}, grid: {color: 'rgba(255,255,255,0.06)'} },
+      y: { title: {display:true, text:ylabel, color:'#95a5a6'}, ticks: {color:'#95a5a6'}, grid: {color: 'rgba(255,255,255,0.06)'} }
+    }
+  };
+}
+
+// CHARTS
+new Chart(document.getElementById('chartLifting'), {
+  type: 'line',
+  data: {
+    labels: liftingDepths,
+    datasets: [
+      {label: 'lambda=32', data: liftBounds32, borderColor: '#e74c3c', borderWidth: 2, pointRadius: 0, fill: false},
+      {label: 'lambda=64', data: liftBounds64, borderColor: '#2980b9', borderWidth: 2, pointRadius: 0, fill: false},
+      {label: 'lambda=128', data: liftBounds128, borderColor: '#27ae60', borderWidth: 2, pointRadius: 0, fill: false},
+      {label: 'lambda=256', data: liftBounds256, borderColor: '#8e44ad', borderWidth: 2, pointRadius: 0, fill: false}
+    ]
+  },
+  options: logOpts('Adversary Depth d', 'Security Bound')
+});
+
+new Chart(document.getElementById('chartLambda'), {
+  type: 'line',
+  data: {
+    labels: lambdaSweepData.lambdas,
+    datasets: [
+      {label: 'Lifting Bound', data: lambdaSweepData.theoretical_bound, borderColor: '#2980b9', borderWidth: 2, pointRadius: 3, fill: false}
+    ]
+  },
+  options: logOpts('Security Parameter lambda', 'Bound Value')
+});
+
+new Chart(document.getElementById('chartDepthSweep'), {
+  type: 'line',
+  data: {
+    labels: depthSweepData.depths,
+    datasets: [
+      {label: 'Mean Advantage', data: depthSweepData.mean_advantage, borderColor: '#2980b9', borderWidth: 2, pointRadius: 2, fill: false},
+      {label: 'P(Both)', data: depthSweepData.p_both, borderColor: '#8e44ad', borderWidth: 2, pointRadius: 2, fill: false},
+      {label: 'Key Accuracy', data: depthSweepData.key_accuracy, borderColor: '#27ae60', borderWidth: 2, pointRadius: 2, fill: false, yAxisID: 'y1'}
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: '#ecf0f1', font: {size: 11} } } },
+    scales: {
+      x: { title: {display:true, text:'Adversary Depth d', color:'#95a5a6'}, ticks: {color:'#95a5a6'}, grid: {color:'rgba(255,255,255,0.06)'} },
+      y: { title: {display:true, text:'Advantage', color:'#95a5a6'}, ticks: {color:'#95a5a6'}, grid: {color:'rgba(255,255,255,0.06)'}, position: 'left' },
+      y1: { title: {display:true, text:'Key Accuracy', color:'#27ae60'}, ticks: {color:'#27ae60'}, grid: {display:false}, position: 'right', min: 0.5, max: 1.0 }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartQuerySweep'), {
+  type: 'line',
+  data: {
+    labels: querySweepData.queries,
+    datasets: [
+      {label: 'Lifting Loss', data: querySweepData.lifting_losses, borderColor: '#27ae60', borderWidth: 2, pointRadius: 4, fill: false}
+    ]
+  },
+  options: logOpts('Number of Queries q', 'Loss')
+});
+
+new Chart(document.getElementById('chartConjunction'), {
+  type: 'bar',
+  data: {
+    labels: conjunctionData.lengths.map(function(n) { return 'n=' + n; }),
+    datasets: [
+      {label: 'q=10', data: conjunctionData.q10, backgroundColor: 'rgba(41,128,185,0.7)'},
+      {label: 'q=50', data: conjunctionData.q50, backgroundColor: 'rgba(231,76,60,0.7)'},
+      {label: 'q=100', data: conjunctionData.q100, backgroundColor: 'rgba(39,174,96,0.7)'},
+      {label: 'q=200', data: conjunctionData.q200, backgroundColor: 'rgba(142,68,173,0.7)'}
+    ]
+  },
+  options: linearOpts('Pattern Length n', 'Distinguishing Probability')
+});
+
+new Chart(document.getElementById('chartPOVM'), {
+  type: 'line',
+  data: {
+    labels: povmBoundsData.n_values,
+    datasets: [
+      {label: 'POVM Bound (k=1)', data: povmBoundsData.k1_bounds, borderColor: '#2980b9', borderWidth: 2, pointRadius: 4, fill: false},
+      {label: 'Trivial (0.5)', data: [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5], borderColor: '#95a5a6', borderWidth: 1, borderDash: [5,3], pointRadius: 0, fill: false}
+    ]
+  },
+  options: linearOpts('Number of Qubits n', 'POVM Bound')
+});
+
+new Chart(document.getElementById('chartLightCone'), {
+  type: 'line',
+  data: {
+    labels: lcDepths,
+    datasets: [
+      {label: 'lambda=32', data: lc32, borderColor: '#e74c3c', borderWidth: 2, pointRadius: 0, fill: false},
+      {label: 'lambda=64', data: lc64, borderColor: '#2980b9', borderWidth: 2, pointRadius: 0, fill: false},
+      {label: 'lambda=128', data: lc128, borderColor: '#27ae60', borderWidth: 2, pointRadius: 0, fill: false}
+    ]
+  },
+  options: linearOpts('Circuit Depth d', 'Light Cone Fraction')
+});
+
+new Chart(document.getElementById('chartSimDist'), {
+  type: 'bar',
+  data: {
+    labels: simDistData.depths.map(function(d) { return 'd=' + d; }),
+    datasets: [
+      {label: 'Overall', data: simDistData.overall, backgroundColor: 'rgba(26,58,92,0.8)'},
+      {label: 'Matching Bases', data: simDistData.matching, backgroundColor: 'rgba(41,128,185,0.7)'},
+      {label: 'Key Accuracy', data: simDistData.key_acc, backgroundColor: 'rgba(39,174,96,0.7)'}
+    ]
+  },
+  options: linearOpts('Adversary Depth d', 'Statistical Distance')
+});
+
+// TABLES via safe DOM methods
+function buildThresholdTable() {
+  var tbody = document.getElementById('thresholdTable');
+  thresholdRows.forEach(function(row) {
+    var tr = document.createElement('tr');
+    var cells = [row.d, row.q, row.t6, row.t9, row.t12];
+    var classes = ['', '', 'val-good', 'val-warn', 'val-bad'];
+    cells.forEach(function(val, i) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      if (classes[i]) td.className = classes[i];
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function buildDepthTable() {
+  var tbody = document.getElementById('depthTable');
+  var indices = [0,1,2,3,5,10,20,30,38];
+  indices.forEach(function(i) {
+    if (i >= depthSweepData.depths.length) return;
+    var tr = document.createElement('tr');
+    var adv = depthSweepData.mean_advantage[i];
+    var cls = adv < 0.01 ? 'val-good' : adv < 0.3 ? 'val-warn' : 'val-bad';
+
+    var td1 = document.createElement('td');
+    td1.textContent = depthSweepData.depths[i];
+    tr.appendChild(td1);
+
+    var td2 = document.createElement('td');
+    td2.textContent = adv.toFixed(6);
+    td2.className = cls;
+    tr.appendChild(td2);
+
+    var td3 = document.createElement('td');
+    td3.textContent = depthSweepData.key_accuracy[i].toFixed(3);
+    tr.appendChild(td3);
+
+    var td4 = document.createElement('td');
+    td4.textContent = depthSweepData.p_both[i].toFixed(6);
+    tr.appendChild(td4);
+
+    var td5 = document.createElement('td');
+    td5.textContent = depthSweepData.povm_bounds[i].toFixed(3);
+    tr.appendChild(td5);
+
+    var td6 = document.createElement('td');
+    td6.textContent = depthSweepData.attack_success[i].toFixed(2);
+    tr.appendChild(td6);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function buildPovmTable() {
+  var tbody = document.getElementById('povmTable');
+  povmBoundsData.n_values.forEach(function(n, i) {
+    var tr = document.createElement('tr');
+
+    var tdN = document.createElement('td');
+    var strong = document.createElement('strong');
+    strong.textContent = n;
+    tdN.appendChild(strong);
+    tr.appendChild(tdN);
+
+    povmBoundsData.bounds_matrix[i].forEach(function(v) {
+      var td = document.createElement('td');
+      td.textContent = v >= 1.0 ? '1.000' : v.toFixed(3);
+      td.className = v >= 1.0 ? 'val-bad' : v < 0.55 ? 'val-good' : 'val-warn';
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+buildThresholdTable();
+buildDepthTable();
+buildPovmTable();
+</script>
+</body>
+</html>

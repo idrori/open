@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Reviewer Agent Efficacy - Interactive Research Findings</title>
+<style>
+:root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent2: #8b5cf6;
+    --green: #22c55e;
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --cyan: #06b6d4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 40px 0;
+    text-align: center;
+}
+header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+header p.subtitle {
+    color: var(--text-muted);
+    font-size: 1rem;
+    max-width: 700px;
+    margin: 0 auto;
+}
+header .meta {
+    margin-top: 15px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+header .meta span {
+    display: inline-block;
+    background: var(--surface2);
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin: 3px;
+}
+nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+nav .container { display: flex; gap: 0; overflow-x: auto; }
+nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 12px 18px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+nav a:hover, nav a.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(59,130,246,0.05);
+}
+section { padding: 40px 0; }
+section h2 {
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+section h2 .num {
+    background: var(--accent);
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+}
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+.card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    color: var(--cyan);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+@media (max-width: 768px) {
+    .grid-2, .grid-3, .grid-5 { grid-template-columns: 1fr; }
+}
+.metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+.metric-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 8px 0;
+}
+.metric-card .label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.metric-card .sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+.color-blue { color: var(--accent); }
+.color-green { color: var(--green); }
+.color-orange { color: var(--orange); }
+.color-red { color: var(--red); }
+.color-purple { color: var(--accent2); }
+.color-cyan { color: var(--cyan); }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+table th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+table tr:hover td { background: rgba(59,130,246,0.05); }
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.bar-row .name { font-size: 0.85rem; min-width: 200px; }
+.bar-row .track {
+    flex: 1;
+    height: 22px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.bar-row .fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s ease;
+}
+.bar-row .val { font-size: 0.85rem; min-width: 50px; text-align: right; font-weight: 600; }
+.chart-area {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 220px;
+    border-bottom: 2px solid var(--border);
+    border-left: 2px solid var(--border);
+    padding: 0 10px;
+}
+.chart-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    max-width: 80px;
+}
+.chart-col .col-bar {
+    width: 40px;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.8s ease;
+    position: relative;
+    cursor: pointer;
+}
+.chart-col .col-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    text-align: center;
+    line-height: 1.2;
+}
+.chart-col .col-val {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.finding-box {
+    background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+    border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+}
+.finding-box h4 {
+    font-size: 0.95rem;
+    margin-bottom: 6px;
+    color: var(--accent);
+}
+.finding-box p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+.slider-section { margin: 20px 0; }
+.slider-section label {
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 8px;
+}
+.slider-section input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+}
+footer {
+    border-top: 1px solid var(--border);
+    padding: 30px 0;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+footer a { color: var(--accent); text-decoration: none; }
+.tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.tag-good { background: rgba(34,197,94,0.15); color: var(--green); }
+.tag-warn { background: rgba(245,158,11,0.15); color: var(--orange); }
+.tag-bad { background: rgba(239,68,68,0.15); color: var(--red); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>Evaluating the Efficacy of LLM-Based Reviewer Agents in Scientific Peer Review</h1>
+        <p class="subtitle">A multi-agent simulation study measuring decision accuracy, score calibration, defect detection, and adversarial robustness of LLM reviewer agent panels.</p>
+        <div class="meta">
+            <span>KDD 2026 Research Track</span>
+            <span>160 Manuscripts</span>
+            <span>267 Planted Defects</span>
+            <span>5 Agent Profiles</span>
+            <span>5 Attack Types</span>
+        </div>
+    </div>
+</header>
+
+<nav>
+    <div class="container">
+        <a href="#summary" class="active">Summary</a>
+        <a href="#agents">Agent Performance</a>
+        <a href="#aggregation">Aggregation</a>
+        <a href="#calibration">Calibration</a>
+        <a href="#defects">Defect Detection</a>
+        <a href="#adversarial">Adversarial Robustness</a>
+        <a href="#ablation">Panel Ablation</a>
+        <a href="#findings">Key Findings</a>
+    </div>
+</nav>
+
+<!-- SUMMARY -->
+<section id="summary">
+<div class="container">
+    <h2><span class="num">1</span> Efficacy Summary</h2>
+    <div class="grid-5">
+        <div class="metric-card">
+            <div class="label">Decision Accuracy</div>
+            <div class="value color-blue">95.0%</div>
+            <div class="sub">Meta-reviewer (5 agents)</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Cohen's Kappa</div>
+            <div class="value color-purple">0.925</div>
+            <div class="sub">Near-perfect agreement</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Score Calibration</div>
+            <div class="value color-green">0.988</div>
+            <div class="sub">Pearson r (mean)</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Defect F1</div>
+            <div class="value color-cyan">0.987</div>
+            <div class="sub">Union aggregation</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Inter-Agent Kappa</div>
+            <div class="value color-orange">0.724</div>
+            <div class="sub">Mean pairwise</div>
+        </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+        <p style="color: var(--text-muted); font-size: 0.95rem;">
+            Multi-agent aggregation of LLM reviewer agents achieves strong performance on standard review tasks.
+            A panel of 5 diverse agents with confidence-weighted aggregation correctly classifies 95% of manuscripts
+            and detects 97.4% of planted defects with zero false positives. However, <strong style="color: var(--red);">adversarial
+            prompt injection</strong> inflates scores by +0.90 points (on a 10-point scale) and flips 16.7% of decisions,
+            posing a critical barrier to unsupervised deployment.
+        </p>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- AGENTS -->
+<section id="agents">
+<div class="container">
+    <h2><span class="num">2</span> Individual Agent Performance</h2>
+    <div class="card">
+        <h3>Performance Comparison (160 manuscripts, 267 defects)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Agent Profile</th>
+                    <th>Accuracy</th>
+                    <th>Cohen's Kappa</th>
+                    <th>Calibration (r)</th>
+                    <th>Defect F1</th>
+                    <th>Assessment</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Accurate Generalist</strong></td>
+                    <td>0.938</td><td>0.906</td><td>0.955</td><td>0.746</td>
+                    <td><span class="tag tag-good">Balanced</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Methods-Focused</strong></td>
+                    <td>0.956</td><td>0.934</td><td>0.968</td><td>0.813</td>
+                    <td><span class="tag tag-good">Best Individual</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Novelty-Focused</strong></td>
+                    <td>0.938</td><td>0.906</td><td>0.937</td><td>0.587</td>
+                    <td><span class="tag tag-warn">Weak Detection</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Harsh Reviewer</strong></td>
+                    <td>0.750</td><td>0.628</td><td>0.929</td><td>0.797</td>
+                    <td><span class="tag tag-bad">Biased Low</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Lenient Reviewer</strong></td>
+                    <td>0.831</td><td>0.748</td><td>0.928</td><td>0.602</td>
+                    <td><span class="tag tag-warn">Sycophancy</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <h3>Interactive Comparison</h3>
+        <div style="margin-bottom:12px; text-align:center;">
+            <select id="agentMetricSelect" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:0.85rem;">
+                <option value="accuracy">Decision Accuracy</option>
+                <option value="kappa">Cohen's Kappa</option>
+                <option value="calibration">Score Calibration (r)</option>
+                <option value="f1">Defect Detection F1</option>
+            </select>
+        </div>
+        <div class="chart-area" id="agentChart"></div>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- AGGREGATION -->
+<section id="aggregation">
+<div class="container">
+    <h2><span class="num">3</span> Meta-Reviewer Aggregation</h2>
+    <div class="grid-3">
+        <div class="metric-card">
+            <div class="label">Best Individual</div>
+            <div class="value" style="font-size:1.5rem;">95.6%</div>
+            <div class="sub">Methods-Focused</div>
+        </div>
+        <div class="metric-card" style="border-color:var(--green);">
+            <div class="label">Majority Vote</div>
+            <div class="value color-green" style="font-size:1.5rem;">95.0%</div>
+            <div class="sub">5-agent panel</div>
+        </div>
+        <div class="metric-card" style="border-color:var(--green);">
+            <div class="label">Confidence-Weighted</div>
+            <div class="value color-green" style="font-size:1.5rem;">95.0%</div>
+            <div class="sub">5-agent panel</div>
+        </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+        <h3>Per-Class Accuracy (Meta-Reviewer)</h3>
+        <div id="perClassBars" style="margin-top:12px;"></div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:12px;">
+            Revise-class manuscripts are hardest to classify, as they occupy the boundary between accept and reject quality tiers.
+        </p>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- CALIBRATION -->
+<section id="calibration">
+<div class="container">
+    <h2><span class="num">4</span> Score Calibration by Dimension</h2>
+    <div class="card">
+        <h3>Pearson Correlation (r) Between Agent and Ground-Truth Scores</h3>
+        <div id="calibrationBars" style="margin-top:16px;"></div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:12px;">
+            All dimensions achieve r &gt; 0.98 after multi-agent aggregation. High calibration results from averaging five diverse agents, which cancels systematic biases. Mean r = 0.988.
+        </p>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- DEFECT DETECTION -->
+<section id="defects">
+<div class="container">
+    <h2><span class="num">5</span> Defect Detection</h2>
+    <div class="grid-3">
+        <div class="metric-card">
+            <div class="label">Precision</div>
+            <div class="value color-green">1.000</div>
+            <div class="sub">Zero false positives</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Recall</div>
+            <div class="value color-cyan">0.974</div>
+            <div class="sub">Union aggregation</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">F1 Score</div>
+            <div class="value color-purple">0.987</div>
+            <div class="sub">Near-perfect detection</div>
+        </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+        <h3>Detection Recall by Defect Type</h3>
+        <div id="defectBars" style="margin-top:16px;"></div>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- ADVERSARIAL -->
+<section id="adversarial">
+<div class="container">
+    <h2><span class="num">6</span> Adversarial Robustness</h2>
+    <div class="card">
+        <h3>Score Inflation and Decision Flip Rate by Perturbation Type</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Perturbation</th>
+                    <th>Score Shift</th>
+                    <th>Std Dev</th>
+                    <th>Flip Rate</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Surface Polish</td>
+                    <td>+0.317</td><td>0.411</td><td>6.7%</td>
+                    <td><span class="tag tag-warn">Moderate</span></td>
+                </tr>
+                <tr>
+                    <td>Claim Inflation</td>
+                    <td>+0.296</td><td>0.392</td><td>6.7%</td>
+                    <td><span class="tag tag-warn">Moderate</span></td>
+                </tr>
+                <tr>
+                    <td>Citation Gaming</td>
+                    <td>+0.141</td><td>0.428</td><td>8.3%</td>
+                    <td><span class="tag tag-good">Low</span></td>
+                </tr>
+                <tr>
+                    <td>Method Obfuscation</td>
+                    <td>+0.212</td><td>0.510</td><td>11.7%</td>
+                    <td><span class="tag tag-warn">Moderate</span></td>
+                </tr>
+                <tr style="background:rgba(239,68,68,0.08);">
+                    <td><strong>Adversarial Prompt</strong></td>
+                    <td><strong>+0.901</strong></td><td>0.387</td><td><strong>16.7%</strong></td>
+                    <td><span class="tag tag-bad">Critical</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <h3>Defect Detection F1 Under Adversarial Perturbation</h3>
+        <div id="advDefectBars" style="margin-top:16px;"></div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:12px;">
+            Method Obfuscation causes the largest drop in defect detection F1 (from 0.698 to 0.642), confirming that obfuscation specifically masks methodological flaws.
+        </p>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- ABLATION -->
+<section id="ablation">
+<div class="container">
+    <h2><span class="num">7</span> Panel Size Ablation</h2>
+    <div class="card">
+        <h3>Metrics vs. Number of Reviewer Agents</h3>
+        <div class="slider-section">
+            <label for="panelSlider">Select panel size: <strong id="panelSizeLabel">5</strong> agent(s)</label>
+            <input type="range" id="panelSlider" min="0" max="4" value="2" step="1">
+        </div>
+        <div class="grid-2" id="ablationMetrics">
+            <div class="metric-card">
+                <div class="label">Accuracy</div>
+                <div class="value color-blue" id="ablAcc">0.969</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Cohen's Kappa</div>
+                <div class="value color-purple" id="ablKappa">0.953</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Calibration (r)</div>
+                <div class="value color-green" id="ablCal">0.988</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Defect F1</div>
+                <div class="value color-cyan" id="ablF1">0.987</div>
+            </div>
+        </div>
+        <table style="margin-top:20px;">
+            <thead>
+                <tr>
+                    <th>Panel Size</th><th>Accuracy</th><th>Kappa</th><th>Calibration</th><th>Defect F1</th><th>Defect Recall</th><th>IAA</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>1</td><td>0.950</td><td>0.925</td><td>0.959</td><td>0.772</td><td>0.629</td><td>--</td></tr>
+                <tr><td>3</td><td>0.981</td><td>0.972</td><td>0.983</td><td>0.955</td><td>0.914</td><td>0.875</td></tr>
+                <tr><td>5</td><td>0.969</td><td>0.953</td><td>0.988</td><td>0.987</td><td>0.974</td><td>0.725</td></tr>
+                <tr><td>7</td><td>0.975</td><td>0.962</td><td>0.990</td><td>0.996</td><td>0.993</td><td>0.757</td></tr>
+                <tr><td>9</td><td>0.963</td><td>0.944</td><td>0.993</td><td>1.000</td><td>1.000</td><td>0.783</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- KEY FINDINGS -->
+<section id="findings">
+<div class="container">
+    <h2><span class="num">8</span> Key Findings &amp; Recommendations</h2>
+
+    <div class="finding-box">
+        <h4>Finding 1: Multi-Agent Aggregation Is Essential</h4>
+        <p>Individual agents vary substantially (accuracy 75.0%-95.6%; defect F1 0.587-0.813). Multi-agent aggregation with diverse profiles achieves 95.0% decision accuracy and 0.987 defect F1, demonstrating that ensemble review is the most viable deployment mode.</p>
+    </div>
+
+    <div class="finding-box">
+        <h4>Finding 2: Union Defect Detection Is Highly Effective</h4>
+        <p>Union aggregation achieves near-perfect recall (0.974) with perfect precision (1.000). LLM reviewer panels are most valuable as defect screening tools that surface potential issues for human assessment.</p>
+    </div>
+
+    <div class="finding-box" style="border-left-color:var(--red);">
+        <h4 style="color:var(--red);">Finding 3: Adversarial Vulnerability Is a Critical Risk</h4>
+        <p>Adversarial prompt injection causes +0.90 score inflation and 16.7% decision flip rate, confirming the signal-collapse concern. Input sanitization, adversarial training, and review provenance verification are needed before deployment.</p>
+    </div>
+
+    <div class="finding-box">
+        <h4>Finding 4: Bias Profiles Create Predictable Trade-offs</h4>
+        <p>Harsh reviewers have high defect sensitivity but poor accuracy; lenient reviewers (sycophancy) have the opposite profile. Careful panel composition with diverse bias profiles improves overall robustness.</p>
+    </div>
+
+    <div class="finding-box">
+        <h4>Finding 5: Diminishing Returns Suggest Practical Panel Sizes</h4>
+        <p>3-5 agents provide the best cost-efficacy trade-off for decision accuracy. Defect detection continues improving up to 9 agents. Resource-constrained deployments should use diverse 3-agent panels; high-stakes reviews warrant larger panels.</p>
+    </div>
+
+    <div class="card" style="margin-top:20px; border-color:var(--accent);">
+        <h3 style="color:var(--accent);">Deployment Recommendation</h3>
+        <p style="font-size:0.95rem; color:var(--text-muted);">
+            LLM reviewer agents should be deployed as <strong style="color:var(--text);">ensemble screening assistants</strong>
+            with human oversight. A panel of 3-5 diverse agents provides structured pre-reviews (defect alerts,
+            dimension scores, confidence flags) that augment human judgment rather than replace it.
+            Adversarial hardening and input sanitization are prerequisites for any editorial pipeline integration.
+        </p>
+    </div>
+</div>
+</section>
+
+<footer>
+    <div class="container">
+        <p>Research based on the open problem identified by Kusumegi et al. (arXiv: 2601.13187, Jan 2026)</p>
+        <p style="margin-top:5px;">
+            <a href="https://www.emergentmind.com/open-problems/efficacy-of-llm-based-reviewer-agents-in-peer-review">Problem Statement</a>
+        </p>
+        <p style="margin-top:10px;">All results generated from reproducible simulation code (seed=42). 160 manuscripts, 267 defects, 5 agent profiles, 5 perturbation types.</p>
+    </div>
+</footer>
+
+<script>
+// Data
+var agentNames = ["Accurate Generalist", "Methods Focused", "Novelty Focused", "Harsh Reviewer", "Lenient Reviewer"];
+var agentData = {
+    accuracy: [0.938, 0.956, 0.938, 0.750, 0.831],
+    kappa: [0.906, 0.934, 0.906, 0.628, 0.748],
+    calibration: [0.955, 0.968, 0.937, 0.929, 0.928],
+    f1: [0.746, 0.813, 0.587, 0.797, 0.602]
+};
+var barColors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6'];
+
+var ablationData = [
+    {size:1, acc:0.950, kappa:0.925, cal:0.959, f1:0.772},
+    {size:3, acc:0.981, kappa:0.972, cal:0.983, f1:0.955},
+    {size:5, acc:0.969, kappa:0.953, cal:0.988, f1:0.987},
+    {size:7, acc:0.975, kappa:0.962, cal:0.990, f1:0.996},
+    {size:9, acc:0.963, kappa:0.944, cal:0.993, f1:1.000}
+];
+
+// Build bar chart for agents
+function buildAgentChart(metric) {
+    var container = document.getElementById('agentChart');
+    while (container.firstChild) container.removeChild(container.firstChild);
+    var vals = agentData[metric];
+    for (var i = 0; i < vals.length; i++) {
+        var col = document.createElement('div');
+        col.className = 'chart-col';
+
+        var valLabel = document.createElement('div');
+        valLabel.className = 'col-val';
+        valLabel.style.color = barColors[i];
+        valLabel.textContent = vals[i].toFixed(3);
+
+        var bar = document.createElement('div');
+        bar.className = 'col-bar';
+        bar.style.height = (vals[i] * 200) + 'px';
+        bar.style.background = barColors[i];
+
+        var label = document.createElement('div');
+        label.className = 'col-label';
+        label.textContent = agentNames[i];
+
+        col.appendChild(valLabel);
+        col.appendChild(bar);
+        col.appendChild(label);
+        container.appendChild(col);
+    }
+}
+
+document.getElementById('agentMetricSelect').addEventListener('change', function() {
+    buildAgentChart(this.value);
+});
+buildAgentChart('accuracy');
+
+// Build horizontal bar rows
+function buildHBars(containerId, items, colorFn) {
+    var container = document.getElementById(containerId);
+    while (container.firstChild) container.removeChild(container.firstChild);
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var c = colorFn(item.val);
+        var row = document.createElement('div');
+        row.className = 'bar-row';
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'name';
+        nameEl.textContent = item.name;
+
+        var track = document.createElement('div');
+        track.className = 'track';
+        var fill = document.createElement('div');
+        fill.className = 'fill';
+        fill.style.width = (item.val * 100) + '%';
+        fill.style.background = c;
+        track.appendChild(fill);
+
+        var valEl = document.createElement('span');
+        valEl.className = 'val';
+        valEl.style.color = c;
+        valEl.textContent = item.val.toFixed(3);
+
+        row.appendChild(nameEl);
+        row.appendChild(track);
+        row.appendChild(valEl);
+        container.appendChild(row);
+    }
+}
+
+// Per-class bars
+var perClassItems = [
+    {name: 'Accept (n=50)', val: 1.000},
+    {name: 'Reject (n=50)', val: 0.960},
+    {name: 'Revise (n=60)', val: 0.900}
+];
+buildHBars('perClassBars', perClassItems, function(v) {
+    if (v >= 0.99) return '#22c55e';
+    if (v >= 0.95) return '#06b6d4';
+    return '#f59e0b';
+});
+
+// Calibration bars
+var calibItems = [
+    {name: 'Experimental Completeness', val: 0.990},
+    {name: 'Methodological Soundness', val: 0.990},
+    {name: 'Novelty', val: 0.989},
+    {name: 'Ethical Considerations', val: 0.989},
+    {name: 'Significance', val: 0.987},
+    {name: 'Statistical Validity', val: 0.986},
+    {name: 'Clarity', val: 0.984}
+];
+buildHBars('calibrationBars', calibItems, function(v) {
+    if (v >= 0.989) return '#22c55e';
+    if (v >= 0.986) return '#06b6d4';
+    return '#f59e0b';
+});
+
+// Defect detection bars
+var defectItems = [
+    {name: 'Statistical Error', val: 1.000},
+    {name: 'Missing Baseline', val: 1.000},
+    {name: 'Insufficient Data', val: 1.000},
+    {name: 'Ethical Concern', val: 1.000},
+    {name: 'Reproducibility Gap', val: 0.952},
+    {name: 'Methodological Flaw', val: 0.950},
+    {name: 'Unsupported Claim', val: 0.932}
+];
+buildHBars('defectBars', defectItems, function(v) {
+    if (v >= 0.99) return '#22c55e';
+    if (v >= 0.95) return '#06b6d4';
+    return '#f59e0b';
+});
+
+// Adversarial defect detection bars
+var advDefItems = [
+    {name: 'Citation Gaming', val: 0.785},
+    {name: 'Claim Inflation', val: 0.771},
+    {name: 'Adversarial Prompt', val: 0.728},
+    {name: 'Clean (No Perturbation)', val: 0.698},
+    {name: 'Surface Polish', val: 0.659},
+    {name: 'Method Obfuscation', val: 0.642}
+];
+buildHBars('advDefectBars', advDefItems, function(v) {
+    if (v >= 0.75) return '#22c55e';
+    if (v >= 0.70) return '#06b6d4';
+    if (v >= 0.65) return '#f59e0b';
+    return '#ef4444';
+});
+
+// Ablation slider
+var slider = document.getElementById('panelSlider');
+slider.addEventListener('input', function() {
+    var idx = parseInt(this.value);
+    var d = ablationData[idx];
+    document.getElementById('panelSizeLabel').textContent = d.size;
+    document.getElementById('ablAcc').textContent = d.acc.toFixed(3);
+    document.getElementById('ablKappa').textContent = d.kappa.toFixed(3);
+    document.getElementById('ablCal').textContent = d.cal.toFixed(3);
+    document.getElementById('ablF1').textContent = d.f1.toFixed(3);
+});
+
+// Smooth scroll for nav
+var navLinks = document.querySelectorAll('nav a');
+for (var i = 0; i < navLinks.length; i++) {
+    navLinks[i].addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').substring(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({behavior:'smooth'});
+        for (var j = 0; j < navLinks.length; j++) navLinks[j].classList.remove('active');
+        this.classList.add('active');
+    });
+}
+
+// Scroll spy
+window.addEventListener('scroll', function() {
+    var sections = document.querySelectorAll('section');
+    var current = '';
+    for (var i = 0; i < sections.length; i++) {
+        if (window.scrollY >= sections[i].offsetTop - 100) current = sections[i].id;
+    }
+    for (var j = 0; j < navLinks.length; j++) {
+        if (navLinks[j].getAttribute('href') === '#' + current) {
+            navLinks[j].classList.add('active');
+        } else {
+            navLinks[j].classList.remove('active');
+        }
+    }
+});
+</script>
+
+</body>
+</html>

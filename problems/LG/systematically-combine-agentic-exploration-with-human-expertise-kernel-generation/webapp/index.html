@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGAS: Constraint-Guided Agentic Search for Kernel Generation</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
+.container{max-width:1300px;margin:0 auto;padding:20px}
+header{text-align:center;padding:40px 20px;background:linear-gradient(135deg,#1e293b,#0f172a);border-bottom:2px solid #334155}
+h1{font-size:1.7rem;color:#f8fafc;margin-bottom:10px}
+.subtitle{color:#94a3b8;font-size:1rem;max-width:900px;margin:0 auto}
+.section{margin:30px 0;padding:25px;background:#1e293b;border-radius:12px;border:1px solid #334155}
+.section h2{color:#f97316;font-size:1.3rem;margin-bottom:15px;border-bottom:1px solid #334155;padding-bottom:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+.chart-box{background:#0f172a;border-radius:8px;padding:15px;border:1px solid #334155}
+.chart-box h3{color:#e2e8f0;font-size:0.95rem;margin-bottom:10px;text-align:center}
+canvas{max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:8px 12px;text-align:center;border-bottom:1px solid #334155}
+th{background:#334155;color:#f97316;font-weight:600}
+tr:hover{background:#1a2744}
+.key-result{display:inline-block;background:#431407;color:#fdba74;padding:4px 12px;border-radius:20px;font-size:0.8rem;margin:3px}
+.layer{padding:12px 16px;background:#1a2744;border-left:3px solid #f97316;margin:8px 0;border-radius:0 6px 6px 0;font-size:0.9rem}
+@media(max-width:768px){.grid2,.grid3{grid-template-columns:1fr}h1{font-size:1.3rem}}
+</style>
+</head>
+<body>
+<header>
+<h1>CGAS: Constraint-Guided Agentic Search for Human-AI Collaborative Kernel Generation</h1>
+<p class="subtitle">A three-layer framework combining structured kernel design spaces, Hierarchical Constrained Monte Carlo Tree Search (HC-MCTS), and mixed-initiative interaction for GPU kernel optimization.</p>
+</header>
+<div class="container">
+
+<div class="section">
+<h2>Problem &amp; Framework</h2>
+<p style="color:#94a3b8;margin-bottom:12px">GPU kernel optimization involves navigating a vast combinatorial design space. Purely autonomous agents waste compute on configurations experts would reject; purely manual tuning cannot scale. CGAS addresses this with three layers:</p>
+<div class="layer"><strong>Layer 1 -- Structured Design Space:</strong> 9 typed parameters (tile sizes, memory placement, thread blocks, vectorization, unroll factor) with hardware-semantic annotations. Total space: 230,400 configurations.</div>
+<div class="layer"><strong>Layer 2 -- HC-MCTS Agent:</strong> UCB1-guided exploration with hard constraint pruning and soft preference biasing. Concentrates evaluation on performance-relevant configurations.</div>
+<div class="layer"><strong>Layer 3 -- Mixed-Initiative Protocol:</strong> Uncertainty-adaptive consultation where experts inject constraints and provide feedback, focused on high-uncertainty parameters.</div>
+</div>
+
+<div class="section">
+<h2>Design Space Reduction Through Expert Constraints</h2>
+<div class="grid2">
+<div class="chart-box"><h3>Design Space Size vs. Constraints</h3><canvas id="spaceChart"></canvas></div>
+<div class="chart-box"><h3>Mean Random-Sample Performance (TFLOPS)</h3><canvas id="perfChart"></canvas></div>
+</div>
+<table style="margin-top:15px">
+<tr><th>Constraints</th><th>Size</th><th>Reduction</th><th>Mean TFLOPS</th></tr>
+<tr><td>None</td><td>230,400</td><td>0.0%</td><td>8.04</td></tr>
+<tr><td>Tile M >= 64</td><td>138,240</td><td>40.0%</td><td>8.89</td></tr>
+<tr><td>+ Vec >= 2</td><td>103,680</td><td>55.0%</td><td>10.82</td></tr>
+<tr><td>+ Tile N >= 64</td><td>62,208</td><td>73.0%</td><td>12.09</td></tr>
+<tr><td>+ Block >= 64</td><td>46,656</td><td>79.8%</td><td>12.75</td></tr>
+<tr><td>+ Tile K >= 16</td><td>34,992</td><td>84.8%</td><td>12.33</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Parameter Sensitivity Analysis</h2>
+<div class="grid2">
+<div class="chart-box"><h3>TFLOPS Range by Parameter</h3><canvas id="sensitivityChart"></canvas></div>
+<div class="chart-box"><h3>Performance by Parameter Value (Top 4)</h3><canvas id="paramCurvesChart"></canvas></div>
+</div>
+</div>
+
+<div class="section">
+<h2>Search Strategy: Bottleneck Distribution</h2>
+<div class="grid2">
+<div class="chart-box"><h3>Bottleneck Distribution by Strategy</h3><canvas id="bottleneckChart"></canvas></div>
+<div class="chart-box"><h3>Memory-Bounded Fraction</h3><canvas id="memFracChart"></canvas></div>
+</div>
+<div style="margin-top:12px;text-align:center">
+<div class="key-result">HC-MCTS: 94.4% memory-bounded</div>
+<div class="key-result">Random: 55.6% memory-bounded</div>
+<div class="key-result">Best TFLOPS: 19.305</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Convergence &amp; Efficiency</h2>
+<div class="chart-box"><h3>Evaluations to Reach TFLOPS Threshold</h3><canvas id="convergenceChart"></canvas></div>
+<p style="margin-top:10px;color:#94a3b8;font-size:0.9rem">Both agent-only and human-assisted strategies reach 15 TFLOPS within 15 evaluations and 19+ TFLOPS within ~21 evaluations. Primary benefit of human expertise: design space reduction and focused evaluation rather than faster convergence.</p>
+</div>
+
+<div class="section">
+<h2>Key Results</h2>
+<div class="grid3">
+<div>
+<h3 style="color:#f97316;margin-bottom:8px">Design Space</h3>
+<div class="key-result">84.8% space reduction</div>
+<div class="key-result">58.6% perf improvement</div>
+</div>
+<div>
+<h3 style="color:#f97316;margin-bottom:8px">Search Focus</h3>
+<div class="key-result">94.4% memory-bounded configs</div>
+<div class="key-result">vs 55.6% random</div>
+</div>
+<div>
+<h3 style="color:#f97316;margin-bottom:8px">Parameter Sensitivity</h3>
+<div class="key-result">Tile K: 15.1 TFLOPS range</div>
+<div class="key-result">Block dims: 11-14 range</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+const constraintLabels = ['None','Tile M>=64','+Vec>=2','+Tile N>=64','+Block>=64','+Tile K>=16'];
+const spaceSizes = [230400,138240,103680,62208,46656,34992];
+const meanPerf = [8.04,8.89,10.82,12.09,12.75,12.33];
+const cOpts = (yT,xT) => ({responsive:true,plugins:{legend:{labels:{color:'#e2e8f0'}}},scales:{x:{ticks:{color:'#94a3b8'},title:{display:!!xT,text:xT||'',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},title:{display:!!yT,text:yT||'',color:'#94a3b8'}}}});
+
+new Chart(document.getElementById('spaceChart').getContext('2d'),{type:'bar',data:{labels:constraintLabels,datasets:[{label:'Design Space Size',data:spaceSizes,backgroundColor:'rgba(249,115,22,0.7)'}]},options:cOpts('Configurations')});
+new Chart(document.getElementById('perfChart').getContext('2d'),{type:'line',data:{labels:constraintLabels,datasets:[{label:'Mean TFLOPS',data:meanPerf,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,0.2)',fill:true,tension:0.3,pointRadius:5}]},options:cOpts('TFLOPS')});
+
+const paramNames = ['tile_K','block_dim_x','block_dim_y','tile_M','tile_N','vec_width','mem_A','mem_B','unroll_K'];
+const paramRanges = [15.11,13.99,11.40,10.36,10.36,8.09,6.22,6.22,2.33];
+new Chart(document.getElementById('sensitivityChart').getContext('2d'),{type:'bar',data:{labels:paramNames,datasets:[{label:'TFLOPS Range',data:paramRanges,backgroundColor:paramRanges.map(v=>v>12?'rgba(239,68,68,0.7)':v>8?'rgba(249,115,22,0.7)':'rgba(34,197,94,0.7)')}]},options:cOpts('TFLOPS Range')});
+
+// Top 4 param curves
+const tileKvals = ['8','16','32','64'];
+const tileKperf = [19.31,18.57,10.41,4.19];
+const blkXvals = ['32','64','128','256'];
+const blkXperf = [2.64,5.23,10.41,16.62];
+new Chart(document.getElementById('paramCurvesChart').getContext('2d'),{type:'line',data:{labels:['Val1','Val2','Val3','Val4'],datasets:[
+  {label:'tile_K (8,16,32,64)',data:tileKperf,borderColor:'#ef4444',fill:false,tension:0.3},
+  {label:'block_dim_x (32,64,128,256)',data:blkXperf,borderColor:'#3b82f6',fill:false,tension:0.3},
+  {label:'block_dim_y (1,2,4,8)',data:[5.23,10.41,16.62,16.62],borderColor:'#10b981',fill:false,tension:0.3},
+  {label:'tile_M (16,32,64,128,256)',data:[9.20,16.62,12.48,10.41,6.26],borderColor:'#f59e0b',fill:false,tension:0.3}
+]},options:cOpts('TFLOPS','Parameter Value Index')});
+
+// Bottleneck
+const strategies = ['Random','Constrained','HC-MCTS','HC-MCTS+Human'];
+const bOcc = [51,97,9,10]; const bComp = [114,83,4,4]; const bIlp = [57,133,15,16]; const bMem = [278,187,472,470];
+new Chart(document.getElementById('bottleneckChart').getContext('2d'),{type:'bar',data:{labels:strategies,datasets:[
+  {label:'Occupancy',data:bOcc,backgroundColor:'rgba(239,68,68,0.7)'},
+  {label:'Compute',data:bComp,backgroundColor:'rgba(59,130,246,0.7)'},
+  {label:'ILP',data:bIlp,backgroundColor:'rgba(245,158,11,0.7)'},
+  {label:'Memory',data:bMem,backgroundColor:'rgba(34,197,94,0.7)'}
+]},options:{...cOpts('Config Count'),scales:{...cOpts().scales,x:{stacked:true,ticks:{color:'#94a3b8'}},y:{stacked:true,ticks:{color:'#94a3b8'}}}}});
+
+const totals = [500,500,500,500];
+const memFrac = bMem.map((v,i)=>+(v/totals[i]*100).toFixed(1));
+new Chart(document.getElementById('memFracChart').getContext('2d'),{type:'bar',data:{labels:strategies,datasets:[{label:'Memory-Bounded %',data:memFrac,backgroundColor:memFrac.map(v=>v>90?'rgba(34,197,94,0.7)':'rgba(249,115,22,0.7)')}]},options:cOpts('% Memory-Bounded')});
+
+// Convergence
+const thresholds = [15,16,17,18,19];
+const agentEvals = [15,15,18,18,21];
+const humanEvals = [15,15,18,18,21];
+new Chart(document.getElementById('convergenceChart').getContext('2d'),{type:'line',data:{labels:thresholds.map(t=>t+' TFLOPS'),datasets:[
+  {label:'Agent Only',data:agentEvals,borderColor:'#3b82f6',fill:false,tension:0.3,pointRadius:5},
+  {label:'Human Assisted',data:humanEvals,borderColor:'#f97316',borderDash:[5,5],fill:false,tension:0.3,pointRadius:5}
+]},options:cOpts('Evaluations Needed','Target TFLOPS')});
+</script>
+</body>
+</html>

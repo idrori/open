@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capacity-Driven Gains from Multilingual SFT at 27B</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#222;--muted:#666;--border:#dde3ea}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;max-width:900px;margin:0 auto}
+header p{opacity:.85;margin-top:.5rem;font-size:.95rem}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+.card{background:var(--card);border-radius:10px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);border:1px solid var(--border)}
+.card h2{font-size:1.1rem;color:var(--primary);margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+.stat-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--bg);border-radius:8px;padding:1rem 1.25rem;flex:1;min-width:130px;text-align:center}
+.stat .val{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat .lbl{font-size:.78rem;color:var(--muted);margin-top:.25rem}
+canvas{max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:.5rem .75rem;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--primary);color:#fff;font-weight:600}
+tr:hover{background:#f0f4f8}
+</style>
+</head>
+<body>
+<header>
+<h1>Verify Capacity-Driven Gains from Multilingual SFT at 27B</h1>
+<p>Larger models extract disproportionately more from multilingual supervised fine-tuning</p>
+</header>
+<div class="container">
+<div class="stat-row">
+<div class="stat"><div class="val">4.52x</div><div class="lbl">27B/4B Slope Ratio</div></div>
+<div class="stat"><div class="val">3.42x</div><div class="lbl">Relative Advantage 27B vs 4B</div></div>
+<div class="stat"><div class="val">0.820</div><div class="lbl">Quality 27B at 55 langs</div></div>
+<div class="stat"><div class="val">p&lt;0.001</div><div class="lbl">Slope Test Significance</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Scaling Curves: Quality vs Number of Languages</h2>
+<canvas id="scalingChart"></canvas>
+</div>
+<div class="card">
+<h2>Language Group Slope Ratios (27B/4B)</h2>
+<canvas id="groupChart"></canvas>
+</div>
+<div class="card">
+<h2>Total Quality Gain by Model Size</h2>
+<canvas id="gainChart"></canvas>
+</div>
+<div class="card">
+<h2>Final Quality at 55 Languages</h2>
+<canvas id="finalChart"></canvas>
+</div>
+</div>
+<div class="card">
+<h2>Language Group Analysis</h2>
+<table>
+<thead><tr><th>Group</th><th>Slope (27B)</th><th>Slope (4B)</th><th>Ratio</th></tr></thead>
+<tbody>
+<tr><td>High Resource</td><td>0.00464</td><td>0.00112</td><td>4.15x</td></tr>
+<tr><td>Mid Resource</td><td>0.00632</td><td>0.00152</td><td>4.16x</td></tr>
+<tr><td>Low Resource</td><td>0.00624</td><td>0.00150</td><td>4.17x</td></tr>
+<tr><td>Typologically Distant</td><td>0.00626</td><td>0.00130</td><td>4.80x</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<script>
+const langs=[5,10,15,20,25,30,35,40,45,50,55];
+const q4B=[0.406,0.417,0.431,0.440,0.449,0.458,0.465,0.466,0.469,0.470,0.469];
+const q12B=[0.485,0.502,0.520,0.538,0.557,0.576,0.598,0.615,0.624,0.626,0.632];
+const q27B=[0.541,0.571,0.602,0.632,0.662,0.691,0.721,0.753,0.782,0.813,0.820];
+new Chart(document.getElementById('scalingChart'),{type:'line',data:{labels:langs,datasets:[{label:'27B',data:q27B,borderColor:'#1a3a5c',backgroundColor:'rgba(26,58,92,0.1)',fill:true,tension:.3,pointRadius:4},{label:'12B',data:q12B,borderColor:'#2980b9',fill:false,tension:.3,pointRadius:4},{label:'4B',data:q4B,borderColor:'#95a5a6',fill:false,tension:.3,pointRadius:4}]},options:{responsive:true,scales:{x:{title:{display:true,text:'Number of Languages'}},y:{title:{display:true,text:'Quality Score'},min:0.35,max:0.85}}}});
+const groups=['High Resource','Mid Resource','Low Resource','Typo. Distant'];
+const ratios=[4.15,4.16,4.17,4.80];
+new Chart(document.getElementById('groupChart'),{type:'bar',data:{labels:groups,datasets:[{label:'27B/4B Slope Ratio',data:ratios,backgroundColor:['#3498db','#2ecc71','#e67e22','#e74c3c'],borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Slope Ratio'},min:3.5,max:5.2}}}});
+new Chart(document.getElementById('gainChart'),{type:'bar',data:{labels:['4B','12B','27B'],datasets:[{label:'Total Gain (5 to 55 langs)',data:[0.063,0.147,0.279],backgroundColor:['#95a5a6','#2980b9','#1a3a5c'],borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Quality Gain'}}}}});
+new Chart(document.getElementById('finalChart'),{type:'bar',data:{labels:['4B','12B','27B'],datasets:[{label:'Quality at 55 langs',data:[0.469,0.632,0.820],backgroundColor:['#95a5a6','#2980b9','#1a3a5c'],borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Quality Score'},min:0.3,max:0.9}}}});
+</script>
+</body>
+</html>

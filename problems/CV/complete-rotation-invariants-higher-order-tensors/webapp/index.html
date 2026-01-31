@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Complete Rotation Invariants for Higher-Order Tensors</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+header p { opacity: 0.85; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(540px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: var(--card); border-radius: 10px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+.chart-container { position: relative; height: 320px; }
+.controls { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+.controls label { font-weight: 600; font-size: 0.9rem; color: var(--primary); }
+.controls select { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+.metric-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.metric { flex: 1; min-width: 150px; background: var(--bg); border-radius: 8px; padding: 1rem; text-align: center; }
+.metric .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.metric .label { font-size: 0.8rem; color: #666; margin-top: 0.3rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { padding: 0.5rem; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: white; font-weight: 600; }
+tr:hover { background: #f0f4f8; }
+footer { text-align: center; padding: 1.5rem; color: #999; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<header>
+<h1>Complete Rotation Invariants for Higher-Order Tensors</h1>
+<p>Computational exploration of contraction-based rotation invariants, their discriminative power, and the connection to graph isomorphism.</p>
+</header>
+<div class="container">
+<div class="metric-row" id="metrics"></div>
+<div class="grid">
+<div class="card">
+<h2>Discrimination Rate by Order and Dimension</h2>
+<div class="controls">
+<label>Dimension: <select id="dimSelect" onchange="updateCharts()"><option value="all">All</option></select></label>
+</div>
+<div class="chart-container"><canvas id="discChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Completeness Gap vs Tensor Order</h2>
+<div class="chart-container"><canvas id="gapChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Invariant Count Scaling</h2>
+<div class="controls">
+<label>Metric: <select id="invMetric" onchange="updateCharts()">
+<option value="n_invariants">Total Invariants</option>
+<option value="n_independent">Independent Invariants</option>
+<option value="n_graphs">Contraction Graphs</option>
+</select></label>
+</div>
+<div class="chart-container"><canvas id="invChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Graph Isomorphism Connection</h2>
+<div class="chart-container"><canvas id="giChart"></canvas></div>
+</div>
+</div>
+<div class="card">
+<h2>Detailed Results Table</h2>
+<table id="resultsTable">
+<thead><tr><th>Order r</th><th>Dim d</th><th>Invariants</th><th>Independent</th><th>Graphs</th><th>Disc. Rate</th><th>Gap</th><th>Status</th></tr></thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+</div>
+<footer>Complete Rotation Invariants for Higher-Order Tensors - Computational Study</footer>
+
+<script>
+const COLORS = ['#1a3a5c','#2980b9','#e74c3c','#27ae60','#f39c12','#8e44ad'];
+const discData = [
+{"order":1,"dimension":2,"n_invariants_constructed":2,"n_independent_invariants":2,"n_contraction_graphs":1,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":2,"dimension":2,"n_invariants_constructed":5,"n_independent_invariants":5,"n_contraction_graphs":1,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":3,"dimension":2,"n_invariants_constructed":8,"n_independent_invariants":8,"n_contraction_graphs":4,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":4,"dimension":2,"n_invariants_constructed":10,"n_independent_invariants":10,"n_contraction_graphs":3,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":1,"dimension":3,"n_invariants_constructed":2,"n_independent_invariants":2,"n_contraction_graphs":1,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":2,"dimension":3,"n_invariants_constructed":5,"n_independent_invariants":5,"n_contraction_graphs":1,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":3,"dimension":3,"n_invariants_constructed":8,"n_independent_invariants":8,"n_contraction_graphs":4,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":4,"dimension":3,"n_invariants_constructed":10,"n_independent_invariants":10,"n_contraction_graphs":3,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":1,"dimension":4,"n_invariants_constructed":2,"n_independent_invariants":2,"n_contraction_graphs":1,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":2,"dimension":4,"n_invariants_constructed":5,"n_independent_invariants":5,"n_contraction_graphs":1,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":3,"dimension":4,"n_invariants_constructed":8,"n_independent_invariants":8,"n_contraction_graphs":4,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0},
+{"order":4,"dimension":4,"n_invariants_constructed":10,"n_independent_invariants":10,"n_contraction_graphs":3,"discrimination_rate":1.0,"completeness_gap":0.0,"graph_iso_connection_score":1.0}
+];
+const dims = [...new Set(discData.map(d=>d.dimension))].sort((a,b)=>a-b);
+const orders = [...new Set(discData.map(d=>d.order))].sort((a,b)=>a-b);
+
+const dimSel = document.getElementById('dimSelect');
+dims.forEach(function(d) { var o = document.createElement('option'); o.value=d; o.textContent='d='+d; dimSel.appendChild(o); });
+
+// Build metrics
+var metricsDiv = document.getElementById('metrics');
+var avgDisc = discData.reduce(function(s,d){return s+d.discrimination_rate;},0)/discData.length;
+var avgGap = discData.reduce(function(s,d){return s+d.completeness_gap;},0)/discData.length;
+var totalGraphs = discData.reduce(function(s,d){return s+d.n_contraction_graphs;},0);
+var configs = discData.length;
+var metricItems = [
+    {v:(avgDisc*100).toFixed(1)+'%',l:'Avg Discrimination Rate'},
+    {v:avgGap.toFixed(4),l:'Avg Completeness Gap'},
+    {v:String(totalGraphs),l:'Total Contraction Graphs'},
+    {v:String(configs),l:'Configurations Tested'}
+];
+metricItems.forEach(function(m) {
+    var d = document.createElement('div'); d.className='metric';
+    var vDiv = document.createElement('div'); vDiv.className='value'; vDiv.textContent=m.v;
+    var lDiv = document.createElement('div'); lDiv.className='label'; lDiv.textContent=m.l;
+    d.appendChild(vDiv); d.appendChild(lDiv); metricsDiv.appendChild(d);
+});
+
+// Build table
+var tbody = document.getElementById('tableBody');
+discData.forEach(function(r) {
+    var tr = document.createElement('tr');
+    var cells = [r.order, r.dimension, r.n_invariants_constructed, r.n_independent_invariants, r.n_contraction_graphs, r.discrimination_rate.toFixed(3), r.completeness_gap.toFixed(4), r.discrimination_rate >= 0.99 ? 'COMPLETE' : 'PARTIAL'];
+    cells.forEach(function(c) { var td = document.createElement('td'); td.textContent = c; tr.appendChild(td); });
+    tbody.appendChild(tr);
+});
+
+var charts = {};
+function updateCharts() {
+    Object.values(charts).forEach(function(c){c.destroy();});
+    charts = {};
+    var selDim = dimSel.value;
+    var filtDims = selDim==='all' ? dims : [parseInt(selDim)];
+
+    var discCtx = document.getElementById('discChart').getContext('2d');
+    var discDatasets = filtDims.map(function(d,i) {
+        return {
+            label: 'd='+d,
+            data: orders.map(function(o) { var r=discData.find(function(x){return x.dimension===d&&x.order===o;}); return r?r.discrimination_rate:null; }),
+            borderColor: COLORS[i%COLORS.length], backgroundColor: COLORS[i%COLORS.length]+'33',
+            tension: 0.3, fill: false, pointRadius: 5
+        };
+    });
+    charts.disc = new Chart(discCtx, { type:'line', data:{labels:orders.map(function(o){return 'r='+o;}),datasets:discDatasets}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:1.05,title:{display:true,text:'Discrimination Rate'}},x:{title:{display:true,text:'Tensor Order'}}}} });
+
+    var gapCtx = document.getElementById('gapChart').getContext('2d');
+    var gapDatasets = filtDims.map(function(d,i) {
+        return {
+            label: 'd='+d,
+            data: orders.map(function(o) { var r=discData.find(function(x){return x.dimension===d&&x.order===o;}); return r?r.completeness_gap:null; }),
+            borderColor: COLORS[i%COLORS.length], backgroundColor: COLORS[i%COLORS.length]+'33',
+            tension: 0.3, fill: true, pointRadius: 5
+        };
+    });
+    charts.gap = new Chart(gapCtx, { type:'line', data:{labels:orders.map(function(o){return 'r='+o;}),datasets:gapDatasets}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,title:{display:true,text:'Completeness Gap'}},x:{title:{display:true,text:'Tensor Order'}}}} });
+
+    var invMetric = document.getElementById('invMetric').value;
+    var invCtx = document.getElementById('invChart').getContext('2d');
+    var invDatasets = filtDims.map(function(d,i) {
+        return {
+            label: 'd='+d,
+            data: orders.map(function(o) { var r=discData.find(function(x){return x.dimension===d&&x.order===o;}); if(!r) return null; if(invMetric==='n_invariants') return r.n_invariants_constructed; if(invMetric==='n_independent') return r.n_independent_invariants; return r.n_contraction_graphs; }),
+            borderColor: COLORS[i%COLORS.length], backgroundColor: COLORS[i%COLORS.length]+'66'
+        };
+    });
+    charts.inv = new Chart(invCtx, { type:'bar', data:{labels:orders.map(function(o){return 'r='+o;}),datasets:invDatasets}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Count'}},x:{title:{display:true,text:'Tensor Order'}}}} });
+
+    var giCtx = document.getElementById('giChart').getContext('2d');
+    var giDatasets = [];
+    filtDims.forEach(function(d,i) {
+        giDatasets.push({
+            label: 'd='+d+' (graphs)', data: orders.map(function(o) { var r=discData.find(function(x){return x.dimension===d&&x.order===o;}); return r?r.n_contraction_graphs:null; }),
+            borderColor: COLORS[i%COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, type: 'line'
+        });
+        giDatasets.push({
+            label: 'd='+d+' (invariants)', data: orders.map(function(o) { var r=discData.find(function(x){return x.dimension===d&&x.order===o;}); return r?r.n_invariants_constructed:null; }),
+            borderColor: COLORS[i%COLORS.length], borderDash: [5,5], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, type: 'line'
+        });
+    });
+    charts.gi = new Chart(giCtx, { type:'line', data:{labels:orders.map(function(o){return 'r='+o;}),datasets:giDatasets}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{type:'logarithmic',title:{display:true,text:'Count (log)'}},x:{title:{display:true,text:'Tensor Order'}}}} });
+}
+updateCharts();
+</script>
+</body>
+</html>

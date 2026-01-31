@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DTA: Differential Trajectory Analysis for VLM Failure Mode Discovery</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+header{text-align:center;padding:40px 20px;border-bottom:1px solid #1e293b;margin-bottom:30px}
+h1{font-size:1.8rem;color:#f1f5f9;margin-bottom:10px}
+h2{font-size:1.3rem;color:#94a3b8;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid #1e293b}
+h3{font-size:1.1rem;color:#cbd5e1;margin-bottom:12px}
+.subtitle{color:#64748b;font-size:1rem;max-width:900px;margin:0 auto}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;margin:4px}
+.badge-cv{background:#059669;color:#ecfdf5}
+.grid{display:grid;gap:24px;margin-bottom:30px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(500px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(350px,1fr))}
+.grid-4{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:#1e293b;border-radius:12px;padding:24px;border:1px solid #334155}
+.stat-card{text-align:center;padding:20px}
+.stat-value{font-size:2.2rem;font-weight:700;color:#34d399}
+.stat-value-warn{color:#fbbf24}
+.stat-label{font-size:0.85rem;color:#94a3b8;margin-top:4px}
+.stat-delta{font-size:0.8rem;color:#94a3b8;margin-top:2px}
+.chart-container{position:relative;height:380px;width:100%}
+.chart-sm{height:300px}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600;background:#0f172a}
+td{color:#cbd5e1}
+.problem-box{background:linear-gradient(135deg,#022c22,#064e3b);border:1px solid #059669;border-radius:12px;padding:24px;margin-bottom:30px}
+.problem-box p{color:#a7f3d0}
+.method-box{background:#1e293b;border-left:4px solid #34d399;padding:16px 20px;margin-bottom:16px;border-radius:0 8px 8px 0}
+.method-box h4{color:#34d399;margin-bottom:6px}
+.method-box p{color:#94a3b8;font-size:0.9rem}
+.paradox-arrow{color:#fbbf24;font-weight:700}
+@media(max-width:768px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}h1{font-size:1.4rem}.chart-container{height:300px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<div><span class="badge badge-cv">CV</span></div>
+<h1>Differential Trajectory Analysis (DTA)</h1>
+<p class="subtitle">Discovering uncaptured failure modes in VLM agents operating without textual feedback</p>
+</header>
+
+<div class="problem-box">
+<h3>The Feedback Paradox</h3>
+<p>When textual feedback is removed from VLM agents, overall success drops (52.7% to 28.3%), yet named failure categories like action looping and state mismanagement DECREASE. This paradox implies the existence of failure modes not captured by existing taxonomies. DTA resolves this by identifying 3 novel failure modes that account for 49.8% of no-feedback failures.</p>
+</div>
+
+<div class="grid grid-4">
+<div class="card stat-card"><div class="stat-value stat-warn" style="color:#fbbf24">-24.4pp</div><div class="stat-label">Success Rate Drop</div><div class="stat-delta">52.7% to 28.3%</div></div>
+<div class="card stat-card"><div class="stat-value">0.767</div><div class="stat-label">Discovery F1 Score</div><div class="stat-delta">Precision: 1.0, Recall: 0.621</div></div>
+<div class="card stat-card"><div class="stat-value">30.9%</div><div class="stat-label">Residual Failures Found</div><div class="stat-delta">133 of 430 F- failures</div></div>
+<div class="card stat-card"><div class="stat-value">3</div><div class="stat-label">Novel Modes Discovered</div><div class="stat-delta">49.8% of F- failures</div></div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Failure Mode Rates: F+ vs F-</h2>
+<div class="chart-container"><canvas id="failureRatesChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Failure Composition Shift</h2>
+<div class="chart-container">
+<canvas id="compositionChart"></canvas>
+</div>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Feedback Degradation Spectrum</h2>
+<p style="color:#64748b;font-size:0.85rem;margin-bottom:12px">Failure mode rates across feedback availability levels (1.0 = full feedback to 0.0 = none). Known modes decrease monotonically while novel/residual failures increase, confirming mode replacement rather than improvement.</p>
+<div class="chart-container"><canvas id="spectrumChart"></canvas></div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Feature Profiles of Failure Modes</h2>
+<div class="chart-container"><canvas id="featureRadar"></canvas></div>
+</div>
+<div class="card">
+<h2>DTA Pipeline Performance</h2>
+<div class="chart-container chart-sm"><canvas id="pipelineChart"></canvas></div>
+<table style="margin-top:16px">
+<thead><tr><th>Metric</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>F- failure episodes</td><td>430</td></tr>
+<tr><td>Residual (classifier)</td><td>133 (30.9%)</td></tr>
+<tr><td>Anomalies (Isolation Forest)</td><td>109 (25.3%)</td></tr>
+<tr><td>Union (residual + anomaly)</td><td>200 (46.5%)</td></tr>
+<tr><td>Ground-truth novel failures</td><td>214</td></tr>
+<tr><td>Precision</td><td style="color:#4ade80;font-weight:700">1.000</td></tr>
+<tr><td>Recall</td><td>0.621</td></tr>
+<tr><td>F1 Score</td><td style="color:#34d399;font-weight:700">0.767</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Discovered Novel Failure Modes</h2>
+<div class="grid grid-3" style="margin-top:16px">
+<div class="method-box">
+<h4>Hallucinated Feedback</h4>
+<p>Low action entropy (0.461), moderate repetition (0.346), strongly negative reward (-5.15). Agent takes confident actions from a restricted set as if receiving progress signals, but achieves poor outcomes. F+ rate: 4.4%, F- rate: 15.2%.</p>
+</div>
+<div class="method-box">
+<h4>Exploratory Drift</h4>
+<p>High action entropy (0.935), high observation diversity (0.527), near-zero reward (-0.07). Agent explores broadly without converging on any plan. Without feedback to confirm progress, exploration never terminates. F+ rate: 1.5%, F- rate: 21.8%.</p>
+</div>
+<div class="method-box">
+<h4>Memoryless Reactive Collapse</h4>
+<p>Moderate entropy (0.694), short episodes (0.129), moderate negative reward (-1.52). Agent abandons multi-step planning entirely, reacting to each observation independently. F+ rate: 1.1%, F- rate: 12.3%.</p>
+</div>
+</div>
+</div>
+
+<div class="card">
+<h2>Failure Mode Rates Table</h2>
+<table>
+<thead><tr><th>Failure Mode</th><th>F+ Rate</th><th>F- Rate</th><th>Change</th><th>Direction</th></tr></thead>
+<tbody>
+<tr><td>Action Looping</td><td>0.275</td><td>0.100</td><td>-0.175</td><td class="paradox-arrow">DECREASE</td></tr>
+<tr><td>State Mismanagement</td><td>0.292</td><td>0.065</td><td>-0.227</td><td class="paradox-arrow">DECREASE</td></tr>
+<tr><td>Early Termination</td><td>0.211</td><td>0.188</td><td>-0.023</td><td style="color:#94a3b8">decrease</td></tr>
+<tr><td>Visual/Spatial Failure</td><td>0.162</td><td>0.149</td><td>-0.013</td><td style="color:#94a3b8">decrease</td></tr>
+<tr><td style="color:#f472b6;font-weight:600">Novel / Uncaptured</td><td>0.060</td><td style="color:#f472b6;font-weight:700">0.498</td><td style="color:#f472b6">+0.438</td><td style="color:#f472b6;font-weight:700">INCREASE</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<script>
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+
+const modeNames = ['Action\nLooping','State\nMismgmt','Early\nTerm.','Visual/\nSpatial','Novel/\nUncaptured'];
+const fbRates = [0.275,0.292,0.211,0.162,0.060];
+const nfRates = [0.100,0.065,0.188,0.149,0.498];
+
+new Chart(document.getElementById('failureRatesChart'),{
+  type:'bar',
+  data:{labels:modeNames,datasets:[
+    {label:'Feedback (F+)',data:fbRates,backgroundColor:'#3b82f6cc',borderColor:'#3b82f6',borderWidth:1},
+    {label:'No Feedback (F-)',data:nfRates,backgroundColor:'#ef4444cc',borderColor:'#ef4444',borderWidth:1}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,max:0.6,title:{display:true,text:'Rate Among Failed Episodes'}}}}
+});
+
+// Composition Pie Charts
+const compCtx = document.getElementById('compositionChart').getContext('2d');
+const fbCounts = {action_looping:78,state_mismanagement:83,early_termination:60,visual_spatial:46,novel:17};
+const nfCounts = {action_looping:43,state_mismanagement:28,early_termination:81,visual_spatial:64,novel:214};
+const pieColors = ['#3b82f6','#f59e0b','#06b6d4','#8b5cf6','#f472b6'];
+const pieLabels = ['Action Looping','State Mismgmt','Early Term.','Visual/Spatial','Novel/Uncaptured'];
+
+new Chart(compCtx,{
+  type:'doughnut',
+  data:{labels:pieLabels,datasets:[
+    {label:'F+',data:Object.values(fbCounts),backgroundColor:pieColors,borderColor:'#1e293b',borderWidth:2},
+    {label:'F-',data:Object.values(nfCounts),backgroundColor:pieColors.map(c=>c+'cc'),borderColor:'#1e293b',borderWidth:2}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'},title:{display:true,text:'Inner: F+ | Outer: F-'}}}
+});
+
+// Feedback Degradation Spectrum
+const spectrumData = {
+  "1.0":{action_looping:0.249,state_mismanagement:0.312,early_termination:0.197,visual_spatial:0.179,residual:0.063},
+  "0.75":{action_looping:0.250,state_mismanagement:0.243,early_termination:0.218,visual_spatial:0.144,residual:0.102},
+  "0.5":{action_looping:0.173,state_mismanagement:0.187,early_termination:0.183,visual_spatial:0.155,residual:0.204},
+  "0.25":{action_looping:0.144,state_mismanagement:0.123,early_termination:0.229,visual_spatial:0.176,residual:0.180},
+  "0.0":{action_looping:0.123,state_mismanagement:0.070,early_termination:0.158,visual_spatial:0.165,residual:0.316}
+};
+const feedbackLevels = ['1.0','0.75','0.5','0.25','0.0'];
+const specColors = {action_looping:'#3b82f6',state_mismanagement:'#f59e0b',early_termination:'#06b6d4',visual_spatial:'#8b5cf6',residual:'#f472b6'};
+const specLabels = {action_looping:'Action Looping',state_mismanagement:'State Mismgmt',early_termination:'Early Term.',visual_spatial:'Visual/Spatial',residual:'Residual/Novel'};
+
+new Chart(document.getElementById('spectrumChart'),{
+  type:'line',
+  data:{labels:feedbackLevels,datasets:Object.keys(specColors).map(k=>({
+    label:specLabels[k],data:feedbackLevels.map(l=>spectrumData[l][k]),
+    borderColor:specColors[k],backgroundColor:specColors[k]+'33',
+    borderWidth:2,pointRadius:4,tension:0.3,
+    borderDash:k==='residual'?[8,4]:[]
+  }))},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+    scales:{x:{title:{display:true,text:'Feedback Availability Level'},reverse:false},
+      y:{beginAtZero:true,max:0.4,title:{display:true,text:'Failure Mode Rate'}}}}
+});
+
+// Feature Radar
+const featureLabels = ['Action\nEntropy','Repetition\nRate','Obs.\nDiversity','Cumul.\nReward','Episode\nLength','State\nRevisit'];
+const featureData = {
+  'Halluc. Feedback':[0.461,0.346,0.139,0.15,0.173,0.388],
+  'Exploratory Drift':[0.935,0.121,0.527,0.5,0.194,0.000],
+  'Memoryless Collapse':[0.694,0.152,0.385,0.35,0.129,0.355],
+  'Action Looping':[0.084,0.919,0.041,0.10,0.204,1.000]
+};
+const radarColors = {'Halluc. Feedback':'#f472b6','Exploratory Drift':'#34d399','Memoryless Collapse':'#fbbf24','Action Looping':'#3b82f6'};
+
+new Chart(document.getElementById('featureRadar'),{
+  type:'radar',
+  data:{labels:featureLabels,datasets:Object.entries(featureData).map(([k,v])=>({
+    label:k,data:v,borderColor:radarColors[k],backgroundColor:radarColors[k]+'22',
+    borderWidth:2,pointRadius:3
+  }))},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+    scales:{r:{beginAtZero:true,max:1.0,ticks:{stepSize:0.2,color:'#64748b'},grid:{color:'#334155'},pointLabels:{color:'#cbd5e1'}}}}
+});
+
+// Pipeline Performance
+new Chart(document.getElementById('pipelineChart'),{
+  type:'bar',
+  data:{labels:['Precision','Recall','F1 Score'],datasets:[{
+    data:[1.0,0.621,0.767],
+    backgroundColor:['#4ade80cc','#fbbf24cc','#34d399cc'],
+    borderColor:['#4ade80','#fbbf24','#34d399'],borderWidth:2
+  }]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{y:{beginAtZero:true,max:1.1,title:{display:true,text:'Score'}}},indexAxis:'x'}
+});
+</script>
+</body>
+</html>

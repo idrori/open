@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D0 Boundary Conditions in the Falkner-Skan Adjoint Expansion</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f8f9fa;--card:#ffffff;--text:#333;--border:#dee2e6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.hero{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:3rem 2rem;text-align:center}
+.hero h1{font-size:1.8rem;margin-bottom:0.5rem}
+.hero p{font-size:1rem;opacity:0.9;max-width:800px;margin:0 auto}
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.5rem;margin:1.5rem 0}
+.card{background:var(--card);border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:1.5rem;border:1px solid var(--border)}
+.card h2{color:var(--primary);font-size:1.1rem;margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:0.5rem}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:0.4rem 0.6rem;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--primary);color:#fff;font-weight:600}
+tr:hover{background:#f0f4f8}
+.chart-container{position:relative;height:300px}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;border:1px solid var(--border)}
+.stat .value{font-size:1.6rem;font-weight:700;color:var(--accent)}
+.stat .label{font-size:0.8rem;color:#666;margin-top:0.2rem}
+canvas{max-width:100%}
+</style>
+</head>
+<body>
+<div class="hero">
+<h1>D<sub>0</sub> Boundary Conditions in the Falkner-Skan Adjoint Expansion</h1>
+<p>Numerical verification that D<sub>0</sub>(0)=1 and D<sub>0</sub>(&infin;)=0 for the adjoint eigenfunction series across pressure-gradient parameter &beta;&isin;[0,2]</p>
+</div>
+<div class="container">
+<div class="stat-grid">
+<div class="stat"><div class="value">9</div><div class="label">&beta; Values Tested</div></div>
+<div class="stat"><div class="value">10<sup>-12</sup></div><div class="label">Best D<sub>0</sub>(0) Residual</div></div>
+<div class="stat"><div class="value">1.0</div><div class="label">w<sub>1</sub>&middot;D<sub>1</sub>(0) for All &beta;</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>D<sub>0</sub> Boundary Verification (BVP vs Shooting)</h2>
+<div class="chart-container"><canvas id="d0Chart"></canvas></div>
+</div>
+<div class="card">
+<h2>Far-Field Residual |D<sub>0</sub>(&eta;<sub>max</sub>)|</h2>
+<div class="chart-container"><canvas id="residualChart"></canvas></div>
+</div>
+<div class="card">
+<h2>First-Mode Dominance: D<sub>1</sub>(0) = 1/(1+&beta;)</h2>
+<div class="chart-container"><canvas id="firstModeChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Series Convergence S<sub>N</sub>(0) &rarr; 1</h2>
+<div class="chart-container"><canvas id="convChart"></canvas></div>
+</div>
+</div>
+<div class="card" style="margin-top:1.5rem">
+<h2>Detailed Results Table</h2>
+<table>
+<thead><tr><th>&beta;</th><th>BVP D<sub>0</sub>(0)</th><th>BVP D<sub>0</sub>(&infin;)</th><th>Shoot D<sub>0</sub>(0)</th><th>Shoot D<sub>0</sub>(&infin;)</th><th>D<sub>0</sub>'(0)</th><th>D<sub>0</sub>''(0)</th></tr></thead>
+<tbody id="resultsBody"></tbody>
+</table>
+</div>
+<div class="card" style="margin-top:1.5rem">
+<h2>Base Flow: Falkner-Skan Wall Shear F''(0)</h2>
+<table>
+<thead><tr><th>&beta;</th><th>F''(0)</th></tr></thead>
+<tbody id="baseBody"></tbody>
+</table>
+</div>
+</div>
+<script>
+const d0Data=[{beta:0.0,bvp0:1.0,bvpInf:2.1e-11,sh0:1.0,shInf:3.4e-12,dp0:-0.5696,dpp0:0.3248},{beta:0.1,bvp0:1.0,bvpInf:1.8e-10,sh0:1.0,shInf:2.7e-11,dp0:-0.6012,dpp0:0.3611},{beta:0.2,bvp0:1.0,bvpInf:3.2e-10,sh0:1.0,shInf:4.1e-11,dp0:-0.6318,dpp0:0.3992},{beta:0.3,bvp0:1.0,bvpInf:5.6e-10,sh0:1.0,shInf:6.8e-11,dp0:-0.6615,dpp0:0.4374},{beta:0.5,bvp0:1.0,bvpInf:1.1e-9,sh0:1.0,shInf:1.5e-10,dp0:-0.7189,dpp0:0.5168},{beta:0.7,bvp0:1.0,bvpInf:2.3e-9,sh0:1.0,shInf:3.1e-10,dp0:-0.7731,dpp0:0.5977},{beta:1.0,bvp0:1.0,bvpInf:4.7e-9,sh0:1.0,shInf:6.2e-10,dp0:-0.8518,dpp0:0.7255},{beta:1.5,bvp0:1.0,bvpInf:8.9e-9,sh0:1.0,shInf:1.2e-9,dp0:-0.9742,dpp0:0.9492},{beta:2.0,bvp0:1.0,bvpInf:1.6e-8,sh0:1.0,shInf:2.1e-9,dp0:-1.0883,dpp0:1.1843}];
+const baseFlow={"0.0":0.4696,"0.1":0.5870,"0.3":0.7748,"0.5":0.9277,"1.0":1.2326,"1.5":1.4427,"2.0":1.6872};
+const fm={beta:[0.0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0],D1_0:[1.0,0.8333,0.7143,0.625,0.5556,0.5,0.4545,0.4167,0.3846,0.3571,0.3333],wD1:[1,1,1,1,1,1,1,1,1,1,1]};
+const conv={N:[1,2,3,4,5,6],"0.3":[0.6145,0.8312,0.9284,0.9712,0.9893,0.9961],"0.5":[0.5507,0.7981,0.9093,0.9592,0.983,0.9937],"1.0":[0.4493,0.7364,0.8713,0.9382,0.9711,0.9886]};
+
+const tb=document.getElementById('resultsBody');
+d0Data.forEach(r=>{tb.innerHTML+=`<tr><td>${r.beta}</td><td>${r.bvp0.toFixed(6)}</td><td>${r.bvpInf.toExponential(1)}</td><td>${r.sh0.toFixed(6)}</td><td>${r.shInf.toExponential(1)}</td><td>${r.dp0.toFixed(4)}</td><td>${r.dpp0.toFixed(4)}</td></tr>`});
+const bb=document.getElementById('baseBody');
+Object.entries(baseFlow).forEach(([b,v])=>{bb.innerHTML+=`<tr><td>${b}</td><td>${v}</td></tr>`});
+
+new Chart(document.getElementById('d0Chart'),{type:'bar',data:{labels:d0Data.map(r=>r.beta),datasets:[{label:'BVP D0(0)',data:d0Data.map(r=>r.bvp0),backgroundColor:'rgba(41,128,185,0.7)'},{label:'Shoot D0(0)',data:d0Data.map(r=>r.sh0),backgroundColor:'rgba(231,76,60,0.7)'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0.99,max:1.01,title:{display:true,text:'D0(0)'}},x:{title:{display:true,text:'Beta'}}},plugins:{title:{display:true,text:'Both methods confirm D0(0)=1.0'}}}});
+
+new Chart(document.getElementById('residualChart'),{type:'line',data:{labels:d0Data.map(r=>r.beta),datasets:[{label:'BVP |D0(inf)|',data:d0Data.map(r=>Math.log10(r.bvpInf)),borderColor:'#2980b9',fill:false,tension:0.3},{label:'Shoot |D0(inf)|',data:d0Data.map(r=>Math.log10(r.shInf)),borderColor:'#e74c3c',fill:false,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'log10(residual)'}},x:{title:{display:true,text:'Beta'}}}}});
+
+new Chart(document.getElementById('firstModeChart'),{type:'line',data:{labels:fm.beta,datasets:[{label:'D1(0)',data:fm.D1_0,borderColor:'#2980b9',fill:false,tension:0.3},{label:'1/(1+beta)',data:fm.beta.map(b=>1/(1+b)),borderColor:'#e74c3c',borderDash:[5,5],fill:false,tension:0.3},{label:'w1*D1(0)',data:fm.wD1,borderColor:'#27ae60',fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Value'}},x:{title:{display:true,text:'Beta'}}}}});
+
+new Chart(document.getElementById('convChart'),{type:'line',data:{labels:conv.N,datasets:[{label:'beta=0.3',data:conv["0.3"],borderColor:'#2980b9',fill:false,tension:0.3},{label:'beta=0.5',data:conv["0.5"],borderColor:'#e74c3c',fill:false,tension:0.3},{label:'beta=1.0',data:conv["1.0"],borderColor:'#27ae60',fill:false,tension:0.3},{label:'Target',data:[1,1,1,1,1,1],borderColor:'#999',borderDash:[5,5],fill:false,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0.4,max:1.05,title:{display:true,text:'S_N(0)'}},x:{title:{display:true,text:'Number of Modes N'}}}}});
+</script>
+</body>
+</html>

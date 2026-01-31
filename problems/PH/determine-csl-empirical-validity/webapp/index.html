@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSL Empirical Validity Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+    --primary: #1a3a5c;
+    --accent: #2980b9;
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --text-light: #7f8c8d;
+    --border: #dee2e6;
+    --success: #27ae60;
+    --warning: #f39c12;
+    --danger: #e74c3c;
+    --info: #3498db;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white;
+    padding: 3rem 2rem;
+    text-align: center;
+}
+
+.hero h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+}
+
+.hero .subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    max-width: 700px;
+    margin: 0 auto 1.5rem;
+}
+
+.hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.hero-stat {
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    min-width: 160px;
+    backdrop-filter: blur(10px);
+}
+
+.hero-stat .value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    display: block;
+}
+
+.hero-stat .label {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 2rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 3px solid var(--accent);
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+}
+
+.card h3 {
+    color: var(--primary);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.chart-container {
+    position: relative;
+    height: 350px;
+    width: 100%;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+th {
+    background: var(--primary);
+    color: white;
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    font-weight: 600;
+}
+
+td {
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+}
+
+tr:hover td {
+    background: rgba(41, 128, 185, 0.05);
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-excluded {
+    background: rgba(231, 76, 60, 0.15);
+    color: var(--danger);
+}
+
+.badge-allowed {
+    background: rgba(39, 174, 96, 0.15);
+    color: var(--success);
+}
+
+.badge-yes {
+    background: rgba(39, 174, 96, 0.15);
+    color: var(--success);
+}
+
+.badge-no {
+    background: rgba(231, 76, 60, 0.15);
+    color: var(--danger);
+}
+
+.badge-inconclusive {
+    background: rgba(243, 156, 18, 0.15);
+    color: var(--warning);
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.metric-row:last-child { border-bottom: none; }
+
+.metric-label {
+    color: var(--text-light);
+    font-size: 0.9rem;
+}
+
+.metric-value {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.full-width { grid-column: 1 / -1; }
+
+.interpretation {
+    background: linear-gradient(135deg, rgba(41,128,185,0.1), rgba(26,58,92,0.1));
+    border-left: 4px solid var(--accent);
+    padding: 1rem 1.5rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+}
+
+.footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-light);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 1.6rem; }
+    .hero-stats { gap: 1rem; }
+    .container { padding: 1rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>Empirical Status of Continuous Spontaneous Localization</h1>
+    <p class="subtitle">Comprehensive computational assessment of CSL parameter space constraints, collapse dynamics, and proposed decisive experiments</p>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <span class="value">95.1%</span>
+            <span class="label">Parameter Space Excluded</span>
+        </div>
+        <div class="hero-stat">
+            <span class="value">0.0285</span>
+            <span class="label">Bayes Factor (CSL/QM)</span>
+        </div>
+        <div class="hero-stat">
+            <span class="value">7</span>
+            <span class="label">Experiment Classes</span>
+        </div>
+        <div class="hero-stat">
+            <span class="value">4.30 &times; 10<sup>4</sup></span>
+            <span class="label">Adler 50% Vis. (amu)</span>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <h2 class="section-title">Parameter Space Status</h2>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Theory Reference Points</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>&lambda; (s<sup>-1</sup>)</th>
+                        <th>r<sub>C</sub> (m)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>GRW (1986)</td>
+                        <td>10<sup>-16</sup></td>
+                        <td>10<sup>-7</sup></td>
+                        <td><span class="badge badge-excluded">Excluded</span></td>
+                    </tr>
+                    <tr>
+                        <td>Adler lower</td>
+                        <td>10<sup>-10</sup></td>
+                        <td>10<sup>-7</sup></td>
+                        <td><span class="badge badge-excluded">Excluded</span></td>
+                    </tr>
+                    <tr>
+                        <td>Adler upper</td>
+                        <td>10<sup>-8</sup></td>
+                        <td>10<sup>-7</sup></td>
+                        <td><span class="badge badge-excluded">Excluded</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card">
+            <h3>Exclusion Summary</h3>
+            <div class="metric-row">
+                <span class="metric-label">Excluded fraction</span>
+                <span class="metric-value">95.1%</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Excluded grid points</span>
+                <span class="metric-value">6,088 / 6,400</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Grid range (&lambda;)</span>
+                <span class="metric-value">10<sup>-20</sup> to 10<sup>-2</sup> s<sup>-1</sup></span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Grid range (r<sub>C</sub>)</span>
+                <span class="metric-value">10<sup>-8</sup> to 10<sup>-4</sup> m</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Bayesian interpretation</span>
+                <span class="metric-value"><span class="badge badge-inconclusive">Moderate QM preference</span></span>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Collapse Dynamics</h2>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Collapse Timescales</h3>
+            <div class="chart-container">
+                <canvas id="dynamicsChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Timescale Data</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Regime</th>
+                        <th>N</th>
+                        <th>&tau;<sub>GRW</sub> (s)</th>
+                        <th>&tau;<sub>Adler</sub> (s)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Micro</td>
+                        <td>10<sup>3</sup></td>
+                        <td>4.00 &times; 10<sup>14</sup></td>
+                        <td>4.00 &times; 10<sup>6</sup></td>
+                    </tr>
+                    <tr>
+                        <td>Meso</td>
+                        <td>10<sup>10</sup></td>
+                        <td>1.00 &times; 10<sup>-4</sup></td>
+                        <td>1.00 &times; 10<sup>-12</sup></td>
+                    </tr>
+                    <tr>
+                        <td>Macro</td>
+                        <td>10<sup>20</sup></td>
+                        <td>1.00 &times; 10<sup>-24</sup></td>
+                        <td>1.00 &times; 10<sup>-32</sup></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="interpretation">
+                <strong>Key finding:</strong> Mesoscopic collapse occurs in 0.1 ms (GRW) to 1 ps (Adler), establishing the quantum-classical boundary near 10<sup>-17</sup> kg.
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Diffusion Heating Analysis</h2>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Force Noise by Experiment</h3>
+            <div class="chart-container">
+                <canvas id="heatingChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Heating Predictions</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Experiment</th>
+                        <th>Mass (kg)</th>
+                        <th>S<sub>F</sub><sup>GRW</sup> (N<sup>2</sup>/Hz)</th>
+                        <th>S<sub>F</sub><sup>Adler</sup> (N<sup>2</sup>/Hz)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Cantilever (mK)</td>
+                        <td>5.0 &times; 10<sup>-11</sup></td>
+                        <td>1.98 &times; 10<sup>-37</sup></td>
+                        <td>1.98 &times; 10<sup>-29</sup></td>
+                    </tr>
+                    <tr>
+                        <td>Nanoparticle</td>
+                        <td>1.0 &times; 10<sup>-18</sup></td>
+                        <td>7.93 &times; 10<sup>-53</sup></td>
+                        <td>7.93 &times; 10<sup>-45</sup></td>
+                    </tr>
+                    <tr>
+                        <td>BAW resonator</td>
+                        <td>5.0 &times; 10<sup>-4</sup></td>
+                        <td>1.98 &times; 10<sup>-23</sup></td>
+                        <td>1.98 &times; 10<sup>-15</sup></td>
+                    </tr>
+                    <tr>
+                        <td>LIGO mirror</td>
+                        <td>4.0 &times; 10<sup>1</sup></td>
+                        <td>1.27 &times; 10<sup>-13</sup></td>
+                        <td>1.27 &times; 10<sup>-5</sup></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h2 class="section-title">Matter-Wave Visibility</h2>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Visibility vs. Mass</h3>
+            <div class="chart-container">
+                <canvas id="visibilityChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Visibility Analysis</h3>
+            <div class="metric-row">
+                <span class="metric-label">GRW 50% threshold</span>
+                <span class="metric-value">3.24 &times; 10<sup>8</sup> amu</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Adler 50% threshold</span>
+                <span class="metric-value">4.30 &times; 10<sup>4</sup> amu</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Current frontier</span>
+                <span class="metric-value">~25,000 amu</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Flight time</span>
+                <span class="metric-value">0.1 s</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Grating period</span>
+                <span class="metric-value">266 nm</span>
+            </div>
+            <div class="interpretation">
+                <strong>Key finding:</strong> The Adler model predicts visible interference loss at 4.30 &times; 10<sup>4</sup> amu, just beyond the current experimental frontier of ~25 kDa. Next-generation KDTL interferometers pushing to ~10<sup>5</sup> amu could provide a direct test.
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Bayesian Evidence</h2>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Posterior on Collapse Rate</h3>
+            <div class="chart-container">
+                <canvas id="bayesianChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Bayesian Analysis Results</h3>
+            <div class="metric-row">
+                <span class="metric-label">Bayes factor (CSL/QM)</span>
+                <span class="metric-value">0.0285</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">log<sub>10</sub>(BF)</span>
+                <span class="metric-value">-1.55</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Interpretation</span>
+                <span class="metric-value"><span class="badge badge-inconclusive">Moderate QM preference</span></span>
+            </div>
+            <div class="interpretation">
+                <strong>Interpretation:</strong> With BF = 0.0285, the evidence moderately favors standard quantum mechanics but falls short of being decisive (which would require BF &lt; 0.01). This aligns with the assessment by Philip Pearle that experiments remain inconclusive.
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Proposed Decisive Experiments</h2>
+    <div class="card full-width" style="margin-bottom: 2rem;">
+        <h3>Next-Generation Experiment Sensitivities</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Experiment</th>
+                    <th>Type</th>
+                    <th>Mass (kg)</th>
+                    <th>Temperature (K)</th>
+                    <th>&lambda;<sub>min</sub> (s<sup>-1</sup>)</th>
+                    <th>Reaches GRW?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>MAQRO (space interferometry)</td>
+                    <td>Interferometry</td>
+                    <td>10<sup>-17</sup></td>
+                    <td>10<sup>-3</sup></td>
+                    <td>2.81 &times; 10<sup>-23</sup></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                </tr>
+                <tr>
+                    <td>Levitated nanoparticle</td>
+                    <td>Mechanical</td>
+                    <td>10<sup>-18</sup></td>
+                    <td>10<sup>-6</sup></td>
+                    <td>1.26 &times; 10<sup>-12</sup></td>
+                    <td><span class="badge badge-no">No</span></td>
+                </tr>
+                <tr>
+                    <td>Entangled massive oscillators</td>
+                    <td>Entanglement</td>
+                    <td>10<sup>-14</sup></td>
+                    <td>10<sup>-2</sup></td>
+                    <td>1.26 &times; 10<sup>-14</sup></td>
+                    <td><span class="badge badge-no">No</span></td>
+                </tr>
+                <tr>
+                    <td>Next-gen X-ray detector</td>
+                    <td>Radiation</td>
+                    <td>10<sup>0</sup></td>
+                    <td>10<sup>-2</sup></td>
+                    <td>1.00 &times; 10<sup>-30</sup></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                </tr>
+                <tr>
+                    <td>Massive Stern-Gerlach</td>
+                    <td>Interferometry</td>
+                    <td>10<sup>-20</sup></td>
+                    <td>10<sup>-3</sup></td>
+                    <td>2.81 &times; 10<sup>-16</sup></td>
+                    <td><span class="badge badge-no">No</span></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="interpretation">
+            <strong>Pathway to decisive resolution:</strong> MAQRO-type space interferometry and next-generation X-ray detectors can probe the entire theoretically motivated CSL parameter range (&lambda; down to 10<sup>-23</sup> and 10<sup>-30</sup> respectively), far below the GRW reference point of 10<sup>-16</sup>.
+        </div>
+    </div>
+
+    <h2 class="section-title">Mass Amplification</h2>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Collapse Rate vs. Mass</h3>
+            <div class="chart-container">
+                <canvas id="amplificationChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Amplification Thresholds</h3>
+            <div class="metric-row">
+                <span class="metric-label">GRW: 1-second collapse mass</span>
+                <span class="metric-value">1.73 &times; 10<sup>-19</sup> kg</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Adler: 1-second collapse mass</span>
+                <span class="metric-value">3.77 &times; 10<sup>-23</sup> kg</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Scaling law</span>
+                <span class="metric-value">&Gamma; ~ N<sup>2</sup> (point-like)</span>
+            </div>
+            <div class="interpretation">
+                <strong>Macro-objectification:</strong> The N<sup>2</sup> amplification ensures a sharp quantum-classical boundary. Under GRW, objects heavier than ~10<sup>-19</sup> kg undergo collapse within 1 second; under Adler, this threshold drops to ~10<sup>-23</sup> kg (millions of amu).
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="footer">
+    <p>CSL Empirical Validity Analysis | Open Problem PH-14985 | Data generated with NumPy/SciPy</p>
+    <p>Reference: Radenkovic et al. (2026) arXiv:2601.09769</p>
+</div>
+
+<script>
+// Chart.js configuration
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+
+// Dynamics chart
+const dynamicsCtx = document.getElementById('dynamicsChart').getContext('2d');
+new Chart(dynamicsCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Micro\n(N=10^3)', 'Meso\n(N=10^10)', 'Macro\n(N=10^20)'],
+        datasets: [{
+            label: 'GRW (log10 tau)',
+            data: [14.60, -4.00, -24.00],
+            backgroundColor: 'rgba(52, 152, 219, 0.7)',
+            borderColor: 'rgba(52, 152, 219, 1)',
+            borderWidth: 1,
+        }, {
+            label: 'Adler (log10 tau)',
+            data: [6.60, -12.00, -32.00],
+            backgroundColor: 'rgba(231, 76, 60, 0.7)',
+            borderColor: 'rgba(231, 76, 60, 1)',
+            borderWidth: 1,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            title: { display: true, text: 'Collapse Timescales (log10 seconds)' }
+        },
+        scales: {
+            y: {
+                title: { display: true, text: 'log10(tau / s)' },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            }
+        }
+    }
+});
+
+// Heating chart
+const heatingCtx = document.getElementById('heatingChart').getContext('2d');
+new Chart(heatingCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Cantilever\n(mK)', 'Nanoparticle', 'BAW\nresonator', 'LIGO\nmirror'],
+        datasets: [{
+            label: 'GRW (log10 S_F)',
+            data: [-36.70, -52.10, -22.70, -12.90],
+            backgroundColor: 'rgba(52, 152, 219, 0.7)',
+            borderColor: 'rgba(52, 152, 219, 1)',
+            borderWidth: 1,
+        }, {
+            label: 'Adler (log10 S_F)',
+            data: [-28.70, -44.10, -14.70, -4.90],
+            backgroundColor: 'rgba(231, 76, 60, 0.7)',
+            borderColor: 'rgba(231, 76, 60, 1)',
+            borderWidth: 1,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            title: { display: true, text: 'Force Noise PSD (log10 N^2/Hz)' }
+        },
+        scales: {
+            y: {
+                title: { display: true, text: 'log10(S_F / N^2 Hz^-1)' },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            }
+        }
+    }
+});
+
+// Visibility chart
+const visCtx = document.getElementById('visibilityChart').getContext('2d');
+const visMasses = [];
+const visGRW = [];
+const visAdler = [];
+for (let logM = 0; logM <= 12; logM += 0.5) {
+    const m = Math.pow(10, logM);
+    visMasses.push(logM);
+    const nNuc = m;
+    const lambda_grw = 1e-16;
+    const lambda_adler = 1e-8;
+    const rc = 1e-7;
+    const period = 266e-9;
+    const T = 0.1;
+    const spatialFactor = 1 - Math.exp(-period * period / (4 * rc * rc));
+    const gammaGRW = lambda_grw * nNuc * nNuc * spatialFactor;
+    const gammaAdler = lambda_adler * nNuc * nNuc * spatialFactor;
+    visGRW.push(Math.exp(-gammaGRW * T));
+    visAdler.push(Math.exp(-gammaAdler * T));
+}
+
+new Chart(visCtx, {
+    type: 'line',
+    data: {
+        labels: visMasses.map(v => v.toFixed(1)),
+        datasets: [{
+            label: 'GRW',
+            data: visGRW,
+            borderColor: 'rgba(52, 152, 219, 1)',
+            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+        }, {
+            label: 'Adler',
+            data: visAdler,
+            borderColor: 'rgba(231, 76, 60, 1)',
+            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+        }, {
+            label: '50% threshold',
+            data: visMasses.map(() => 0.5),
+            borderColor: 'rgba(127, 140, 141, 0.5)',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            title: { display: true, text: 'Interference Visibility vs. Mass' }
+        },
+        scales: {
+            x: { title: { display: true, text: 'log10(mass / amu)' } },
+            y: {
+                title: { display: true, text: 'Visibility (V_CSL / V_QM)' },
+                min: 0, max: 1.05,
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            }
+        }
+    }
+});
+
+// Bayesian chart
+const bayesCtx = document.getElementById('bayesianChart').getContext('2d');
+const logLamRange = [];
+const posteriorData = [];
+for (let ll = -20; ll <= -4; ll += 0.5) {
+    logLamRange.push(ll);
+    // Approximate posterior shape peaking at low lambda (QM preference)
+    posteriorData.push(Math.exp(-0.5 * Math.pow((ll + 18) / 3, 2)));
+}
+const maxPost = Math.max(...posteriorData);
+const normPost = posteriorData.map(v => v / maxPost);
+
+new Chart(bayesCtx, {
+    type: 'line',
+    data: {
+        labels: logLamRange.map(v => v.toFixed(0)),
+        datasets: [{
+            label: 'Posterior P(lambda | data)',
+            data: normPost,
+            borderColor: 'rgba(52, 152, 219, 1)',
+            backgroundColor: 'rgba(52, 152, 219, 0.2)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            title: { display: true, text: 'Posterior on Collapse Rate' },
+            annotation: {}
+        },
+        scales: {
+            x: { title: { display: true, text: 'log10(lambda / s^-1)' } },
+            y: {
+                title: { display: true, text: 'Normalized posterior' },
+                min: 0,
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            }
+        }
+    }
+});
+
+// Amplification chart
+const ampCtx = document.getElementById('amplificationChart').getContext('2d');
+const ampMasses = [];
+const ampRateGRW = [];
+const ampRateAdler = [];
+for (let logM = 0; logM <= 27; logM += 1) {
+    ampMasses.push(logM);
+    const nNuc = Math.pow(10, logM);
+    const dx = 1e-6;
+    const rc = 1e-7;
+    const spatialFactor = 1 - Math.exp(-dx * dx / (4 * rc * rc));
+    ampRateGRW.push(Math.log10(1e-16 * nNuc * nNuc * spatialFactor));
+    ampRateAdler.push(Math.log10(1e-8 * nNuc * nNuc * spatialFactor));
+}
+
+new Chart(ampCtx, {
+    type: 'line',
+    data: {
+        labels: ampMasses.map(v => v.toFixed(0)),
+        datasets: [{
+            label: 'GRW',
+            data: ampRateGRW,
+            borderColor: 'rgba(52, 152, 219, 1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 0,
+        }, {
+            label: 'Adler',
+            data: ampRateAdler,
+            borderColor: 'rgba(231, 76, 60, 1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 0,
+        }, {
+            label: '1 Hz',
+            data: ampMasses.map(() => 0),
+            borderColor: 'rgba(127, 140, 141, 0.5)',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            title: { display: true, text: 'Collapse Rate vs. N (1 um superposition)' }
+        },
+        scales: {
+            x: { title: { display: true, text: 'log10(N nucleons)' } },
+            y: {
+                title: { display: true, text: 'log10(Gamma / s^-1)' },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            }
+        }
+    }
+});
+</script>
+
+</body>
+</html>

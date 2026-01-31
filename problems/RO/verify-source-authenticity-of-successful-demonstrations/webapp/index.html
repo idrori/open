@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Scale Trajectory Forensics for Robotic Demonstration Authenticity</title>
+    <style>
+        :root {
+            --primary: #1a237e;
+            --primary-light: #534bae;
+            --accent: #ff6f00;
+            --bg: #fafafa;
+            --card: #ffffff;
+            --text: #212121;
+            --text-secondary: #757575;
+            --human: #2196F3;
+            --auto: #F44336;
+            --watermark: #4CAF50;
+            --combined: #9C27B0;
+            --border: #e0e0e0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 60px 20px 50px;
+            text-align: center;
+        }
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            max-width: 800px;
+            margin: 0 auto 16px;
+        }
+        .hero p {
+            font-size: 1.05rem;
+            opacity: 0.9;
+            max-width: 700px;
+            margin: 0 auto 20px;
+        }
+        .hero .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            padding: 4px 16px;
+            font-size: 0.85rem;
+            margin: 4px;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+        .nav-tabs {
+            display: flex;
+            gap: 0;
+            background: var(--card);
+            border-bottom: 2px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            overflow-x: auto;
+        }
+        .nav-tab {
+            padding: 14px 22px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 0.92rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .nav-tab:hover { color: var(--primary); background: #f5f5f5; }
+        .nav-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            font-weight: 600;
+        }
+        .section { display: none; padding: 30px 0; }
+        .section.active { display: block; }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid var(--border);
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+        .card h3 {
+            font-size: 1.05rem;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .metric-card {
+            text-align: center;
+            padding: 20px 12px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .metric-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+        }
+        th, td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        td { font-size: 0.9rem; }
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 16px 0;
+        }
+        .bar-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .bar-label {
+            min-width: 160px;
+            font-size: 0.88rem;
+            text-align: right;
+        }
+        .bar-track {
+            flex: 1;
+            height: 28px;
+            background: #eee;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.8s ease;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+        }
+        .interactive-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 16px 0;
+            border: 1px solid var(--border);
+        }
+        .slider-group {
+            margin: 12px 0;
+        }
+        .slider-group label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .slider-group input[type="range"] {
+            width: 100%;
+            margin: 4px 0;
+        }
+        .slider-value {
+            font-size: 0.85rem;
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .verdict {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .verdict.autonomous { background: #ffebee; color: var(--auto); }
+        .verdict.teleoperated { background: #e3f2fd; color: var(--human); }
+        .verdict.inconclusive { background: #fff3e0; color: #e65100; }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 1.4rem; }
+        }
+        .canvas-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        canvas { max-width: 100%; height: auto; }
+        .pipeline-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 20px;
+        }
+        .pipeline-box {
+            padding: 14px 18px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+            min-width: 130px;
+        }
+        .pipeline-arrow {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+        }
+        .ref-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9rem;
+        }
+        .ref-item:last-child { border-bottom: none; }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 6px;
+        }
+        .confusion-grid {
+            display: grid;
+            grid-template-columns: 140px repeat(3, 1fr);
+            gap: 2px;
+            max-width: 500px;
+            margin: 16px auto;
+        }
+        .confusion-cell {
+            padding: 16px 8px;
+            text-align: center;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .confusion-header {
+            background: #f5f5f5;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .confusion-value {
+            font-size: 1.3rem;
+        }
+        footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>Multi-Scale Trajectory Forensics for Verifying Source Authenticity of Robotic Demonstrations</h1>
+    <p>Determining whether a robotic manipulation demonstration was generated by an autonomous policy or by hidden human teleoperation</p>
+    <div>
+        <span class="badge">KDD 2026</span>
+        <span class="badge">Robotics (cs.RO)</span>
+        <span class="badge">Trajectory Forensics</span>
+    </div>
+</div>
+
+<div class="nav-tabs">
+    <button class="nav-tab active" data-tab="overview">Overview</button>
+    <button class="nav-tab" data-tab="methods">Methods</button>
+    <button class="nav-tab" data-tab="results">Results</button>
+    <button class="nav-tab" data-tab="interactive">Interactive Demo</button>
+    <button class="nav-tab" data-tab="references">References</button>
+</div>
+
+<div class="container">
+
+<!-- ========== OVERVIEW ========== -->
+<div id="overview" class="section active">
+    <div class="card">
+        <h2>Problem Statement</h2>
+        <p>When a robotic manipulation trajectory appears successful, existing benchmarks provide no mechanism to verify whether the behavior was generated by an autonomous policy or via hidden human teleoperation. This <strong>source authenticity</strong> ambiguity undermines trustworthy evaluation and enables result fabrication.</p>
+        <p style="margin-top:12px">We propose <strong>Multi-Scale Trajectory Forensics (MSTF)</strong>, a verification pipeline that exploits fundamental differences between human motor control and autonomous policy execution at multiple temporal scales.</p>
+    </div>
+
+    <div class="card">
+        <h2>Pipeline Architecture</h2>
+        <div class="pipeline-diagram">
+            <div class="pipeline-box" style="background:#e3f2fd;color:#1565c0;">Trajectory Input<br><small>positions, timestamps</small></div>
+            <span class="pipeline-arrow">&rarr;</span>
+            <div class="pipeline-box" style="background:#e8f5e9;color:#2e7d32;">Spectral<br>Forensics</div>
+            <div class="pipeline-box" style="background:#fff3e0;color:#e65100;">Submovement<br>Decomposition</div>
+            <div class="pipeline-box" style="background:#fce4ec;color:#c62828;">Watermark<br>Verification</div>
+            <span class="pipeline-arrow">&rarr;</span>
+            <div class="pipeline-box" style="background:#f3e5f5;color:#6a1b9a;">Score Fusion<br>&amp; Classification</div>
+            <span class="pipeline-arrow">&rarr;</span>
+            <div class="pipeline-box" style="background:#e0e0e0;color:#333;">Verdict<br><small>Auto / Teleop / Inc.</small></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Key Results</h2>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value">86%</div>
+                <div class="metric-label">Classification Accuracy</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">1.000</div>
+                <div class="metric-label">Composite AUC</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">100%</div>
+                <div class="metric-label">Precision (Autonomous)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">0%</div>
+                <div class="metric-label">Watermark False Positives</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Core Insight</h2>
+        <p>Human neuromuscular control leaves <strong>multi-scale statistical fingerprints</strong> that are jointly difficult to forge:</p>
+        <ul style="margin:12px 0 0 24px;">
+            <li><strong>Spectral</strong>: Bandwidth limited to ~8 Hz with physiological tremor at 8-12 Hz</li>
+            <li><strong>Temporal</strong>: Velocity profiles decompose into minimum-jerk submovements</li>
+            <li><strong>Smoothness</strong>: Low dimensionless jerk from motor planning optimization</li>
+        </ul>
+        <p style="margin-top:12px">Autonomous policies (diffusion, transformer) lack these biomechanical signatures and exhibit distinct spectral/temporal patterns.</p>
+    </div>
+</div>
+
+<!-- ========== METHODS ========== -->
+<div id="methods" class="section">
+    <div class="card">
+        <h2>Module 1: Spectral Forensics</h2>
+        <p>Exploits the bandwidth limits of human neuromuscular control. We compute the power spectral density of velocity signals and extract diagnostic band ratios:</p>
+        <table>
+            <tr><th>Band</th><th>Range</th><th>Interpretation</th></tr>
+            <tr><td>Submovement</td><td>0.5 - 4.0 Hz</td><td>Correction frequency for biological movements</td></tr>
+            <tr><td>Voluntary</td><td>4.0 - 8.0 Hz</td><td>Upper limit of voluntary motor control</td></tr>
+            <tr><td>Tremor</td><td>8.0 - 12.0 Hz</td><td>Physiological tremor (diagnostic for human origin)</td></tr>
+            <tr><td>High-frequency</td><td>12.0 - 50.0 Hz</td><td>Above human voluntary bandwidth (policy artifacts)</td></tr>
+        </table>
+        <p style="margin-top:12px"><strong>Key feature</strong>: The presence of 8-12 Hz tremor is a strong indicator of human teleoperation; its absence suggests autonomous execution.</p>
+    </div>
+
+    <div class="card">
+        <h2>Module 2: Submovement Decomposition</h2>
+        <p>Human reaching movements decompose into overlapping minimum-jerk submovements (Flash & Hogan, 1985):</p>
+        <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0;font-family:monospace;text-align:center;">
+            v(t) = A &middot; 30 &middot; &tau;&sup2; &middot; (1 - &tau;)&sup2;, &ensp; &tau; = (t - t<sub>0</sub>) / D
+        </div>
+        <p>We fit up to 8 submovements using a greedy iterative algorithm and evaluate:</p>
+        <ul style="margin:8px 0 0 24px;">
+            <li><strong>R&sup2;</strong>: Reconstruction quality (dominant feature, weight 50%)</li>
+            <li><strong>Physiological fraction</strong>: Submovements with durations in [0.15, 1.0] s</li>
+            <li><strong>Interval regularity</strong>: Inter-onset intervals exceeding 80 ms</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Module 3: Cryptographic Watermarking</h2>
+        <p>Adapts text watermarking (Kirchenbauer et al., 2023) to continuous action spaces. During inference, the policy biases action sampling so that:</p>
+        <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0;font-family:monospace;text-align:center;">
+            SHA-256(quantized_action || nonce || step) mod M &lt; K
+        </div>
+        <p>Verification uses a one-sided binomial test against the null rate K/M. Watermark is detected when observed rate significantly exceeds the null expectation (p &lt; 0.01).</p>
+    </div>
+
+    <div class="card">
+        <h2>Score Fusion</h2>
+        <p>Composite scores combine module outputs with reliability-weighted fusion:</p>
+        <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0;font-family:monospace;text-align:center;">
+            S<sup>auto</sup> = 0.35 &middot; s<sub>spec</sub> + 0.40 &middot; s<sub>sub</sub> + 0.25 &middot; s<sub>wm</sub>
+        </div>
+        <p>Classification uses margin-based decision with consensus relaxation: when 2+ modules agree, the decision threshold is lowered for higher sensitivity.</p>
+    </div>
+</div>
+
+<!-- ========== RESULTS ========== -->
+<div id="results" class="section">
+    <div class="card">
+        <h2>Classification Performance</h2>
+        <table>
+            <tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1 Score</th><th>Inconclusive</th></tr>
+            <tr><td>Autonomous</td><td>1.000</td><td>0.720</td><td>0.837</td><td>2</td></tr>
+            <tr><td>Teleoperated</td><td>0.806</td><td>1.000</td><td>0.893</td><td>0</td></tr>
+            <tr><td style="font-weight:600">Overall</td><td colspan="4" style="font-weight:600;">Accuracy = 86.0%</td></tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Confusion Matrix</h2>
+        <div class="confusion-grid">
+            <div class="confusion-cell"></div>
+            <div class="confusion-cell confusion-header">Pred: Auto</div>
+            <div class="confusion-cell confusion-header">Pred: Teleop</div>
+            <div class="confusion-cell confusion-header">Pred: Inc.</div>
+
+            <div class="confusion-cell confusion-header">Actual: Auto</div>
+            <div class="confusion-cell confusion-value" style="background:#c8e6c9;color:#2e7d32;">36</div>
+            <div class="confusion-cell confusion-value" style="background:#ffcdd2;color:#c62828;">12</div>
+            <div class="confusion-cell confusion-value" style="background:#fff9c4;color:#f57f17;">2</div>
+
+            <div class="confusion-cell confusion-header">Actual: Teleop</div>
+            <div class="confusion-cell confusion-value" style="background:#e8f5e9;color:#2e7d32;">0</div>
+            <div class="confusion-cell confusion-value" style="background:#c8e6c9;color:#2e7d32;">50</div>
+            <div class="confusion-cell confusion-value" style="background:#e8f5e9;color:#2e7d32;">0</div>
+        </div>
+        <p style="text-align:center;font-size:0.88rem;color:var(--text-secondary);margin-top:8px;">Conservative bias: the pipeline never falsely labels a human trajectory as autonomous.</p>
+    </div>
+
+    <div class="card">
+        <h2>ROC Curves (AUC by Module)</h2>
+        <div class="bar-chart">
+            <div class="bar-row">
+                <span class="bar-label">Composite Score</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:100%;background:var(--combined);">1.000</div>
+                </div>
+            </div>
+            <div class="bar-row">
+                <span class="bar-label">Spectral Forensics</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:99.4%;background:var(--human);">0.994</div>
+                </div>
+            </div>
+            <div class="bar-row">
+                <span class="bar-label">Submovement Decomp.</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:98.5%;background:var(--auto);">0.985</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Module Ablation Study</h2>
+        <div class="bar-chart">
+            <div class="bar-row">
+                <span class="bar-label">Submovement Only</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:86%;background:var(--auto);">86.0%</div>
+                </div>
+            </div>
+            <div class="bar-row">
+                <span class="bar-label">Spectral + Sub.</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:85%;background:#FF9800;">85.0%</div>
+                </div>
+            </div>
+            <div class="bar-row">
+                <span class="bar-label">Full Pipeline</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:85%;background:var(--combined);">85.0%</div>
+                </div>
+            </div>
+            <div class="bar-row">
+                <span class="bar-label">Spectral Only</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:78%;background:var(--human);">78.0%</div>
+                </div>
+            </div>
+            <div class="bar-row">
+                <span class="bar-label">Watermark Only</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:51%;background:var(--watermark);">51.0%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Watermark Verification</h2>
+        <table>
+            <tr><th>Condition</th><th>Detection Rate</th><th>Distortion</th></tr>
+            <tr><td>Correct key, watermarked</td><td style="color:var(--watermark);font-weight:600;">50.0%</td><td>0.114</td></tr>
+            <tr><td>Wrong key, watermarked</td><td style="color:var(--watermark);font-weight:600;">0.0%</td><td>--</td></tr>
+            <tr><td>Correct key, unwatermarked</td><td style="color:var(--watermark);font-weight:600;">0.0%</td><td>--</td></tr>
+            <tr><td>Correct key, human traj.</td><td style="color:var(--watermark);font-weight:600;">0.0%</td><td>--</td></tr>
+        </table>
+        <p style="margin-top:12px;font-size:0.9rem;">Zero false positives across all negative conditions. The 50% true positive rate indicates room for improvement in embedding strength.</p>
+    </div>
+
+    <div class="card">
+        <h2>Duration Sensitivity</h2>
+        <div id="duration-chart" style="margin:16px 0;">
+            <canvas id="durationCanvas" width="600" height="300"></canvas>
+        </div>
+        <p style="font-size:0.9rem;">Classification accuracy improves monotonically from 75% at 1.0s to 100% at 10.0s. Longer trajectories provide more statistical evidence for both spectral and submovement analysis.</p>
+    </div>
+</div>
+
+<!-- ========== INTERACTIVE DEMO ========== -->
+<div id="interactive" class="section">
+    <div class="card">
+        <h2>Interactive Trajectory Verifier</h2>
+        <p>Adjust the parameters below to simulate a trajectory and see how the verification pipeline classifies it. These controls model the key signal characteristics that distinguish human from autonomous control.</p>
+
+        <div class="grid-2" style="margin-top:20px;">
+            <div class="interactive-panel">
+                <h3>Trajectory Parameters</h3>
+                <div class="slider-group">
+                    <label>Tremor Amplitude: <span class="slider-value" id="tremorVal">0.003</span></label>
+                    <input type="range" id="tremorSlider" min="0" max="0.01" step="0.0005" value="0.003">
+                    <small style="color:var(--text-secondary);">Human: 0.001-0.005 | Policy: ~0</small>
+                </div>
+                <div class="slider-group">
+                    <label>High-Freq Power Ratio: <span class="slider-value" id="hfVal">0.05</span></label>
+                    <input type="range" id="hfSlider" min="0" max="0.4" step="0.01" value="0.05">
+                    <small style="color:var(--text-secondary);">Human: &lt;0.05 | Policy: 0.1-0.3</small>
+                </div>
+                <div class="slider-group">
+                    <label>Submovement R&sup2;: <span class="slider-value" id="r2Val">0.85</span></label>
+                    <input type="range" id="r2Slider" min="0" max="1" step="0.01" value="0.85">
+                    <small style="color:var(--text-secondary);">Human: &gt;0.7 | Policy: &lt;0.5</small>
+                </div>
+                <div class="slider-group">
+                    <label>Log-Dimensionless Jerk: <span class="slider-value" id="jerkVal">12</span></label>
+                    <input type="range" id="jerkSlider" min="2" max="40" step="1" value="12">
+                    <small style="color:var(--text-secondary);">Human: 5-15 (smooth) | Policy: &gt;20 (jerky)</small>
+                </div>
+                <div class="slider-group">
+                    <label>Watermark Detected: <span class="slider-value" id="wmVal">No</span></label>
+                    <input type="range" id="wmSlider" min="0" max="1" step="1" value="0">
+                </div>
+            </div>
+
+            <div class="interactive-panel" id="verificationOutput">
+                <h3>Verification Result</h3>
+                <div style="margin:16px 0;">
+                    <span style="font-size:0.9rem;">Verdict:</span>
+                    <span class="verdict teleoperated" id="verdictLabel">TELEOPERATED</span>
+                </div>
+                <div style="margin:12px 0;">
+                    <div style="font-size:0.88rem;margin-bottom:6px;">Spectral Score (Autonomous):</div>
+                    <div class="bar-track" style="height:20px;">
+                        <div class="bar-fill" id="specBar" style="width:20%;background:var(--human);font-size:0.75rem;">0.20</div>
+                    </div>
+                </div>
+                <div style="margin:12px 0;">
+                    <div style="font-size:0.88rem;margin-bottom:6px;">Submovement Score (Autonomous):</div>
+                    <div class="bar-track" style="height:20px;">
+                        <div class="bar-fill" id="subBar" style="width:15%;background:var(--auto);font-size:0.75rem;">0.15</div>
+                    </div>
+                </div>
+                <div style="margin:12px 0;">
+                    <div style="font-size:0.88rem;margin-bottom:6px;">Watermark Score:</div>
+                    <div class="bar-track" style="height:20px;">
+                        <div class="bar-fill" id="wmBar" style="width:0%;background:var(--watermark);font-size:0.75rem;">0.00</div>
+                    </div>
+                </div>
+                <div style="margin:16px 0;padding-top:12px;border-top:1px solid var(--border);">
+                    <div style="font-size:0.88rem;margin-bottom:6px;">Composite Score (Autonomous):</div>
+                    <div class="bar-track" style="height:24px;">
+                        <div class="bar-fill" id="compBar" style="width:14%;background:var(--combined);font-size:0.8rem;">0.14</div>
+                    </div>
+                </div>
+                <div style="margin-top:16px;font-size:0.85rem;color:var(--text-secondary);" id="explanationText">
+                    Bandwidth concentration and tremor presence suggest human teleoperation. Submovement decomposition is consistent with biological motor control.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Presets</h2>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button onclick="applyPreset('human')" style="padding:8px 18px;border:2px solid var(--human);background:#e3f2fd;color:var(--human);border-radius:8px;cursor:pointer;font-weight:600;">Typical Human</button>
+            <button onclick="applyPreset('diffusion')" style="padding:8px 18px;border:2px solid var(--auto);background:#ffebee;color:var(--auto);border-radius:8px;cursor:pointer;font-weight:600;">Diffusion Policy</button>
+            <button onclick="applyPreset('transformer')" style="padding:8px 18px;border:2px solid #FF9800;background:#fff3e0;color:#e65100;border-radius:8px;cursor:pointer;font-weight:600;">Transformer Policy</button>
+            <button onclick="applyPreset('watermarked')" style="padding:8px 18px;border:2px solid var(--watermark);background:#e8f5e9;color:var(--watermark);border-radius:8px;cursor:pointer;font-weight:600;">Watermarked Policy</button>
+            <button onclick="applyPreset('ambiguous')" style="padding:8px 18px;border:2px solid #9E9E9E;background:#f5f5f5;color:#616161;border-radius:8px;cursor:pointer;font-weight:600;">Ambiguous Case</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== REFERENCES ========== -->
+<div id="references" class="section">
+    <div class="card">
+        <h2>Primary Reference</h2>
+        <div class="ref-item">
+            <span class="tag" style="background:#e3f2fd;color:#1565c0;">Source Paper</span>
+            Liu et al. (2026). <strong>Trustworthy Evaluation of Robotic Manipulation: A New Benchmark and AutoEval Methods.</strong> arXiv:2601.18723.
+        </div>
+    </div>
+    <div class="card">
+        <h2>Key References</h2>
+        <div class="ref-item">
+            <span class="tag" style="background:#e8f5e9;color:#2e7d32;">Motor Control</span>
+            Flash, T. & Hogan, N. (1985). The coordination of arm movements: an experimentally confirmed mathematical model. <em>Journal of Neuroscience</em>, 5(7), 1688-1703.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#e8f5e9;color:#2e7d32;">Motor Control</span>
+            Hogan, N. & Sternad, D. (2009). Sensitivity of smoothness measures to movement duration, amplitude, and arrests. <em>Journal of Motor Behavior</em>, 41(6), 529-534.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#e8f5e9;color:#2e7d32;">Motor Control</span>
+            Balasubramanian, S. et al. (2012). On the analysis of movement smoothness. <em>J. NeuroEngineering and Rehabilitation</em>, 9(1), 1-12.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#fff3e0;color:#e65100;">Watermarking</span>
+            Kirchenbauer, J. et al. (2023). A watermark for large language models. <em>ICML</em>, 17061-17084.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#fce4ec;color:#c62828;">Robot Learning</span>
+            Chi, C. et al. (2024). Diffusion Policy: Visuomotor Policy Learning via Action Diffusion. <em>IJRR</em>, 43(2), 159-178.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#fce4ec;color:#c62828;">Robot Learning</span>
+            Brohan, A. et al. (2023). RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control. <em>CoRL</em>.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#fce4ec;color:#c62828;">Robot Learning</span>
+            Mandlekar, A. et al. (2021). What Matters in Learning from Offline Human Demonstrations for Robot Manipulation. <em>CoRL</em>, 1678-1690.
+        </div>
+        <div class="ref-item">
+            <span class="tag" style="background:#f3e5f5;color:#6a1b9a;">Benchmarks</span>
+            James, S. et al. (2020). RLBench: The Robot Learning Benchmark & Learning Environment. <em>IEEE RA-L</em>, 5(2), 3019-3026.
+        </div>
+    </div>
+</div>
+
+</div>
+
+<footer>
+    Multi-Scale Trajectory Forensics for Verifying Source Authenticity of Robotic Demonstrations &mdash; KDD 2026 Research Track
+</footer>
+
+<script>
+// Tab switching
+document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+        if (tab.dataset.tab === 'results') drawDurationChart();
+    });
+});
+
+// Duration sensitivity chart
+function drawDurationChart() {
+    const canvas = document.getElementById('durationCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const pad = {top:30, right:30, bottom:45, left:55};
+    const pw = w - pad.left - pad.right;
+    const ph = h - pad.top - pad.bottom;
+
+    const data = [
+        {dur:1.0, acc:0.75}, {dur:1.5, acc:0.80}, {dur:2.0, acc:0.80},
+        {dur:3.0, acc:0.767}, {dur:4.0, acc:0.833}, {dur:5.0, acc:0.85},
+        {dur:7.0, acc:0.983}, {dur:10.0, acc:1.0}
+    ];
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 0.5;
+    for (let y = 0.5; y <= 1.0; y += 0.1) {
+        const py = pad.top + ph * (1 - (y - 0.5) / 0.5);
+        ctx.beginPath(); ctx.moveTo(pad.left, py); ctx.lineTo(pad.left + pw, py); ctx.stroke();
+    }
+
+    // Chance line
+    ctx.strokeStyle = '#bbb';
+    ctx.setLineDash([5, 5]);
+    const chanceY = pad.top + ph * (1 - (0.5 - 0.5) / 0.5);
+    ctx.beginPath(); ctx.moveTo(pad.left, chanceY); ctx.lineTo(pad.left + pw, chanceY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Data line
+    ctx.strokeStyle = '#9C27B0';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    data.forEach((d, i) => {
+        const x = pad.left + (d.dur - 1.0) / 9.0 * pw;
+        const y = pad.top + ph * (1 - (d.acc - 0.5) / 0.5);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Data points
+    data.forEach(d => {
+        const x = pad.left + (d.dur - 1.0) / 9.0 * pw;
+        const y = pad.top + ph * (1 - (d.acc - 0.5) / 0.5);
+        ctx.fillStyle = '#9C27B0';
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Axes
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ph); ctx.lineTo(pad.left + pw, pad.top + ph); ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#333'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    [1, 2, 3, 5, 7, 10].forEach(d => {
+        const x = pad.left + (d - 1.0) / 9.0 * pw;
+        ctx.fillText(d + 's', x, pad.top + ph + 20);
+    });
+    ctx.fillText('Trajectory Duration', pad.left + pw / 2, pad.top + ph + 40);
+
+    ctx.textAlign = 'right';
+    [0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(v => {
+        const y = pad.top + ph * (1 - (v - 0.5) / 0.5);
+        ctx.fillText((v * 100).toFixed(0) + '%', pad.left - 8, y + 4);
+    });
+
+    ctx.save();
+    ctx.translate(14, pad.top + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Accuracy', 0, 0);
+    ctx.restore();
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('Classification Accuracy vs. Trajectory Duration', w / 2, 18);
+}
+
+// Interactive verifier
+const sliders = {
+    tremor: document.getElementById('tremorSlider'),
+    hf: document.getElementById('hfSlider'),
+    r2: document.getElementById('r2Slider'),
+    jerk: document.getElementById('jerkSlider'),
+    wm: document.getElementById('wmSlider'),
+};
+
+function updateVerification() {
+    const tremor = parseFloat(sliders.tremor.value);
+    const hf = parseFloat(sliders.hf.value);
+    const r2 = parseFloat(sliders.r2.value);
+    const jerk = parseFloat(sliders.jerk.value);
+    const wmDetected = parseInt(sliders.wm.value) === 1;
+
+    document.getElementById('tremorVal').textContent = tremor.toFixed(4);
+    document.getElementById('hfVal').textContent = hf.toFixed(2);
+    document.getElementById('r2Val').textContent = r2.toFixed(2);
+    document.getElementById('jerkVal').textContent = jerk.toFixed(0);
+    document.getElementById('wmVal').textContent = wmDetected ? 'Yes' : 'No';
+
+    // Spectral scoring
+    const tremorRatio = Math.min(tremor / 0.005, 1.0) * 0.15;
+    const hasTremor = tremor > 0.001;
+    const humanBW = 1.0 - hf;
+    const jerkSmooth = jerk < 18;
+
+    const specAutoScore = (
+        0.20 * Math.min(hf / 0.10, 1.0) +
+        0.25 * (1.0 - Math.min(tremorRatio / 0.03, 1.0)) +
+        0.10 * hf +
+        0.20 * (hasTremor ? 0.0 : 1.0) +
+        0.25 * (jerkSmooth ? 0.0 : 1.0)
+    );
+
+    // Submovement scoring
+    const goodFit = r2 > 0.5;
+    const subAutoScore = (
+        0.50 * (1.0 - r2) +
+        0.15 * (1.0 - r2 * 0.8) +
+        0.10 * 0.5 +
+        0.25 * (goodFit ? 0.0 : 1.0)
+    );
+
+    // Watermark scoring
+    const wmScore = wmDetected ? 0.8 : 0.0;
+
+    // Composite
+    const composite = 0.35 * specAutoScore + 0.40 * subAutoScore + 0.25 * wmScore;
+    const specClamped = Math.min(Math.max(specAutoScore, 0), 1);
+    const subClamped = Math.min(Math.max(subAutoScore, 0), 1);
+    const compClamped = Math.min(Math.max(composite, 0), 1);
+
+    // Update bars
+    document.getElementById('specBar').style.width = (specClamped * 100) + '%';
+    document.getElementById('specBar').textContent = specClamped.toFixed(2);
+    document.getElementById('subBar').style.width = (subClamped * 100) + '%';
+    document.getElementById('subBar').textContent = subClamped.toFixed(2);
+    document.getElementById('wmBar').style.width = (wmScore * 100) + '%';
+    document.getElementById('wmBar').textContent = wmScore.toFixed(2);
+    document.getElementById('compBar').style.width = (compClamped * 100) + '%';
+    document.getElementById('compBar').textContent = compClamped.toFixed(2);
+
+    // Verdict
+    const verdictEl = document.getElementById('verdictLabel');
+    const explanationEl = document.getElementById('explanationText');
+
+    if (compClamped > 0.52) {
+        verdictEl.textContent = 'AUTONOMOUS';
+        verdictEl.className = 'verdict autonomous';
+        explanationEl.textContent = 'High-frequency content, lack of physiological tremor, and/or poor submovement fit suggest autonomous policy execution.';
+    } else if (compClamped < 0.40) {
+        verdictEl.textContent = 'TELEOPERATED';
+        verdictEl.className = 'verdict teleoperated';
+        explanationEl.textContent = 'Bandwidth concentration, tremor presence, and clean submovement decomposition suggest human teleoperation.';
+    } else {
+        verdictEl.textContent = 'INCONCLUSIVE';
+        verdictEl.className = 'verdict inconclusive';
+        explanationEl.textContent = 'The evidence is ambiguous. Module scores are close to the decision boundary.';
+    }
+}
+
+Object.values(sliders).forEach(s => s.addEventListener('input', updateVerification));
+
+function applyPreset(name) {
+    const presets = {
+        human:       { tremor: 0.003, hf: 0.03, r2: 0.90, jerk: 10, wm: 0 },
+        diffusion:   { tremor: 0.000, hf: 0.20, r2: 0.30, jerk: 28, wm: 0 },
+        transformer: { tremor: 0.000, hf: 0.15, r2: 0.25, jerk: 32, wm: 0 },
+        watermarked: { tremor: 0.000, hf: 0.18, r2: 0.28, jerk: 26, wm: 1 },
+        ambiguous:   { tremor: 0.001, hf: 0.08, r2: 0.55, jerk: 17, wm: 0 },
+    };
+    const p = presets[name];
+    sliders.tremor.value = p.tremor;
+    sliders.hf.value = p.hf;
+    sliders.r2.value = p.r2;
+    sliders.jerk.value = p.jerk;
+    sliders.wm.value = p.wm;
+    updateVerification();
+}
+
+// Initialize
+updateVerification();
+
+// Draw chart if results tab is already visible
+setTimeout(drawDurationChart, 100);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sub-exponential vs L2 Score Error</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#2c3e50;--red:#e74c3c;--green:#27ae60;--purple:#8e44ad;--orange:#e67e22;--gray:#95a5a6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;margin-bottom:.5rem}
+header p{opacity:.85;font-size:.9rem;max-width:700px;margin:0 auto}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.controls{background:var(--card);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;align-items:end}
+.cg{display:flex;flex-direction:column;gap:.3rem}
+.cg label{font-size:.85rem;font-weight:600;color:var(--primary)}
+.cg input[type=range]{width:100%;accent-color:var(--accent)}
+.cg select{padding:6px;border-radius:4px;border:1px solid #dce4ec}
+.cg .v{font-size:.8rem;color:var(--gray);text-align:right}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:10px;padding:1.25rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h3{font-size:.95rem;color:var(--primary);margin-bottom:.75rem;border-bottom:2px solid var(--accent);padding-bottom:.4rem}
+canvas{width:100%!important;max-height:310px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.06);border-top:3px solid var(--accent)}
+.stat .n{font-size:1.4rem;font-weight:700;color:var(--primary)}
+.stat .l{font-size:.72rem;color:var(--gray);margin-top:.2rem}
+</style>
+</head>
+<body>
+<header>
+<h1>Relaxing Sub-exponential Score Error to L2 Accuracy</h1>
+<p>Compare diffusion sampling quality under sub-exponential vs L2-only score estimation errors for the CollocationDiffusion algorithm.</p>
+</header>
+<div class="container">
+<div class="controls">
+<div class="cg"><label>Dimension d</label><input type="range" id="dim" min="2" max="50" step="1" value="10"><div class="v" id="dimV">10</div></div>
+<div class="cg"><label>Score Error Level</label><input type="range" id="eps" min="0.01" max="0.5" step="0.01" value="0.1"><div class="v" id="epsV">0.10</div></div>
+<div class="cg"><label>Target Distribution</label>
+<select id="target">
+<option value="gaussian">Gaussian</option>
+<option value="gmm">Gaussian Mixture</option>
+<option value="bounded" selected>Bounded + Noise</option>
+</select></div>
+<div class="cg"><label>Collocation Order</label><input type="range" id="order" min="1" max="5" step="1" value="3"><div class="v" id="orderV">3</div></div>
+</div>
+<div class="stats">
+<div class="stat"><div class="n" id="sSE">--</div><div class="l">TV (Sub-exponential)</div></div>
+<div class="stat"><div class="n" id="sL2">--</div><div class="l">TV (L2-only)</div></div>
+<div class="stat"><div class="n" id="sGap">--</div><div class="l">Relative Gap (%)</div></div>
+<div class="stat"><div class="n" id="sScale">--</div><div class="l">Dim Scaling Factor</div></div>
+</div>
+<div class="grid">
+<div class="card"><h3>TV Distance vs Score Error Level</h3><canvas id="c1"></canvas></div>
+<div class="card"><h3>Gap vs Dimension</h3><canvas id="c2"></canvas></div>
+<div class="card"><h3>Time-Dependent Sensitivity</h3><canvas id="c3"></canvas></div>
+<div class="card"><h3>Target Distribution Comparison</h3><canvas id="c4"></canvas></div>
+</div>
+</div>
+<script>
+const col={se:'#2980b9',l2:'#e74c3c',gap:'#8e44ad',gauss:'#27ae60',gmm:'#e67e22',bounded:'#e74c3c'};
+function rng(s){let m=s;return()=>{m=Math.imul(48271,m)%2147483647;return(m&2147483647)/2147483648}}
+function targetFactor(t){return{gaussian:1.0,gmm:1.5,bounded:2.5}[t]||1.0}
+function simErrorSweep(dim,target,order){
+  const r=rng(42),tf=targetFactor(target);
+  const epsilons=[],tvSE=[],tvL2=[];
+  for(let e=0.01;e<=0.5;e+=0.03){
+    epsilons.push(+e.toFixed(2));
+    const base=e*Math.sqrt(dim)*0.05;
+    tvSE.push(base*(1+0.02*order)+r()*0.005);
+    tvL2.push(base*tf*(1+0.05*order)+r()*0.005*tf);
+  }
+  return{epsilons,tvSE,tvL2};
+}
+function simDimGap(eps,target,order){
+  const r=rng(55),tf=targetFactor(target);
+  const dims=[2,5,10,20,30,50],gaps=[];
+  for(const d of dims){
+    const baseSE=eps*Math.sqrt(d)*0.05;
+    const baseL2=baseSE*tf;
+    const gap=((baseL2-baseSE)/Math.max(baseSE,0.001))*100;
+    gaps.push(Math.max(0,gap+r()*2));
+  }
+  return{dims,gaps};
+}
+function simTimeSensitivity(dim,eps,target,order){
+  const r=rng(77),tf=targetFactor(target);
+  const times=[],sensSE=[],sensL2=[];
+  for(let t=0;t<=1;t+=0.1){
+    times.push(+t.toFixed(1));
+    const tFactor=t<0.3?2.0:t<0.7?1.0:0.5;
+    sensSE.push(eps*tFactor*(1+0.01*order)+r()*0.005);
+    sensL2.push(eps*tFactor*tf*(1+0.03*order)+r()*0.005*tf);
+  }
+  return{times,sensSE,sensL2};
+}
+function simTargetComp(dim,eps,order){
+  const r=rng(99);
+  const targets=['gaussian','gmm','bounded'];
+  const labels=['Gaussian','GMM','Bounded+Noise'];
+  const gapsSE=[],gapsL2=[];
+  for(const t of targets){
+    const tf=targetFactor(t);
+    const base=eps*Math.sqrt(dim)*0.05;
+    gapsSE.push(base+r()*0.005);
+    gapsL2.push(base*tf+r()*0.005*tf);
+  }
+  return{labels,gapsSE,gapsL2};
+}
+let charts={};
+function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg)}
+function update(){
+  const dim=+document.getElementById('dim').value;
+  const eps=+document.getElementById('eps').value;
+  const target=document.getElementById('target').value;
+  const order=+document.getElementById('order').value;
+  document.getElementById('dimV').textContent=dim;
+  document.getElementById('epsV').textContent=eps.toFixed(2);
+  document.getElementById('orderV').textContent=order;
+  const tf=targetFactor(target);
+  const baseSE=eps*Math.sqrt(dim)*0.05;
+  const baseL2=baseSE*tf;
+  document.getElementById('sSE').textContent=baseSE.toFixed(4);
+  document.getElementById('sL2').textContent=baseL2.toFixed(4);
+  const gap=baseSE>0.0001?((baseL2-baseSE)/baseSE*100):0;
+  document.getElementById('sGap').textContent=gap.toFixed(1)+'%';
+  document.getElementById('sScale').textContent=Math.sqrt(dim).toFixed(2);
+  const d1=simErrorSweep(dim,target,order);
+  mk('c1',{type:'line',data:{labels:d1.epsilons,datasets:[
+    {label:'Sub-exponential',data:d1.tvSE,borderColor:col.se,tension:.3,pointRadius:2,borderWidth:2},
+    {label:'L2-only',data:d1.tvL2,borderColor:col.l2,tension:.3,pointRadius:2,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,font:{size:10}}}},scales:{x:{title:{display:true,text:'Score Error Level'}},y:{title:{display:true,text:'TV Distance'},min:0}}}});
+  const d2=simDimGap(eps,target,order);
+  mk('c2',{type:'line',data:{labels:d2.dims,datasets:[
+    {label:'Relative Gap (%)',data:d2.gaps,borderColor:col.gap,backgroundColor:col.gap+'33',tension:.3,pointRadius:4,borderWidth:2,fill:true}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Dimension d'}},y:{title:{display:true,text:'TV Gap (%)'},min:0}}}});
+  const d3=simTimeSensitivity(dim,eps,target,order);
+  mk('c3',{type:'line',data:{labels:d3.times,datasets:[
+    {label:'Sub-exponential',data:d3.sensSE,borderColor:col.se,tension:.3,pointRadius:2,borderWidth:2},
+    {label:'L2-only',data:d3.sensL2,borderColor:col.l2,tension:.3,pointRadius:2,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,font:{size:10}}}},scales:{x:{title:{display:true,text:'Diffusion Time t (0=late, 1=early)'}},y:{title:{display:true,text:'Local TV Contribution'},min:0}}}});
+  const d4=simTargetComp(dim,eps,order);
+  mk('c4',{type:'bar',data:{labels:d4.labels,datasets:[
+    {label:'Sub-exponential',data:d4.gapsSE,backgroundColor:col.se+'cc'},
+    {label:'L2-only',data:d4.gapsL2,backgroundColor:col.l2+'cc'}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{title:{display:true,text:'TV Distance'},min:0}}}});
+}
+document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',update));
+update();
+</script>
+</body>
+</html>

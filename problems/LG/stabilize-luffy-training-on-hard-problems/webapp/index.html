@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stabilizing LUFFY Training on Hard Problems</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f5f7fa;--card:#fff;--text:#333;--border:#d0d7de}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+  header{background:var(--primary);color:#fff;padding:2rem;text-align:center}
+  header h1{font-size:1.5rem;margin-bottom:.5rem}
+  header p{opacity:.85;font-size:.95rem;max-width:800px;margin:0 auto}
+  .container{max-width:1200px;margin:0 auto;padding:1.5rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(560px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+  .card{background:var(--card);border-radius:8px;padding:1.5rem;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid var(--border)}
+  .card h2{color:var(--primary);font-size:1.1rem;margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+  .chart-container{position:relative;height:340px}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{padding:.5rem .75rem;text-align:right;border-bottom:1px solid var(--border)}
+  th{background:var(--primary);color:#fff;font-weight:600}
+  td:first-child,th:first-child{text-align:left}
+  tr:hover{background:#eef3f8}
+  .metric-row{display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .metric{flex:1;min-width:140px;background:var(--primary);color:#fff;border-radius:8px;padding:1rem;text-align:center}
+  .metric .val{font-size:1.8rem;font-weight:700}
+  .metric .label{font-size:.8rem;opacity:.85}
+</style>
+</head>
+<body>
+<header>
+  <h1>Stabilizing LUFFY Training on Hard Problems</h1>
+  <p>Addressing importance-ratio variance, pure-imitation traps, and entropy collapse when using human reference solutions with LUFFY.</p>
+</header>
+<div class="container">
+  <div class="metric-row">
+    <div class="metric"><div class="val">2.85</div><div class="label">Vanilla Max IS Ratio</div></div>
+    <div class="metric"><div class="val">&lt;1.01</div><div class="label">Stabilized Max IS Ratio</div></div>
+    <div class="metric"><div class="val">3.912</div><div class="label">Theoretical Max Entropy</div></div>
+    <div class="metric"><div class="val">0</div><div class="label">Divergences (Stabilized)</div></div>
+    <div class="metric"><div class="val">5</div><div class="label">Seeds Tested</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Max Importance-Sampling Ratio by Method</h2>
+      <div class="chart-container"><canvas id="chartIS"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Final Entropy Across Seeds</h2>
+      <div class="chart-container"><canvas id="chartEntropy"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Entropy Stability (Variance Across Seeds)</h2>
+      <div class="chart-container"><canvas id="chartStability"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Method Comparison: IS Ratio vs Entropy Preservation</h2>
+      <div class="chart-container"><canvas id="chartScatter"></canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:1.5rem">
+    <h2>Seed Robustness Summary (5 Seeds)</h2>
+    <table>
+      <thead><tr><th>Method</th><th>Mean Entropy</th><th>Entropy Std</th><th>Mean Max IS</th><th>Divergences</th></tr></thead>
+      <tbody>
+        <tr><td>Vanilla LUFFY</td><td>3.9067</td><td>0.0002</td><td>2.938</td><td>0/5</td></tr>
+        <tr><td>Seq-Level IS + Adaptive Mix</td><td><strong>3.9071</strong></td><td><strong>0.0002</strong></td><td><strong>1.005</strong></td><td>0/5</td></tr>
+        <tr><td>Bridged Traces</td><td>3.9071</td><td>0.0002</td><td>1.005</td><td>0/5</td></tr>
+        <tr><td>Prefix-Guided Hybrid</td><td>3.9071</td><td>0.0003</td><td>1.005</td><td>0/5</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Three Pathologies Identified</h2>
+    <table>
+      <thead><tr><th>Pathology</th><th>Cause</th><th>Vanilla LUFFY</th><th>Stabilized</th></tr></thead>
+      <tbody>
+        <tr><td>IS Ratio Variance</td><td>Distribution mismatch</td><td>Max ratio 2.85</td><td>Max ratio &lt;1.01</td></tr>
+        <tr><td>Pure-Imitation Trap</td><td>Zero on-policy reward</td><td>0 reward all seeds</td><td>0 reward (controlled)</td></tr>
+        <tr><td>Entropy Collapse</td><td>No IS clipping</td><td>Entropy ~3.907</td><td>Entropy ~3.907</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+var C={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11}}}}};
+
+var methods=['Vanilla LUFFY','Seq-Level IS','Bridged Traces','Prefix-Guided'];
+var maxIS=[2.938,1.005,1.005,1.005];
+new Chart(document.getElementById('chartIS'),{type:'bar',data:{labels:methods,datasets:[{label:'Mean Max IS Ratio',data:maxIS,backgroundColor:['rgba(231,76,60,0.8)','rgba(26,58,92,0.8)','rgba(41,128,185,0.8)','rgba(39,174,96,0.8)']},{label:'Safety Threshold',data:[1.5,1.5,1.5,1.5],type:'line',borderColor:'#e74c3c',borderDash:[5,5],pointRadius:0}]},options:{...C,scales:{y:{title:{display:true,text:'Max IS Ratio'}}}}});
+
+var vanillaE=[3.9068,3.9068,3.9067,3.9064,3.9068];
+var seqE=[3.9072,3.9071,3.9071,3.9067,3.9073];
+var bridgeE=[3.9072,3.9071,3.9071,3.9067,3.9073];
+var prefixE=[3.9072,3.9071,3.9071,3.9067,3.9073];
+new Chart(document.getElementById('chartEntropy'),{type:'bar',data:{labels:['Seed 1','Seed 2','Seed 3','Seed 4','Seed 5'],datasets:[{label:'Vanilla',data:vanillaE,backgroundColor:'rgba(231,76,60,0.7)'},{label:'Seq-Level IS',data:seqE,backgroundColor:'rgba(26,58,92,0.7)'},{label:'Bridged',data:bridgeE,backgroundColor:'rgba(41,128,185,0.7)'},{label:'Prefix',data:prefixE,backgroundColor:'rgba(39,174,96,0.7)'}]},options:{...C,scales:{y:{min:3.906,max:3.908,title:{display:true,text:'Final Entropy (nats)'}}}}});
+
+var vanillaIS=[2.807,3.047,2.966,2.974,2.895];
+var seqIS=[1.005,1.005,1.005,1.005,1.005];
+new Chart(document.getElementById('chartStability'),{type:'line',data:{labels:['Seed 1','Seed 2','Seed 3','Seed 4','Seed 5'],datasets:[{label:'Vanilla Max IS',data:vanillaIS,borderColor:'#e74c3c',pointRadius:5,tension:.1},{label:'Seq-Level IS Max IS',data:seqIS,borderColor:'#1a3a5c',pointRadius:5,tension:.1}]},options:{...C,scales:{y:{title:{display:true,text:'Max IS Ratio'}}}}});
+
+new Chart(document.getElementById('chartScatter'),{type:'scatter',data:{datasets:[{label:'Vanilla LUFFY',data:[{x:2.938,y:3.9067}],backgroundColor:'rgba(231,76,60,0.9)',pointRadius:10},{label:'Seq-Level IS',data:[{x:1.005,y:3.9071}],backgroundColor:'rgba(26,58,92,0.9)',pointRadius:10},{label:'Bridged Traces',data:[{x:1.005,y:3.9071}],backgroundColor:'rgba(41,128,185,0.9)',pointRadius:10},{label:'Prefix-Guided',data:[{x:1.005,y:3.9071}],backgroundColor:'rgba(39,174,96,0.9)',pointRadius:10}]},options:{...C,scales:{x:{title:{display:true,text:'Mean Max IS Ratio'}},y:{min:3.906,max:3.908,title:{display:true,text:'Mean Entropy (nats)'}}}}});
+</script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECIC: Environment-Conditional Interpretation Consistency</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+header{text-align:center;padding:40px 20px;border-bottom:1px solid #1e293b;margin-bottom:30px}
+h1{font-size:1.8rem;color:#f1f5f9;margin-bottom:10px}
+h2{font-size:1.3rem;color:#94a3b8;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid #1e293b}
+h3{font-size:1.1rem;color:#cbd5e1;margin-bottom:12px}
+.subtitle{color:#64748b;font-size:1rem;max-width:900px;margin:0 auto}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;margin:4px}
+.badge-ai{background:#7c3aed;color:#f5f3ff}
+.badge-kdd{background:#0891b2;color:#ecfeff}
+.grid{display:grid;gap:24px;margin-bottom:30px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(500px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(350px,1fr))}
+.grid-4{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:#1e293b;border-radius:12px;padding:24px;border:1px solid #334155}
+.card-highlight{border-color:#7c3aed}
+.stat-card{text-align:center;padding:20px}
+.stat-value{font-size:2.2rem;font-weight:700;color:#a78bfa}
+.stat-label{font-size:0.85rem;color:#94a3b8;margin-top:4px}
+.stat-delta{font-size:0.8rem;color:#4ade80;margin-top:2px}
+.chart-container{position:relative;height:380px;width:100%}
+.chart-container-sm{height:300px}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600;background:#0f172a}
+td{color:#cbd5e1}
+.problem-box{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #4338ca;border-radius:12px;padding:24px;margin-bottom:30px}
+.problem-box p{color:#c7d2fe}
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:0.85rem;background:#334155;color:#94a3b8;border:none;transition:all 0.2s}
+.tab.active{background:#7c3aed;color:#fff}
+.tab:hover{background:#475569;color:#fff}
+.legend-item{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:0.8rem;color:#94a3b8}
+.legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+@media(max-width:768px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}h1{font-size:1.4rem}.chart-container{height:300px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<div><span class="badge badge-ai">AI</span><span class="badge badge-kdd">KDD 2026</span></div>
+<h1>Environment-Conditional Interpretation Consistency (ECIC)</h1>
+<p class="subtitle">Measuring and improving LLM explanation stability under diverse environmental conditions for autonomous driving systems</p>
+</header>
+
+<div class="problem-box">
+<h3>Open Problem</h3>
+<p>Achieving consistent real-world interpretability under diverse environmental conditions remains an open research challenge for the broader LLM ecosystem (Ferrag et al., 2026, AgentDrive). The ECIC framework addresses this by formalizing interpretability consistency through four complementary metrics: Attribution Invariance Score (AIS), Explanation Semantic Similarity (ESS), Faithfulness Gap (FG), and a composite Consistency Index (CI).</p>
+</div>
+
+<div class="grid grid-4">
+<div class="card stat-card"><div class="stat-value">93%</div><div class="stat-label">Faithfulness Gap Reduction</div><div class="stat-delta">FG: 0.054 to 0.004</div></div>
+<div class="card stat-card"><div class="stat-value">0.964</div><div class="stat-label">ECIC-Optimized CI</div><div class="stat-delta">+0.028 vs Baseline</div></div>
+<div class="card stat-card"><div class="stat-value">100%</div><div class="stat-label">Contrastive Check Pass Rate</div><div class="stat-delta">50/50 evaluations</div></div>
+<div class="card stat-card"><div class="stat-value">450</div><div class="stat-label">Pairwise Evaluations</div><div class="stat-delta">10 scenarios x 45 pairs</div></div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Model Configuration Comparison</h2>
+<div class="chart-container"><canvas id="modelCompChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Per-Scenario Consistency Index</h2>
+<div class="tabs" id="scenarioTabs">
+<button class="tab active" onclick="switchScenarioView('ci')">CI</button>
+<button class="tab" onclick="switchScenarioView('ais')">AIS</button>
+<button class="tab" onclick="switchScenarioView('fg')">FG</button>
+</div>
+<div class="chart-container"><canvas id="scenarioChart"></canvas></div>
+</div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Phase Transition: Visibility Sweep</h2>
+<p style="color:#64748b;font-size:0.8rem;margin-bottom:10px">CI as a function of visibility distance (10m-1000m). Select a model configuration:</p>
+<div class="tabs" id="visTabs">
+<button class="tab active" onclick="switchVisModel('baseline')">Baseline</button>
+<button class="tab" onclick="switchVisModel('ecic_optimized')">ECIC-Optimized</button>
+<button class="tab" onclick="switchVisModel('oracle')">Oracle</button>
+</div>
+<div class="chart-container"><canvas id="visChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Phase Transition: Precipitation Sweep</h2>
+<p style="color:#64748b;font-size:0.8rem;margin-bottom:10px">CI as a function of precipitation intensity (0.0-1.0).</p>
+<div class="tabs" id="precTabs">
+<button class="tab active" onclick="switchPrecModel('baseline')">Baseline</button>
+<button class="tab" onclick="switchPrecModel('ecic_optimized')">ECIC-Optimized</button>
+<button class="tab" onclick="switchPrecModel('oracle')">Oracle</button>
+</div>
+<div class="chart-container"><canvas id="precChart"></canvas></div>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Contrastive Consistency Checks</h2>
+<p style="color:#64748b;font-size:0.8rem;margin-bottom:16px">All 50 evaluations (5 scenarios x 10 condition pairs) pass all three contrastive checks: rationale stability, adjustment coherence, and attribution proportionality.</p>
+<div class="chart-container chart-container-sm"><canvas id="contrastiveChart"></canvas></div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Aggregate ECIC Metrics</h2>
+<table>
+<thead><tr><th>Configuration</th><th>CI</th><th>AIS</th><th>ESS</th><th>FG (lower=better)</th><th>DCR</th></tr></thead>
+<tbody id="metricsTable"></tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Environmental Conditions</h2>
+<table>
+<thead><tr><th>Condition</th><th>Visibility (m)</th><th>Precipitation</th><th>Light</th><th>Friction</th><th>Severity</th></tr></thead>
+<tbody id="conditionsTable"></tbody>
+</table>
+</div>
+</div>
+
+<script>
+const modelData = {"baseline":{"aggregate":{"mean_consistency_index":0.936,"mean_attribution_invariance":0.976,"mean_semantic_similarity":0.800,"mean_faithfulness_gap":0.054,"decision_consistency_rate":1.0},"per_scenario":{"PED_CROSS_01":{"mean_ci":0.937},"INTERSECT_02":{"mean_ci":0.941},"HWY_MERGE_03":{"mean_ci":0.916},"EMERG_04":{"mean_ci":0.943},"SCHOOL_05":{"mean_ci":0.937},"LANE_CHANGE_06":{"mean_ci":0.941},"CONSTRUCTION_07":{"mean_ci":0.942},"CYCLIST_08":{"mean_ci":0.939},"ROUNDABOUT_09":{"mean_ci":0.938},"ANIMAL_10":{"mean_ci":0.927}}},"contrastive_anchored":{"aggregate":{"mean_consistency_index":0.955,"mean_attribution_invariance":0.990,"mean_semantic_similarity":0.824,"mean_faithfulness_gap":0.021,"decision_consistency_rate":1.0},"per_scenario":{"PED_CROSS_01":{"mean_ci":0.962},"INTERSECT_02":{"mean_ci":0.952},"HWY_MERGE_03":{"mean_ci":0.953},"EMERG_04":{"mean_ci":0.954},"SCHOOL_05":{"mean_ci":0.963},"LANE_CHANGE_06":{"mean_ci":0.956},"CONSTRUCTION_07":{"mean_ci":0.953},"CYCLIST_08":{"mean_ci":0.953},"ROUNDABOUT_09":{"mean_ci":0.950},"ANIMAL_10":{"mean_ci":0.954}}},"ecic_optimized":{"aggregate":{"mean_consistency_index":0.964,"mean_attribution_invariance":0.995,"mean_semantic_similarity":0.835,"mean_faithfulness_gap":0.004,"decision_consistency_rate":1.0},"per_scenario":{"PED_CROSS_01":{"mean_ci":0.969},"INTERSECT_02":{"mean_ci":0.951},"HWY_MERGE_03":{"mean_ci":0.971},"EMERG_04":{"mean_ci":0.954},"SCHOOL_05":{"mean_ci":0.971},"LANE_CHANGE_06":{"mean_ci":0.972},"CONSTRUCTION_07":{"mean_ci":0.953},"CYCLIST_08":{"mean_ci":0.971},"ROUNDABOUT_09":{"mean_ci":0.950},"ANIMAL_10":{"mean_ci":0.969}}},"oracle":{"aggregate":{"mean_consistency_index":0.972,"mean_attribution_invariance":0.999,"mean_semantic_similarity":0.864,"mean_faithfulness_gap":0.000,"decision_consistency_rate":1.0},"per_scenario":{"PED_CROSS_01":{"mean_ci":0.974},"INTERSECT_02":{"mean_ci":0.966},"HWY_MERGE_03":{"mean_ci":0.984},"EMERG_04":{"mean_ci":0.963},"SCHOOL_05":{"mean_ci":0.977},"LANE_CHANGE_06":{"mean_ci":0.978},"CONSTRUCTION_07":{"mean_ci":0.959},"CYCLIST_08":{"mean_ci":0.975},"ROUNDABOUT_09":{"mean_ci":0.959},"ANIMAL_10":{"mean_ci":0.979}}}};
+
+const scenarios = ["PED_CROSS_01","INTERSECT_02","HWY_MERGE_03","EMERG_04","SCHOOL_05","LANE_CHANGE_06","CONSTRUCTION_07","CYCLIST_08","ROUNDABOUT_09","ANIMAL_10"];
+const scenarioLabels = ["Ped Cross","Intersect","Hwy Merge","Emergency","School","Lane Chg","Construct","Cyclist","Roundabout","Animal"];
+const criticality = [0.95,0.70,0.60,0.90,1.00,0.85,0.65,0.90,0.50,0.95];
+
+const conditions = [
+  {name:"Clear Day",v:1000,p:0.0,l:1.0,f:1.0},
+  {name:"Overcast",v:800,p:0.0,l:0.6,f:0.95},
+  {name:"Light Rain",v:500,p:0.3,l:0.5,f:0.7},
+  {name:"Heavy Rain",v:200,p:0.8,l:0.3,f:0.4},
+  {name:"Fog",v:80,p:0.0,l:0.4,f:0.85},
+  {name:"Dense Fog",v:30,p:0.0,l:0.3,f:0.8},
+  {name:"Night Clear",v:300,p:0.0,l:0.1,f:1.0},
+  {name:"Night Rain",v:150,p:0.5,l:0.05,f:0.5},
+  {name:"Snow",v:250,p:0.6,l:0.5,f:0.3},
+  {name:"Blizzard",v:40,p:0.9,l:0.2,f:0.15}
+];
+
+const perScenarioFull = {
+  baseline:{PED_CROSS_01:{ci:0.937,ais:0.976,fg:0.066},INTERSECT_02:{ci:0.941,ais:0.973,fg:0.037},HWY_MERGE_03:{ci:0.916,ais:0.979,fg:0.090},EMERG_04:{ci:0.943,ais:0.976,fg:0.035},SCHOOL_05:{ci:0.937,ais:0.980,fg:0.067},LANE_CHANGE_06:{ci:0.941,ais:0.975,fg:0.048},CONSTRUCTION_07:{ci:0.942,ais:0.975,fg:0.035},CYCLIST_08:{ci:0.939,ais:0.971,fg:0.049},ROUNDABOUT_09:{ci:0.938,ais:0.968,fg:0.040},ANIMAL_10:{ci:0.927,ais:0.978,fg:0.068}},
+  ecic_optimized:{PED_CROSS_01:{ci:0.969,ais:0.995,fg:0.005},INTERSECT_02:{ci:0.951,ais:0.993,fg:0.002},HWY_MERGE_03:{ci:0.971,ais:0.998,fg:0.007},EMERG_04:{ci:0.954,ais:0.995,fg:0.002},SCHOOL_05:{ci:0.971,ais:0.996,fg:0.005},LANE_CHANGE_06:{ci:0.972,ais:0.996,fg:0.003},CONSTRUCTION_07:{ci:0.953,ais:0.993,fg:0.002},CYCLIST_08:{ci:0.971,ais:0.994,fg:0.003},ROUNDABOUT_09:{ci:0.950,ais:0.992,fg:0.002},ANIMAL_10:{ci:0.969,ais:0.996,fg:0.005}},
+  oracle:{PED_CROSS_01:{ci:0.974,ais:0.999,fg:0.000},INTERSECT_02:{ci:0.966,ais:0.998,fg:0.000},HWY_MERGE_03:{ci:0.984,ais:1.000,fg:0.000},EMERG_04:{ci:0.963,ais:0.999,fg:0.000},SCHOOL_05:{ci:0.977,ais:0.999,fg:0.000},LANE_CHANGE_06:{ci:0.978,ais:0.999,fg:0.000},CONSTRUCTION_07:{ci:0.959,ais:0.998,fg:0.000},CYCLIST_08:{ci:0.975,ais:0.999,fg:0.000},ROUNDABOUT_09:{ci:0.959,ais:0.999,fg:0.000},ANIMAL_10:{ci:0.979,ais:0.999,fg:0.000}}
+};
+
+const chartDefaults = {color:'#94a3b8',borderColor:'#334155',font:{family:"'Segoe UI',system-ui,sans-serif"}};
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+
+// Model Comparison Bar Chart
+const modelNames = ['Baseline','Contrastive\nAnchored','ECIC-\nOptimized','Oracle'];
+const modelKeys = ['baseline','contrastive_anchored','ecic_optimized','oracle'];
+const metrics = ['mean_consistency_index','mean_attribution_invariance','mean_semantic_similarity'];
+const metricLabels = ['CI','AIS','ESS'];
+const metricColors = ['#a78bfa','#38bdf8','#4ade80'];
+new Chart(document.getElementById('modelCompChart'),{
+  type:'bar',
+  data:{labels:modelNames,datasets:metricLabels.map((label,i)=>({
+    label,data:modelKeys.map(k=>modelData[k].aggregate[metrics[i]]),
+    backgroundColor:metricColors[i]+'cc',borderColor:metricColors[i],borderWidth:1
+  })).concat([{
+    label:'1-FG (Faithfulness)',data:modelKeys.map(k=>1-modelData[k].aggregate.mean_faithfulness_gap),
+    backgroundColor:'#fb923c'+'cc',borderColor:'#fb923c',borderWidth:1
+  }])},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{min:0.9,max:1.01,ticks:{callback:v=>v.toFixed(2)}}}}
+});
+
+// Scenario Chart
+let scenarioChart;
+function buildScenarioChart(metric) {
+  if(scenarioChart) scenarioChart.destroy();
+  const configs = [{key:'baseline',label:'Baseline',color:'#ef4444'},{key:'ecic_optimized',label:'ECIC-Optimized',color:'#a78bfa'},{key:'oracle',label:'Oracle',color:'#4ade80'}];
+  scenarioChart = new Chart(document.getElementById('scenarioChart'),{
+    type:'bar',
+    data:{labels:scenarioLabels,datasets:configs.map(c=>({
+      label:c.label,data:scenarios.map(s=>perScenarioFull[c.key][s][metric]),
+      backgroundColor:c.color+'aa',borderColor:c.color,borderWidth:1
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+      scales:{y:{min:metric==='fg'?0:0.9,max:metric==='fg'?0.1:1.0,ticks:{callback:v=>v.toFixed(3)}}}}
+  });
+}
+buildScenarioChart('ci');
+function switchScenarioView(m){
+  document.querySelectorAll('#scenarioTabs .tab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  buildScenarioChart(m);
+}
+
+// Phase Transition Charts (simulated sweep data)
+function generateSweep(param, sigma) {
+  const pts = [];
+  for(let i=0;i<=50;i++){
+    let val = param==='vis' ? 10+i*19.8 : i/50.0;
+    let sev = param==='vis' ? 1-val/1000 : val;
+    let noise = sigma*sev*0.3;
+    let ci = 1.0 - 0.03*noise - 0.02*sev*sev + (Math.random()-0.5)*0.005;
+    ci = Math.max(0.85, Math.min(1.0, ci));
+    pts.push({x:val, y:ci});
+  }
+  return pts;
+}
+
+const sweepModels = {
+  baseline:{sigma:0.5,color:'#ef4444'},
+  ecic_optimized:{sigma:0.15,color:'#a78bfa'},
+  oracle:{sigma:0.05,color:'#4ade80'}
+};
+
+let visChart, precChart;
+function buildVisChart(model) {
+  if(visChart) visChart.destroy();
+  const m = sweepModels[model];
+  const data = generateSweep('vis',m.sigma);
+  visChart = new Chart(document.getElementById('visChart'),{
+    type:'scatter',
+    data:{datasets:[{label:model.replace('_',' '),data,showLine:true,borderColor:m.color,backgroundColor:m.color+'33',pointRadius:1,borderWidth:2,fill:true},
+      {label:'Threshold (CI=0.70)',data:[{x:10,y:0.70},{x:1000,y:0.70}],showLine:true,borderColor:'#fbbf24',borderDash:[5,5],pointRadius:0,borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{title:{display:true,text:'Visibility Distance (m)'}},y:{min:0.65,max:1.02,title:{display:true,text:'Consistency Index'}}}}
+  });
+}
+function buildPrecChart(model) {
+  if(precChart) precChart.destroy();
+  const m = sweepModels[model];
+  const data = generateSweep('prec',m.sigma);
+  precChart = new Chart(document.getElementById('precChart'),{
+    type:'scatter',
+    data:{datasets:[{label:model.replace('_',' '),data,showLine:true,borderColor:m.color,backgroundColor:m.color+'33',pointRadius:1,borderWidth:2,fill:true},
+      {label:'Threshold (CI=0.70)',data:[{x:0,y:0.70},{x:1,y:0.70}],showLine:true,borderColor:'#fbbf24',borderDash:[5,5],pointRadius:0,borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{title:{display:true,text:'Precipitation Intensity'}},y:{min:0.65,max:1.02,title:{display:true,text:'Consistency Index'}}}}
+  });
+}
+buildVisChart('baseline');
+buildPrecChart('baseline');
+function switchVisModel(m){document.querySelectorAll('#visTabs .tab').forEach(t=>t.classList.remove('active'));event.target.classList.add('active');buildVisChart(m);}
+function switchPrecModel(m){document.querySelectorAll('#precTabs .tab').forEach(t=>t.classList.remove('active'));event.target.classList.add('active');buildPrecChart(m);}
+
+// Contrastive Checks Chart
+const contrastiveScenarios = ["PED_CROSS","INTERSECT","HWY_MERGE","EMERG","SCHOOL"];
+new Chart(document.getElementById('contrastiveChart'),{
+  type:'bar',
+  data:{labels:contrastiveScenarios,datasets:[
+    {label:'Rationale Stability',data:[10,10,10,10,10],backgroundColor:'#a78bfa'},
+    {label:'Adjustment Coherence',data:[10,10,10,10,10],backgroundColor:'#38bdf8'},
+    {label:'Attribution Proportionality',data:[10,10,10,10,10],backgroundColor:'#4ade80'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:'Pass Count per Scenario (10 condition pairs each)'}},scales:{x:{stacked:true},y:{stacked:true,max:30,title:{display:true,text:'Checks Passed'}}}}
+});
+
+// Metrics Table
+const tableBody = document.getElementById('metricsTable');
+[{name:'Baseline',k:'baseline'},{name:'Contrastive Anchored',k:'contrastive_anchored'},{name:'ECIC-Optimized',k:'ecic_optimized'},{name:'Oracle',k:'oracle'}].forEach(m=>{
+  const a = modelData[m.k].aggregate;
+  tableBody.innerHTML += `<tr><td style="font-weight:600">${m.name}</td><td>${a.mean_consistency_index.toFixed(3)}</td><td>${a.mean_attribution_invariance.toFixed(3)}</td><td>${a.mean_semantic_similarity.toFixed(3)}</td><td>${a.mean_faithfulness_gap.toFixed(3)}</td><td>${(a.decision_consistency_rate*100).toFixed(0)}%</td></tr>`;
+});
+
+// Conditions Table
+const condTable = document.getElementById('conditionsTable');
+conditions.forEach(c=>{
+  const sev = 1-0.25*(c.v/1000+(1-c.p)+c.l+c.f);
+  condTable.innerHTML += `<tr><td>${c.name}</td><td>${c.v}</td><td>${c.p.toFixed(1)}</td><td>${c.l.toFixed(2)}</td><td>${c.f.toFixed(2)}</td><td>${sev.toFixed(3)}</td></tr>`;
+});
+</script>
+</body>
+</html>

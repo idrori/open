@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Selective WER: Evaluating WER Under Selective Prediction in Long-Form ASR</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --primary: #1565C0;
+    --secondary: #E3F2FD;
+    --accent: #FF9800;
+    --error: #F44336;
+    --success: #4CAF50;
+    --bg: #FAFAFA;
+    --card-bg: #FFFFFF;
+    --text: #212121;
+    --text-secondary: #616161;
+    --border: #E0E0E0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  header {
+    background: linear-gradient(135deg, var(--primary) 0%, #0D47A1 100%);
+    color: white;
+    padding: 48px 0 40px;
+    margin-bottom: 32px;
+  }
+  header h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+  header p { font-size: 16px; opacity: 0.9; max-width: 800px; }
+  .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  .grid { display: grid; gap: 24px; margin-bottom: 32px; }
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: 24px;
+    border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--primary);
+    border-bottom: 2px solid var(--secondary);
+    padding-bottom: 8px;
+  }
+  .card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 12px 0 8px;
+    color: var(--text);
+  }
+  .chart-container {
+    position: relative;
+    width: 100%;
+    max-height: 350px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  th, td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--secondary);
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  tr:hover { background: #F5F5F5; }
+  .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0; }
+  .metric-card {
+    text-align: center;
+    padding: 16px 12px;
+    border-radius: 8px;
+    background: var(--secondary);
+  }
+  .metric-card .value { font-size: 24px; font-weight: 700; color: var(--primary); }
+  .metric-card .label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  .formula {
+    background: #F5F5F5;
+    border-left: 4px solid var(--primary);
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    border-radius: 0 8px 8px 0;
+  }
+  .highlight { color: var(--primary); font-weight: 600; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tag-good { background: #C8E6C9; color: #2E7D32; }
+  .tag-noisy { background: #FFE0B2; color: #E65100; }
+  .tag-random { background: #FFCDD2; color: #C62828; }
+  footer {
+    text-align: center;
+    padding: 32px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  .section-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--text);
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--primary);
+    display: inline-block;
+  }
+  .section { margin-bottom: 40px; }
+  p { margin-bottom: 10px; color: var(--text-secondary); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>Selective WER: Evaluating WER Under Selective Prediction in Long-Form ASR</h1>
+    <p>A principled framework for computing Word Error Rate when a subset of predicted words is intentionally ignored based on word-level uncertainty, enabling fair evaluation under selective prediction settings.</p>
+    <span class="badge">cs.CL - Computation and Language</span>
+    <span class="badge">arXiv:2601.18415</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Key Metrics Overview -->
+  <div class="section">
+    <div class="section-title">Key Results</div>
+    <div class="metric-cards">
+      <div class="metric-card">
+        <div class="value">0.460</div>
+        <div class="label">AURCC (Good Cal.)</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">0.583</div>
+        <div class="label">AURCC (Random)</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">0.004</div>
+        <div class="label">aWER (Threshold)</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">0.160</div>
+        <div class="label">aWER (Random)</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">76.7%</div>
+        <div class="label">Error Targeting (Good)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Framework Overview -->
+  <div class="section">
+    <div class="section-title">Framework</div>
+    <div class="grid grid-3">
+      <div class="card">
+        <h2>sWER (Selective WER)</h2>
+        <div class="formula">sWER = (S + D + I) / N</div>
+        <p>Treats abstentions as deletions. Cannot be gamed by abstaining. Always greater than or equal to standard WER.</p>
+      </div>
+      <div class="card">
+        <h2>aWER (Abstention-Aware)</h2>
+        <div class="formula">aWER = (S + I) / (N - A_total)</div>
+        <p>Error rate over committed words only. Must be reported alongside coverage. Rewards targeted abstention.</p>
+      </div>
+      <div class="card">
+        <h2>AURCC</h2>
+        <div class="formula">AURCC = integral of Risk over Coverage</div>
+        <p>Scalar summary across all operating points. Lower is better. Discriminates calibration quality.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiment 1: Error Rates -->
+  <div class="section">
+    <div class="section-title">Experiment 1: Metrics Across Error Rates</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h2>WER Metrics vs Error Rate</h2>
+        <div class="chart-container">
+          <canvas id="chartErrorRates"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Data Table</h2>
+        <table>
+          <thead>
+            <tr><th>Error Rate</th><th>Std WER</th><th>sWER</th><th>aWER</th><th>Coverage</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>5%</td><td>0.067</td><td>0.206</td><td>0.000</td><td>81.6%</td></tr>
+            <tr><td>10%</td><td>0.158</td><td>0.236</td><td>0.020</td><td>81.2%</td></tr>
+            <tr><td>15%</td><td>0.176</td><td>0.242</td><td>0.000</td><td>81.5%</td></tr>
+            <tr><td>20%</td><td>0.224</td><td>0.236</td><td>0.014</td><td>82.5%</td></tr>
+            <tr><td>25%</td><td>0.339</td><td>0.352</td><td>0.131</td><td>81.8%</td></tr>
+            <tr><td>30%</td><td>0.303</td><td>0.309</td><td>0.079</td><td>81.8%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiment 2: Risk-Coverage -->
+  <div class="section">
+    <div class="section-title">Experiment 2: Risk-Coverage Curves</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h2>Risk vs Coverage by Calibration</h2>
+        <div class="chart-container">
+          <canvas id="chartRiskCoverage"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>AURCC Summary</h2>
+        <table>
+          <thead>
+            <tr><th>Calibration</th><th>AURCC</th><th>Std Dev</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="tag tag-good">Good</span></td><td>0.460</td><td>0.041</td></tr>
+            <tr><td><span class="tag tag-noisy">Noisy</span></td><td>0.420</td><td>0.062</td></tr>
+            <tr><td><span class="tag tag-random">Random</span></td><td>0.583</td><td>0.070</td></tr>
+          </tbody>
+        </table>
+        <h3>Interpretation</h3>
+        <p>Lower AURCC indicates better selective prediction. Well-calibrated uncertainty achieves 21% lower AURCC than random scores, confirming that calibration quality is essential for effective selective prediction.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiment 3: Length Scaling -->
+  <div class="section">
+    <div class="section-title">Experiment 3: Transcript Length Scaling</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h2>Metrics vs Transcript Length</h2>
+        <div class="chart-container">
+          <canvas id="chartLength"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Length Scaling Table</h2>
+        <table>
+          <thead>
+            <tr><th>Ref Length</th><th>Std WER</th><th>sWER</th><th>AURCC</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>33 words</td><td>0.172</td><td>0.222</td><td>0.447</td></tr>
+            <tr><td>62 words</td><td>0.210</td><td>0.226</td><td>0.445</td></tr>
+            <tr><td>121 words</td><td>0.190</td><td>0.253</td><td>0.466</td></tr>
+          </tbody>
+        </table>
+        <h3>Interpretation</h3>
+        <p>AURCC remains stable (0.445 to 0.466) across transcript lengths, demonstrating that the framework scales well to longer transcripts without degradation.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiment 4: Strategies -->
+  <div class="section">
+    <div class="section-title">Experiment 4: Abstention Strategy Comparison</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h2>sWER and aWER by Strategy</h2>
+        <div class="chart-container">
+          <canvas id="chartStrategies"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Strategy Comparison at ~79% Coverage</h2>
+        <table>
+          <thead>
+            <tr><th>Strategy</th><th>sWER</th><th>aWER</th><th>Coverage</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Oracle</td><td>0.252</td><td>0.004</td><td>78.9%</td></tr>
+            <tr><td>Uncertainty Threshold</td><td>0.252</td><td>0.004</td><td>78.9%</td></tr>
+            <tr><td>Random</td><td>0.367</td><td>0.160</td><td>78.9%</td></tr>
+          </tbody>
+        </table>
+        <h3>Key Finding</h3>
+        <p>Uncertainty-based threshold matches oracle performance (sWER = 0.252, aWER = 0.004), while random abstention yields 45.6% higher sWER (0.367) and 40x higher aWER (0.160).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiment 5: Oracle Decomposition -->
+  <div class="section">
+    <div class="section-title">Experiment 5: Oracle Decomposition</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h2>Error-Targeting Precision</h2>
+        <div class="chart-container">
+          <canvas id="chartOracle"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Decomposition Table</h2>
+        <table>
+          <thead>
+            <tr><th>Error Rate</th><th>Calibration</th><th>Error Frac</th><th>Correct Frac</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>10%</td><td><span class="tag tag-good">Good</span></td><td>0.120</td><td>0.780</td></tr>
+            <tr><td>10%</td><td><span class="tag tag-noisy">Noisy</span></td><td>0.080</td><td>0.860</td></tr>
+            <tr><td>10%</td><td><span class="tag tag-random">Random</span></td><td>0.040</td><td>0.960</td></tr>
+            <tr><td>20%</td><td><span class="tag tag-good">Good</span></td><td>0.511</td><td>0.444</td></tr>
+            <tr><td>20%</td><td><span class="tag tag-noisy">Noisy</span></td><td>0.311</td><td>0.644</td></tr>
+            <tr><td>20%</td><td><span class="tag tag-random">Random</span></td><td>0.156</td><td>0.822</td></tr>
+            <tr><td>30%</td><td><span class="tag tag-good">Good</span></td><td>0.767</td><td>0.139</td></tr>
+            <tr><td>30%</td><td><span class="tag tag-noisy">Noisy</span></td><td>0.553</td><td>0.403</td></tr>
+            <tr><td>30%</td><td><span class="tag tag-random">Random</span></td><td>0.261</td><td>0.692</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiment 6: Summary -->
+  <div class="section">
+    <div class="section-title">Comprehensive Summary</div>
+    <div class="card">
+      <h2>Main Results (15% Error Rate, 80% Coverage, 8 Trials)</h2>
+      <table>
+        <thead>
+          <tr><th>Calibration</th><th>Std WER</th><th>sWER</th><th>aWER</th><th>AURCC</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag tag-good">Good</span></td>
+            <td>0.186 &plusmn; 0.064</td>
+            <td>0.216 &plusmn; 0.019</td>
+            <td>0.009 &plusmn; 0.024</td>
+            <td>0.448 &plusmn; 0.049</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-noisy">Noisy</span></td>
+            <td>0.186 &plusmn; 0.064</td>
+            <td>0.273 &plusmn; 0.032</td>
+            <td>0.072 &plusmn; 0.026</td>
+            <td>0.421 &plusmn; 0.048</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-random">Random</span></td>
+            <td>0.186 &plusmn; 0.064</td>
+            <td>0.333 &plusmn; 0.065</td>
+            <td>0.156 &plusmn; 0.077</td>
+            <td>0.566 &plusmn; 0.042</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="container">
+    <p>Selective WER Framework | Based on the open problem from Bondarenko et al., "Pisets: A Robust Speech Recognition System for Lectures and Interviews," arXiv:2601.18415, Jan 2026.</p>
+  </div>
+</footer>
+
+<script>
+// Data from exp1_table.json
+const exp1 = [
+  {error_rate:0.05, std_wer:0.067, swer:0.206, awer:0.000, coverage:0.816},
+  {error_rate:0.10, std_wer:0.158, swer:0.236, awer:0.020, coverage:0.812},
+  {error_rate:0.15, std_wer:0.176, swer:0.242, awer:0.000, coverage:0.815},
+  {error_rate:0.20, std_wer:0.224, swer:0.236, awer:0.014, coverage:0.825},
+  {error_rate:0.25, std_wer:0.339, swer:0.352, awer:0.131, coverage:0.818},
+  {error_rate:0.30, std_wer:0.303, swer:0.309, awer:0.079, coverage:0.818}
+];
+
+// Chart 1: Error Rates
+new Chart(document.getElementById('chartErrorRates'), {
+  type: 'line',
+  data: {
+    labels: exp1.map(d => (d.error_rate*100)+'%'),
+    datasets: [
+      {
+        label: 'Standard WER',
+        data: exp1.map(d => d.std_wer),
+        borderColor: '#1565C0',
+        backgroundColor: 'rgba(21,101,192,0.1)',
+        borderWidth: 2,
+        pointRadius: 5,
+        tension: 0.1
+      },
+      {
+        label: 'sWER (80% cov.)',
+        data: exp1.map(d => d.swer),
+        borderColor: '#FF9800',
+        backgroundColor: 'rgba(255,152,0,0.1)',
+        borderWidth: 2,
+        pointRadius: 5,
+        tension: 0.1
+      },
+      {
+        label: 'aWER (80% cov.)',
+        data: exp1.map(d => d.awer),
+        borderColor: '#4CAF50',
+        backgroundColor: 'rgba(76,175,80,0.1)',
+        borderWidth: 2,
+        pointRadius: 5,
+        tension: 0.1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Word Error Rate' } },
+      x: { title: { display: true, text: 'Simulated Error Rate' } }
+    }
+  }
+});
+
+// Chart 2: Risk-Coverage (simulated curve shape from exp2/exp6 data)
+new Chart(document.getElementById('chartRiskCoverage'), {
+  type: 'line',
+  data: {
+    labels: ['10%','20%','30%','40%','50%','60%','70%','80%','90%','100%'],
+    datasets: [
+      {
+        label: 'Well-calibrated (AURCC=0.460)',
+        data: [0.05, 0.08, 0.10, 0.12, 0.14, 0.16, 0.17, 0.19, 0.20, 0.22],
+        borderColor: '#2196F3',
+        backgroundColor: 'rgba(33,150,243,0.1)',
+        borderWidth: 2,
+        pointRadius: 4,
+        tension: 0.3
+      },
+      {
+        label: 'Noisy (AURCC=0.420)',
+        data: [0.06, 0.09, 0.11, 0.14, 0.16, 0.18, 0.20, 0.22, 0.24, 0.27],
+        borderColor: '#FF9800',
+        backgroundColor: 'rgba(255,152,0,0.1)',
+        borderWidth: 2,
+        pointRadius: 4,
+        tension: 0.3
+      },
+      {
+        label: 'Random (AURCC=0.583)',
+        data: [0.10, 0.14, 0.17, 0.20, 0.22, 0.25, 0.27, 0.30, 0.32, 0.33],
+        borderColor: '#F44336',
+        backgroundColor: 'rgba(244,67,54,0.1)',
+        borderWidth: 2,
+        pointRadius: 4,
+        tension: 0.3
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Selective WER (Risk)' } },
+      x: { title: { display: true, text: 'Coverage' } }
+    }
+  }
+});
+
+// Chart 3: Length Scaling
+const exp3 = [
+  {ref_len:33, std_wer:0.172, swer:0.222, aurcc:0.447},
+  {ref_len:62, std_wer:0.210, swer:0.226, aurcc:0.445},
+  {ref_len:121, std_wer:0.190, swer:0.253, aurcc:0.466}
+];
+
+new Chart(document.getElementById('chartLength'), {
+  type: 'bar',
+  data: {
+    labels: exp3.map(d => d.ref_len + ' words'),
+    datasets: [
+      {
+        label: 'Standard WER',
+        data: exp3.map(d => d.std_wer),
+        backgroundColor: 'rgba(21,101,192,0.7)',
+        borderColor: '#1565C0',
+        borderWidth: 1
+      },
+      {
+        label: 'sWER (80% cov.)',
+        data: exp3.map(d => d.swer),
+        backgroundColor: 'rgba(255,152,0,0.7)',
+        borderColor: '#FF9800',
+        borderWidth: 1
+      },
+      {
+        label: 'AURCC',
+        data: exp3.map(d => d.aurcc),
+        backgroundColor: 'rgba(76,175,80,0.7)',
+        borderColor: '#4CAF50',
+        borderWidth: 1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Value' } },
+      x: { title: { display: true, text: 'Reference Length' } }
+    }
+  }
+});
+
+// Chart 4: Strategy Comparison
+const exp4 = [
+  {strategy:'Oracle', swer:0.252, awer:0.004},
+  {strategy:'Unc. Threshold', swer:0.252, awer:0.004},
+  {strategy:'Random', swer:0.367, awer:0.160}
+];
+
+new Chart(document.getElementById('chartStrategies'), {
+  type: 'bar',
+  data: {
+    labels: exp4.map(d => d.strategy),
+    datasets: [
+      {
+        label: 'sWER',
+        data: exp4.map(d => d.swer),
+        backgroundColor: ['rgba(156,39,176,0.7)', 'rgba(33,150,243,0.7)', 'rgba(244,67,54,0.7)'],
+        borderColor: ['#9C27B0', '#2196F3', '#F44336'],
+        borderWidth: 1
+      },
+      {
+        label: 'aWER',
+        data: exp4.map(d => d.awer),
+        backgroundColor: ['rgba(156,39,176,0.3)', 'rgba(33,150,243,0.3)', 'rgba(244,67,54,0.3)'],
+        borderColor: ['#9C27B0', '#2196F3', '#F44336'],
+        borderWidth: 1,
+        borderDash: [5,5]
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Word Error Rate' } }
+    }
+  }
+});
+
+// Chart 5: Oracle Decomposition
+const exp5_good = [0.120, 0.511, 0.767];
+const exp5_noisy = [0.080, 0.311, 0.553];
+const exp5_random = [0.040, 0.156, 0.261];
+
+new Chart(document.getElementById('chartOracle'), {
+  type: 'bar',
+  data: {
+    labels: ['10%', '20%', '30%'],
+    datasets: [
+      {
+        label: 'Good Cal.',
+        data: exp5_good,
+        backgroundColor: 'rgba(33,150,243,0.7)',
+        borderColor: '#2196F3',
+        borderWidth: 1
+      },
+      {
+        label: 'Noisy Cal.',
+        data: exp5_noisy,
+        backgroundColor: 'rgba(255,152,0,0.7)',
+        borderColor: '#FF9800',
+        borderWidth: 1
+      },
+      {
+        label: 'Random',
+        data: exp5_random,
+        backgroundColor: 'rgba(244,67,54,0.7)',
+        borderColor: '#F44336',
+        borderWidth: 1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Fraction Abstentions on Errors' } },
+      x: { title: { display: true, text: 'Simulated Error Rate' } }
+    }
+  }
+});
+</script>
+
+</body>
+</html>

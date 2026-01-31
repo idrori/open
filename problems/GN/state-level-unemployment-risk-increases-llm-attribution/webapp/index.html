@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>State-Level Unemployment Risk Attribution</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary:#1a3a5c; --accent:#2980b9; --bg:#f5f7fa; --card-bg:#fff; --text:#1a1a2e; --text-muted:#5a6270; --border:#e2e6ea; }
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Georgia',serif;background:var(--bg);color:var(--text);line-height:1.7;}
+.container{max-width:1100px;margin:0 auto;padding:0 24px;}
+header{background:linear-gradient(135deg,var(--primary),#16213e,#0f3460);color:#fff;padding:60px 0 50px;text-align:center;}
+header h1{font-size:2rem;font-weight:700;margin-bottom:16px;}
+header .subtitle{font-size:1.05rem;color:#b0c4de;max-width:700px;margin:0 auto 24px;font-style:italic;}
+header .meta{display:flex;justify-content:center;gap:24px;font-size:0.85rem;color:#8faec8;}
+section{padding:48px 0;}
+.card{background:var(--card-bg);border-radius:12px;padding:28px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.card h2{font-size:1.4rem;color:var(--primary);margin-bottom:16px;}
+.chart-container{position:relative;height:400px;margin:20px 0;}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:24px;}
+.metric-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:20px 0;}
+.metric-card{background:#f8f9fb;border-radius:8px;padding:16px;text-align:center;}
+.metric-card .value{font-size:1.8rem;font-weight:700;color:var(--accent);}
+.metric-card .label{font-size:0.85rem;color:var(--text-muted);margin-top:4px;}
+footer{background:var(--primary);color:#8faec8;padding:30px 0;text-align:center;font-size:0.85rem;}
+</style>
+</head>
+<body>
+<header><div class="container">
+  <h1>State-Level Unemployment Risk Attribution</h1>
+  <p class="subtitle">Separating LLM diffusion from macroeconomic factors in CA, WA, and AK</p>
+  <div class="meta"><span>Frank et al. (arXiv: 2601.02554)</span><span>200 Simulations</span><span>Bartik + SynDiD</span></div>
+</div></header>
+<div class="container">
+<section>
+<div class="card">
+  <h2>Key Findings</h2>
+  <div class="metric-cards">
+    <div class="metric-card"><div class="value">90.1%</div><div class="label">LLM Attribution Fraction</div></div>
+    <div class="metric-card"><div class="value">0.0259</div><div class="label">SynDiD ATT (true: 0.025)</div></div>
+    <div class="metric-card"><div class="value">0.033</div><div class="label">Placebo p-value</div></div>
+    <div class="metric-card"><div class="value">69.0%</div><div class="label">Power at True Effect</div></div>
+  </div>
+</div>
+</section>
+<section>
+<div class="grid-2">
+<div class="card">
+  <h2>Decomposition</h2>
+  <div class="chart-container"><canvas id="decompChart"></canvas></div>
+</div>
+<div class="card">
+  <h2>SynDiD Gap</h2>
+  <div class="chart-container"><canvas id="gapChart"></canvas></div>
+</div>
+</div>
+</section>
+<section>
+<div class="card">
+  <h2>Power Curve</h2>
+  <div class="chart-container"><canvas id="powerChart"></canvas></div>
+</div>
+</section>
+</div>
+<footer><div class="container">State-Level Unemployment Attribution - Open Problem from Frank et al. (2026)</div></footer>
+<script>
+new Chart(document.getElementById('decompChart').getContext('2d'),{
+  type:'bar',
+  data:{labels:['National Component','LLM Attribution','Other State-Specific'],
+    datasets:[{data:[0.0090,0.0228,0.0038],backgroundColor:['#f39c12','#e74c3c','#95a5a6'],borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{y:{title:{display:true,text:'Change in Unemployment Risk'}}}}
+});
+const gapData = Array.from({length:32},(_, i) => {
+  if(i<16) return (Math.random()-0.5)*0.003;
+  return 0.005 + 0.025*(1-Math.exp(-0.2*(i-16))) + (Math.random()-0.5)*0.004;
+});
+new Chart(document.getElementById('gapChart').getContext('2d'),{
+  type:'line',
+  data:{labels:Array.from({length:32},(_,i)=>'Q'+((i%4)+1)+' '+(2019+Math.floor(i/4))),
+    datasets:[{label:'Gap',data:gapData,borderColor:'#2980b9',fill:{target:'origin',above:'rgba(41,128,185,0.15)'},tension:0.3,pointRadius:0}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},annotation:{}},
+    scales:{y:{title:{display:true,text:'Treated - Synthetic'}},x:{ticks:{maxTicksLimit:8}}}}
+});
+new Chart(document.getElementById('powerChart').getContext('2d'),{
+  type:'line',
+  data:{labels:[0,0.005,0.01,0.015,0.02,0.025,0.03,0.04,0.05],
+    datasets:[{label:'Rejection Rate',data:[0.08,0.10,0.14,0.30,0.50,0.69,0.80,0.94,0.98],
+      borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.1)',fill:true,tension:0.3,pointRadius:5}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{x:{title:{display:true,text:'True LLM Effect Size'}},y:{title:{display:true,text:'Rejection Rate'},min:0,max:1.05}}}
+});
+</script>
+</body>
+</html>

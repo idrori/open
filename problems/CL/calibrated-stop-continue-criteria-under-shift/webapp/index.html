@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calibrated Stop/Continue Criteria Under Shift</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.8; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
+.card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; height: 300px !important; }
+.controls select { padding: 0.3rem; border-radius: 4px; margin: 0.5rem 0; }
+.stat { display: inline-block; background: #eef2f7; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.25rem; }
+.stat .val { font-weight: bold; color: var(--primary); font-size: 1.1rem; }
+.stat .label { font-size: 0.8rem; color: #666; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Calibrated Stop/Continue Criteria Under Distribution Shift</h1>
+<p>Comparing stopping strategies across retrievers, corpora, and LLM backbones</p>
+</div>
+<div class="container">
+<div style="text-align:center;margin:1rem 0;">
+<div class="stat"><div class="label">Best ECE</div><div class="val">0.103 (Bayesian)</div></div>
+<div class="stat"><div class="label">Best Accuracy</div><div class="val">0.481 (Fixed-5)</div></div>
+<div class="stat"><div class="label">Configurations</div><div class="val">36</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>ECE Comparison Across Criteria</h2>
+<canvas id="eceChart"></canvas>
+</div>
+<div class="card">
+<h2>Calibration Diagram</h2>
+<canvas id="calChart"></canvas>
+<div class="controls">
+<label>Criterion: </label>
+<select id="calSelect">
+<option value="bayesian">Bayesian Uncertainty</option>
+<option value="confidence">Confidence 0.7</option>
+</select>
+</div>
+</div>
+<div class="card">
+<h2>Noise Sensitivity: ECE</h2>
+<canvas id="noiseECE"></canvas>
+</div>
+<div class="card">
+<h2>Accuracy by Hop Depth</h2>
+<canvas id="depthChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+const P='#1a3a5c',A='#2980b9',R='#e74c3c',G='#27ae60',O='#f39c12',V='#8e44ad';
+const criteria=['Fixed-3','Fixed-5','Conf-0.7','Conf-0.8','Stability','Bayesian'];
+const eces=[0.183,0.149,0.141,0.167,0.197,0.103];
+const eceStds=[0.062,0.051,0.063,0.076,0.042,0.043];
+const accs=[0.456,0.481,0.467,0.434,0.355,0.447];
+new Chart(document.getElementById('eceChart'),{
+  type:'bar',data:{labels:criteria,
+    datasets:[{label:'ECE',data:eces,backgroundColor:[P,A,R,G,O,V],
+      borderColor:'black',borderWidth:0.5}]},
+  options:{responsive:true,plugins:{legend:{display:false}},
+    scales:{y:{title:{display:true,text:'Expected Calibration Error'},min:0,max:0.3}}}
+});
+// Calibration diagram
+const bayesConf=[0.05,0.15,0.25,0.35,0.45,0.55,0.65,0.75,0.85,0.95];
+const bayesAcc=[0.03,0.12,0.20,0.30,0.38,0.48,0.58,0.68,0.78,0.85];
+const confAcc=[0.01,0.08,0.15,0.22,0.32,0.45,0.55,0.72,0.82,0.90];
+let calChart=new Chart(document.getElementById('calChart'),{
+  type:'bar',data:{labels:bayesConf.map(v=>v.toFixed(1)),
+    datasets:[{label:'Accuracy',data:bayesAcc,backgroundColor:A+'99',borderColor:A,borderWidth:1}]},
+  options:{responsive:true,scales:{x:{title:{display:true,text:'Confidence'}},y:{title:{display:true,text:'Accuracy'},min:0,max:1}},
+    plugins:{annotation:{annotations:{perfect:{type:'line',xMin:0,xMax:9,yMin:0.05,yMax:0.95,borderColor:'black',borderDash:[3,3]}}}}}
+});
+document.getElementById('calSelect').addEventListener('change',function(e){
+  calChart.data.datasets[0].data=e.target.value==='bayesian'?bayesAcc:confAcc;
+  calChart.update();
+});
+// Noise ECE
+const noise=[0,0.1,0.2,0.3,0.4,0.5];
+new Chart(document.getElementById('noiseECE'),{
+  type:'line',data:{labels:noise,datasets:[
+    {label:'Confidence 0.7',data:[0.12,0.14,0.16,0.18,0.19,0.20],borderColor:P,fill:false,tension:0.3},
+    {label:'Stability',data:[0.15,0.17,0.19,0.21,0.22,0.24],borderColor:R,fill:false,tension:0.3},
+    {label:'Bayesian',data:[0.08,0.09,0.10,0.10,0.11,0.12],borderColor:G,fill:false,tension:0.3}
+  ]},options:{responsive:true,scales:{x:{title:{display:true,text:'Retrieval Noise'}},y:{title:{display:true,text:'ECE'},min:0,max:0.3}}}
+});
+// Depth
+const depths=[1,2,3,4,5,6,7,8];
+new Chart(document.getElementById('depthChart'),{
+  type:'line',data:{labels:depths,datasets:[
+    {label:'Bayesian',data:[0.65,0.55,0.48,0.42,0.38,0.35,0.32,0.30],borderColor:G,fill:false,tension:0.3},
+    {label:'Confidence 0.7',data:[0.60,0.50,0.42,0.36,0.31,0.27,0.24,0.22],borderColor:P,fill:false,tension:0.3}
+  ]},options:{responsive:true,scales:{x:{title:{display:true,text:'Required Hop Depth'}},y:{title:{display:true,text:'Accuracy'},min:0,max:0.75}}}
+});
+</script>
+</body>
+</html>

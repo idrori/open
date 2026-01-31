@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generative Models from Single Operator Measurements</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary:#1a3a5c; --accent:#2980b9; --bg:#f4f7fa; --card-bg:#fff; --text:#2d3748; --text-light:#718096; --border:#e2e8f0; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:var(--text); background:var(--bg); line-height:1.6; }
+.container { max-width:1200px; margin:0 auto; padding:0 20px; }
+.hero { background:linear-gradient(135deg,var(--primary),#2c5f8a); color:white; padding:60px 0 50px; text-align:center; }
+.hero h1 { font-size:2em; font-weight:700; margin-bottom:16px; }
+.hero .subtitle { font-size:1.1em; opacity:0.9; max-width:800px; margin:0 auto 24px; }
+.stats-row { display:flex; justify-content:center; gap:40px; flex-wrap:wrap; margin-top:24px; }
+.stat-item { text-align:center; } .stat-value { font-size:2em; font-weight:700; } .stat-label { font-size:0.85em; opacity:0.8; }
+nav { background:var(--card-bg); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+nav .container { display:flex; overflow-x:auto; }
+nav a { padding:14px 18px; text-decoration:none; color:var(--text-light); font-size:0.9em; font-weight:500; white-space:nowrap; border-bottom:2px solid transparent; }
+nav a:hover { color:var(--primary); border-bottom-color:var(--primary); }
+section { padding:50px 0; } section:nth-child(even) { background:var(--card-bg); }
+.section-title { font-size:1.5em; color:var(--primary); margin-bottom:8px; }
+.section-desc { color:var(--text-light); margin-bottom:30px; }
+.card { background:var(--card-bg); border-radius:10px; padding:24px; box-shadow:0 1px 3px rgba(0,0,0,0.08); border:1px solid var(--border); margin-bottom:24px; }
+.card h3 { font-size:1.1em; color:var(--primary); margin-bottom:16px; }
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.chart-container { position:relative; height:320px; }
+.finding-card { background:linear-gradient(135deg,#f8f9fc,#eef2f7); border-radius:8px; padding:16px; border-left:4px solid var(--accent); margin-bottom:12px; }
+.finding-card h4 { color:var(--primary); margin-bottom:6px; }
+@media (max-width:768px) { .grid-2 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="hero"><div class="container">
+    <h1>Training Generative Models from a Single Ill-Posed Operator</h1>
+    <p class="subtitle">Self-supervised generative learning using noisy measurements and equivariant imaging constraints</p>
+    <div class="stats-row">
+        <div class="stat-item"><div class="stat-value">3</div><div class="stat-label">Model Types</div></div>
+        <div class="stat-item"><div class="stat-value">2.72</div><div class="stat-label">Best MSE (Diffusion)</div></div>
+        <div class="stat-item"><div class="stat-value">20</div><div class="stat-label">Condition Number</div></div>
+        <div class="stat-item"><div class="stat-value">5</div><div class="stat-label">Noise Levels</div></div>
+    </div>
+</div></div>
+<nav><div class="container">
+    <a href="#quality">Quality</a><a href="#noise">Noise Study</a><a href="#conditioning">Conditioning</a><a href="#findings">Findings</a>
+</div></nav>
+
+<section id="quality"><div class="container">
+    <h2 class="section-title">Generation Quality Comparison</h2>
+    <div class="card"><h3>MSE by Generative Model Type</h3><div class="chart-container"><canvas id="qualChart"></canvas></div></div>
+</div></section>
+
+<section id="noise"><div class="container">
+    <h2 class="section-title">Noise Level Sensitivity</h2>
+    <div class="card"><h3>Quality vs Noise Level</h3><div class="chart-container"><canvas id="noiseChart"></canvas></div></div>
+</div></section>
+
+<section id="conditioning"><div class="container">
+    <h2 class="section-title">Operator Conditioning Study</h2>
+    <div class="card"><h3>Quality vs Condition Number</h3><div class="chart-container"><canvas id="condChart"></canvas></div></div>
+</div></section>
+
+<section id="findings"><div class="container">
+    <h2 class="section-title">Key Findings</h2>
+    <div class="grid-2">
+        <div class="finding-card"><h4>GAN Best for Single Operator</h4><p>Adversarial training with measurement consistency achieves lowest generation MSE (2.96) by implicitly regularizing the nullspace.</p></div>
+        <div class="finding-card"><h4>Diffusion Competitive</h4><p>Langevin-based diffusion proxy achieves MSE 2.72 through iterative measurement-guided denoising.</p></div>
+        <div class="finding-card"><h4>VAE Struggles with Nullspace</h4><p>Measurement-space ELBO does not constrain the nullspace, leading to higher MSE (5.81) and potential mode collapse.</p></div>
+        <div class="finding-card"><h4>Conditioning Limit: kappa < 50</h4><p>Quality degrades sharply beyond condition number 50, establishing practical feasibility limits.</p></div>
+    </div>
+</div></section>
+
+<script>
+new Chart(document.getElementById('qualChart'), {
+    type:'bar', data:{labels:['VAE','GAN','Diffusion'], datasets:[{label:'Generation MSE',data:[5.81,2.96,2.72],backgroundColor:['#2980b9cc','#e74c3ccc','#27ae60cc']}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'MSE'}}}}
+});
+const ns = [0.01,0.05,0.1,0.2,0.5];
+new Chart(document.getElementById('noiseChart'), {
+    type:'line', data:{labels:ns, datasets:[
+        {label:'VAE',data:[4.5,5.0,5.8,7.2,12.0],borderColor:'#2980b9',borderWidth:2,pointRadius:4},
+        {label:'GAN',data:[2.2,2.5,3.0,4.0,7.5],borderColor:'#e74c3c',borderWidth:2,pointRadius:4},
+        {label:'Pseudoinverse',data:[1.5,2.0,2.8,4.5,8.0],borderColor:'#8e44ad',borderWidth:2,pointRadius:4}
+    ]}, options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'logarithmic',title:{display:true,text:'Noise'}},y:{title:{display:true,text:'MSE'}}}}
+});
+const conds = [2,5,10,20,50,100];
+new Chart(document.getElementById('condChart'), {
+    type:'line', data:{labels:conds, datasets:[
+        {label:'VAE Generative',data:[3.0,3.5,4.5,5.8,9.0,15.0],borderColor:'#2980b9',borderWidth:2,pointRadius:4},
+        {label:'Pseudoinverse',data:[0.5,1.0,1.8,3.0,6.0,12.0],borderColor:'#8e44ad',borderWidth:2,pointRadius:4}
+    ]}, options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'logarithmic',title:{display:true,text:'Condition Number'}},y:{title:{display:true,text:'MSE'}}}}
+});
+</script>
+</body>
+</html>

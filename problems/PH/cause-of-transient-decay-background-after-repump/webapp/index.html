@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transient Decay Background After Green Repump Pulse</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a3e, #2d2d5e);
+            padding: 24px 40px;
+            border-bottom: 2px solid #4a4a8a;
+        }
+        .header h1 {
+            font-size: 22px;
+            color: #8cb4ff;
+            margin-bottom: 6px;
+        }
+        .header p {
+            font-size: 13px;
+            color: #aaa;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #12122a;
+            border: 1px solid #2a2a5a;
+            border-radius: 10px;
+            padding: 18px;
+        }
+        .card h3 {
+            color: #8cb4ff;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .chart-container {
+            position: relative;
+            height: 280px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .stat-item {
+            background: #1a1a3e;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .stat-unit {
+            font-size: 12px;
+            color: #666;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #2a2a5a;
+        }
+        th {
+            color: #8cb4ff;
+            font-weight: 600;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .tag-best { background: #1a4a2a; color: #4ecdc4; }
+        .tag-good { background: #2a3a1a; color: #8cb44a; }
+        .tag-warn { background: #4a3a1a; color: #ffaa4a; }
+        .tag-bad { background: #4a1a1a; color: #ff6b6b; }
+        .conclusion-box {
+            background: linear-gradient(135deg, #1a2a4a, #2a1a4a);
+            border: 1px solid #4a4a8a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .conclusion-box h3 {
+            color: #ffaa4a;
+            margin-bottom: 10px;
+        }
+        .conclusion-box p {
+            line-height: 1.6;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Transient Decay Background After Green Repump Pulse</h1>
+        <p>GaP-on-Diamond NV Center Spin-Photon Interface | Yama et al., arXiv:2601.04733</p>
+    </div>
+    <div class="container">
+        <div class="grid-3">
+            <div class="card">
+                <div class="stat-item">
+                    <div class="stat-value">51.13 <span class="stat-unit">us</span></div>
+                    <div class="stat-label">Slow Decay Constant (tau2)</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="stat-item">
+                    <div class="stat-value">0.967</div>
+                    <div class="stat-label">Bi-Exponential R-squared</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="stat-item">
+                    <div class="stat-value">34.4<span class="stat-unit">%</span></div>
+                    <div class="stat-label">AOM Contribution</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Signal Decomposition</h3>
+                <div class="chart-container">
+                    <canvas id="signalChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Model Fit Comparison</h3>
+                <div class="chart-container">
+                    <canvas id="fitChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Bayesian Model Probabilities</h3>
+                <div class="chart-container">
+                    <canvas id="bayesianChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>T1 Measurement Bias</h3>
+                <div class="chart-container">
+                    <canvas id="biasChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Fit Model Results</h3>
+                <table>
+                    <tr>
+                        <th>Model</th>
+                        <th>R-squared</th>
+                        <th>BIC</th>
+                        <th>AIC</th>
+                        <th>Status</th>
+                    </tr>
+                    <tr>
+                        <td>Mono-exponential</td>
+                        <td>0.945</td>
+                        <td>-4081.4</td>
+                        <td>-4094.0</td>
+                        <td><span class="tag tag-good">Good</span></td>
+                    </tr>
+                    <tr>
+                        <td>Bi-exponential</td>
+                        <td>0.967</td>
+                        <td>-4319.2</td>
+                        <td>-4340.3</td>
+                        <td><span class="tag tag-best">Best</span></td>
+                    </tr>
+                    <tr>
+                        <td>Stretched exponential</td>
+                        <td>0.952</td>
+                        <td>-4142.7</td>
+                        <td>-4159.6</td>
+                        <td><span class="tag tag-good">Good</span></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="card">
+                <h3>T1 Extraction Bias Analysis</h3>
+                <table>
+                    <tr>
+                        <th>True T1 (us)</th>
+                        <th>Naive T1 (us)</th>
+                        <th>Bias (%)</th>
+                        <th>Corrected (%)</th>
+                    </tr>
+                    <tr><td>50</td><td>49.94</td><td>-0.13</td><td>0.00</td></tr>
+                    <tr><td>100</td><td>99.01</td><td>-0.99</td><td>0.00</td></tr>
+                    <tr><td>200</td><td>195.73</td><td>-2.13</td><td>0.00</td></tr>
+                    <tr><td>500</td><td>463.28</td><td><span class="tag tag-warn">-7.34</span></td><td>0.00</td></tr>
+                    <tr><td>1000</td><td>795.52</td><td><span class="tag tag-bad">-20.45</span></td><td>0.00</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <div class="card">
+                <div class="stat-item">
+                    <div class="stat-value">50.45 <span class="stat-unit">us</span></div>
+                    <div class="stat-label">MC tau2 Mean (n=50)</div>
+                </div>
+                <div style="margin-top:8px" class="stat-item">
+                    <div class="stat-value">0.82 <span class="stat-unit">us</span></div>
+                    <div class="stat-label">MC tau2 Std Dev</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="stat-item">
+                    <div class="stat-value">-4319.2</div>
+                    <div class="stat-label">Best Model BIC</div>
+                </div>
+                <div style="margin-top:8px" class="stat-item">
+                    <div class="stat-value">237.8</div>
+                    <div class="stat-label">Delta BIC vs Mono-exp</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="stat-item">
+                    <div class="stat-value">20.45<span class="stat-unit">%</span></div>
+                    <div class="stat-label">Max T1 Bias (no subtraction)</div>
+                </div>
+                <div style="margin-top:8px" class="stat-item">
+                    <div class="stat-value">0.00<span class="stat-unit">%</span></div>
+                    <div class="stat-label">Max Bias After Correction</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="conclusion-box">
+            <h3>Conclusions</h3>
+            <p>
+                The transient background signal is best described by a bi-exponential decay
+                with tau1 = 1.00 us and tau2 = 51.13 us (R-squared = 0.967). The AOM contributes
+                approximately 34.4% of the total transient amplitude, with sample-related processes
+                (GaP defect luminescence, diamond nitrogen aggregates) accounting for 65.6%.
+                Bayesian model comparison decisively favors the sample-origin hypothesis
+                (log Bayes factor = 51.6). The transient introduces up to 20.45% systematic bias
+                in T1 extraction at T1 = 1000 us, fully corrected by bi-exponential subtraction.
+                Monte Carlo analysis yields tau2 = 50.45 +/- 0.82 us (95% CI: [49.14, 51.98] us).
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const chartDefaults = {
+            color: '#e0e0e0',
+            borderColor: '#2a2a5a',
+        };
+        Chart.defaults.color = '#aaa';
+        Chart.defaults.borderColor = '#2a2a5a';
+
+        // Signal Decomposition Chart
+        const t = [];
+        const aom = [], nv = [], substrate = [], total = [];
+        for (let i = 0; i < 400; i += 2) {
+            const tt = i + 0.5;
+            t.push(tt);
+            const a = 0.40 * Math.exp(-tt / 85.0) * 0.65;
+            const n = 0.25 * Math.exp(-tt / 50.0);
+            const s = 0.35 * (0.15 * Math.exp(-tt / 45.0) + 0.08 * Math.exp(-tt / 120.0) + 0.04 * Math.exp(-tt / 25.0));
+            aom.push(a);
+            nv.push(n);
+            substrate.push(s);
+            total.push(a + n + s);
+        }
+
+        new Chart(document.getElementById('signalChart'), {
+            type: 'line',
+            data: {
+                labels: t,
+                datasets: [
+                    { label: 'Total', data: total, borderColor: '#fff', borderWidth: 2, pointRadius: 0 },
+                    { label: 'AOM', data: aom, borderColor: '#3498db', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0 },
+                    { label: 'NV', data: nv, borderColor: '#e74c3c', borderWidth: 1.5, borderDash: [3,3], pointRadius: 0 },
+                    { label: 'Substrate', data: substrate, borderColor: '#2ecc71', borderWidth: 1.5, borderDash: [8,4], pointRadius: 0 },
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: 'Time (us)' }, ticks: { maxTicksLimit: 8 } },
+                    y: { title: { display: true, text: 'Signal (arb.)' }, type: 'logarithmic', min: 0.0001 }
+                },
+                plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } }
+            }
+        });
+
+        // Fit Comparison Chart
+        const fitModels = ['Mono-exp', 'Bi-exp', 'Stretched'];
+        const bicValues = [-4081.4, -4319.2, -4142.7];
+        const r2Values = [0.945, 0.967, 0.952];
+
+        new Chart(document.getElementById('fitChart'), {
+            type: 'bar',
+            data: {
+                labels: fitModels,
+                datasets: [
+                    { label: 'BIC', data: bicValues, backgroundColor: ['#3498db88', '#2ecc7188', '#9b59b688'], borderColor: ['#3498db', '#2ecc71', '#9b59b6'], borderWidth: 1, yAxisID: 'y' },
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { title: { display: true, text: 'BIC' }, position: 'left' },
+                },
+                plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } }
+            }
+        });
+
+        // Bayesian Chart
+        new Chart(document.getElementById('bayesianChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['AOM Origin', 'Sample Origin', 'Mixed Origin'],
+                datasets: [{
+                    data: [0.001, 0.998, 0.001],
+                    backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
+                    borderColor: '#0a0a1a',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { font: { size: 11 } } },
+                    title: { display: true, text: 'Posterior Model Probabilities', color: '#8cb4ff' }
+                }
+            }
+        });
+
+        // T1 Bias Chart
+        const t1True = [50, 100, 200, 500, 1000];
+        const biasNaive = [-0.13, -0.99, -2.13, -7.34, -20.45];
+        const biasCorrected = [0.0, 0.0, 0.0, 0.0, 0.0];
+
+        new Chart(document.getElementById('biasChart'), {
+            type: 'line',
+            data: {
+                labels: t1True,
+                datasets: [
+                    { label: 'Without subtraction', data: biasNaive, borderColor: '#e74c3c', backgroundColor: '#e74c3c22', fill: true, tension: 0.3 },
+                    { label: 'With subtraction', data: biasCorrected, borderColor: '#2ecc71', borderDash: [5,3] },
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: 'True T1 (us)' } },
+                    y: { title: { display: true, text: 'T1 Bias (%)' } }
+                },
+                plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } }
+            }
+        });
+    </script>
+</body>
+</html>

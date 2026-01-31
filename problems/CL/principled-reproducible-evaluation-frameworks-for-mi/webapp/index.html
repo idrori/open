@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAUSAL-BENCH: Principled Evaluation Framework for Mechanistic Interpretability</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a56db;
+  --primary-dark: #1040a0;
+  --primary-light: #e8effc;
+  --accent: #f59e0b;
+  --accent2: #10b981;
+  --accent3: #ef4444;
+  --accent4: #8b5cf6;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04);
+  --radius: 12px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 1rem;
+}
+nav .nav-inner {
+  max-width: 1280px; margin: 0 auto;
+  display: flex; align-items: center; gap: 0.25rem;
+  overflow-x: auto; white-space: nowrap;
+  scrollbar-width: none;
+}
+nav .nav-inner::-webkit-scrollbar { display: none; }
+nav a {
+  text-decoration: none; color: var(--text-secondary);
+  font-size: 0.82rem; font-weight: 500;
+  padding: 0.75rem 0.7rem;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+nav a:hover, nav a.active { color: var(--primary); border-bottom-color: var(--primary); }
+nav .nav-brand { font-weight: 700; color: var(--primary); font-size: 0.9rem; margin-right: 0.5rem; }
+
+.hero {
+  background: linear-gradient(135deg, #1a56db 0%, #7c3aed 50%, #1a56db 100%);
+  background-size: 200% 200%;
+  animation: gradShift 8s ease infinite;
+  color: #fff; padding: 4rem 1.5rem 3rem; text-align: center;
+}
+@keyframes gradShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+.hero h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+.hero .subtitle { font-size: 1.1rem; opacity: 0.92; max-width: 780px; margin: 0 auto 1.5rem; line-height: 1.7; }
+.hero .badge-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+.hero .badge {
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+  padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
+}
+.hero .stats-row {
+  display: flex; gap: 2rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap;
+}
+.hero .stat { text-align: center; }
+.hero .stat-val { font-size: 2rem; font-weight: 800; }
+.hero .stat-label { font-size: 0.75rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.container { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
+section { padding: 3rem 0; }
+section:nth-child(even) { background: #fff; }
+
+.section-header { text-align: center; margin-bottom: 2rem; }
+.section-header h2 { font-size: 1.7rem; font-weight: 700; color: var(--text); margin-bottom: 0.4rem; }
+.section-header p { color: var(--text-secondary); max-width: 700px; margin: 0 auto; font-size: 0.95rem; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.5rem;
+  box-shadow: var(--shadow); transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: var(--shadow-lg); }
+.card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th { background: var(--primary-light); color: var(--primary-dark); font-weight: 600; text-align: left; padding: 0.65rem 0.75rem; white-space: nowrap; }
+td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+tr:hover td { background: #f8fafc; }
+.best { font-weight: 700; color: var(--primary); }
+
+.metric-bar-wrap { margin-bottom: 0.5rem; }
+.metric-bar-label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.2rem; }
+.metric-bar-bg { background: #e2e8f0; border-radius: 999px; height: 8px; overflow: hidden; }
+.metric-bar-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+
+.method-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.method-card {
+  background: var(--card); border-radius: var(--radius); padding: 1.25rem;
+  border-left: 4px solid; box-shadow: var(--shadow);
+}
+.method-card:nth-child(1) { border-left-color: #3b82f6; }
+.method-card:nth-child(2) { border-left-color: #f59e0b; }
+.method-card:nth-child(3) { border-left-color: #10b981; }
+.method-card:nth-child(4) { border-left-color: #8b5cf6; }
+.method-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.4rem; }
+.method-card .desc { font-size: 0.8rem; color: var(--text-secondary); }
+.method-card .id-count { font-size: 1.5rem; font-weight: 800; margin: 0.3rem 0; }
+.method-card .id-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+
+.chart-container { position: relative; width: 100%; }
+.chart-container canvas { max-height: 400px; }
+
+.btn-group { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.btn-toggle {
+  padding: 0.4rem 0.9rem; border: 1px solid var(--border); background: #fff;
+  border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: 500;
+  transition: all 0.2s; color: var(--text-secondary);
+}
+.btn-toggle.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-toggle:hover:not(.active) { background: var(--primary-light); }
+
+.findings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.finding-card {
+  background: var(--card); border-radius: var(--radius); padding: 1.25rem;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.finding-card .finding-num { font-size: 0.7rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+.finding-card h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
+.finding-card p { font-size: 0.85rem; color: var(--text-secondary); }
+
+.component-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;
+  max-width: 600px; margin: 0 auto;
+}
+.comp-cell {
+  text-align: center; padding: 0.6rem 0.3rem; border-radius: 8px;
+  font-size: 0.72rem; font-weight: 600; border: 2px solid transparent;
+  transition: all 0.3s;
+}
+.comp-cell.gt { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
+.comp-cell.fp { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.comp-cell.fn { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+.comp-cell.tn { background: #f1f5f9; color: #94a3b8; }
+.comp-legend { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; font-size: 0.8rem; }
+.comp-legend span { display: flex; align-items: center; gap: 0.4rem; }
+.comp-legend .dot { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+
+footer {
+  background: #1e293b; color: #94a3b8; padding: 2rem 1.5rem;
+  text-align: center; font-size: 0.82rem;
+}
+footer a { color: #60a5fa; text-decoration: none; }
+
+@media (max-width: 900px) {
+  .grid-2, .grid-3, .method-cards, .findings-grid { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 1.7rem; }
+  .hero .stats-row { gap: 1rem; }
+  .component-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 600px) {
+  .component-grid { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="#hero" class="nav-brand">CAUSAL-BENCH</a>
+    <a href="#problem">Problem</a>
+    <a href="#framework">Framework</a>
+    <a href="#methods">Methods</a>
+    <a href="#results">Results</a>
+    <a href="#radar">Multi-Metric</a>
+    <a href="#convergence">Convergence</a>
+    <a href="#scalability">Scalability</a>
+    <a href="#threshold">Threshold</a>
+    <a href="#tradeoff">Trade-offs</a>
+    <a href="#robustness">Robustness</a>
+    <a href="#findings">Findings</a>
+  </div>
+</nav>
+
+<section class="hero" id="hero">
+  <h1>CAUSAL-BENCH</h1>
+  <p class="subtitle">A Principled Evaluation Framework for Mechanistic Interpretability Localization Methods</p>
+  <div class="badge-row">
+    <span class="badge">KDD 2026</span>
+    <span class="badge">Track: Datasets</span>
+    <span class="badge">Category: CL</span>
+    <span class="badge">Mechanistic Interpretability</span>
+  </div>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val">4</div><div class="stat-label">Methods Evaluated</div></div>
+    <div class="stat"><div class="stat-val">5</div><div class="stat-label">Evaluation Metrics</div></div>
+    <div class="stat"><div class="stat-val">6</div><div class="stat-label">Model Scales</div></div>
+    <div class="stat"><div class="stat-val">0.929</div><div class="stat-label">Best Composite Score</div></div>
+  </div>
+</section>
+
+<section id="problem">
+  <div class="container">
+    <div class="section-header">
+      <h2>The Open Problem</h2>
+      <p>Mechanistic interpretability lacks unified benchmarks for comparing localization methods</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Problem Statement</h3>
+        <p style="font-size:0.9rem; color: var(--text-secondary);">Mechanistic interpretability (MI) aims to identify model components causally responsible for specific behaviors in neural networks. However, the field lacks unified benchmarks for comparing localization methods or verifying that identified components are causally optimal. Different methods often disagree, and there is no principled way to determine which identification is most accurate.</p>
+        <p style="font-size:0.85rem; color: var(--text-secondary); margin-top:0.75rem;">Zhang et al. (2026) identified that developing principled and reproducible evaluation frameworks remains an open challenge for MI.</p>
+      </div>
+      <div class="card">
+        <h3>Our Solution: Three Pillars</h3>
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <div style="background:var(--primary); color:#fff; border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0;">1</div>
+            <div><strong style="font-size:0.9rem;">Multi-Metric Scoring</strong><p style="font-size:0.82rem; color:var(--text-secondary);">Five metrics combined via weighted harmonic mean to prevent single-metric gaming.</p></div>
+          </div>
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <div style="background:var(--accent2); color:#fff; border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0;">2</div>
+            <div><strong style="font-size:0.9rem;">Cross-Method Convergence</strong><p style="font-size:0.82rem; color:var(--text-secondary);">Permutation testing to assess agreement beyond chance without ground truth.</p></div>
+          </div>
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <div style="background:var(--accent); color:#fff; border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0;">3</div>
+            <div><strong style="font-size:0.9rem;">Planted-Circuit Benchmarks</strong><p style="font-size:0.82rem; color:var(--text-secondary);">Synthetic models with known ground-truth circuits for objective evaluation.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="framework" style="background:#fff;">
+  <div class="container">
+    <div class="section-header">
+      <h2>Evaluation Metrics</h2>
+      <p>Five complementary dimensions measuring localization quality</p>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:1rem;">
+      <div class="card" style="text-align:center; padding:1.25rem 1rem;">
+        <div style="font-size:1.8rem; margin-bottom:0.3rem; font-weight:700; color:var(--primary);">F</div>
+        <h3 style="font-size:0.85rem;">Faithfulness</h3>
+        <p style="font-size:0.78rem; color:var(--text-secondary);">Fraction of behavior preserved when only identified components are active</p>
+      </div>
+      <div class="card" style="text-align:center; padding:1.25rem 1rem;">
+        <div style="font-size:1.8rem; margin-bottom:0.3rem; font-weight:700; color:var(--accent2);">C</div>
+        <h3 style="font-size:0.85rem;">Completeness</h3>
+        <p style="font-size:0.78rem; color:var(--text-secondary);">Fraction of behavior destroyed when identified components are ablated</p>
+      </div>
+      <div class="card" style="text-align:center; padding:1.25rem 1rem;">
+        <div style="font-size:1.8rem; margin-bottom:0.3rem; font-weight:700; color:var(--accent);">M</div>
+        <h3 style="font-size:0.85rem;">Minimality</h3>
+        <p style="font-size:0.78rem; color:var(--text-secondary);">How selective the identification is: 1 - |S| / |C|</p>
+      </div>
+      <div class="card" style="text-align:center; padding:1.25rem 1rem;">
+        <div style="font-size:1.8rem; margin-bottom:0.3rem; font-weight:700; color:var(--accent4);">S</div>
+        <h3 style="font-size:0.85rem;">Stability</h3>
+        <p style="font-size:0.78rem; color:var(--text-secondary);">Mean pairwise Jaccard similarity across seed perturbations</p>
+      </div>
+      <div class="card" style="text-align:center; padding:1.25rem 1rem;">
+        <div style="font-size:1.4rem; margin-bottom:0.3rem; font-weight:700; color:var(--accent3);">COS</div>
+        <h3 style="font-size:0.85rem;">Causal Optimality</h3>
+        <p style="font-size:0.78rem; color:var(--text-secondary);">Fraction of components surviving greedy subset reduction</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="methods">
+  <div class="container">
+    <div class="section-header">
+      <h2>Localization Methods</h2>
+      <p>Four methods evaluated on a 4-layer, 4-head synthetic transformer (20 components, 5 ground-truth)</p>
+    </div>
+    <div class="method-cards">
+      <div class="method-card">
+        <h4>Activation Patching</h4>
+        <div class="id-count">7</div>
+        <div class="id-label">Components Identified</div>
+        <p class="desc" style="margin-top:0.5rem;">Measures marginal behavior drop for each component. 5 TP, 2 FP, 0 FN.</p>
+      </div>
+      <div class="method-card">
+        <h4>Gradient Attribution</h4>
+        <div class="id-count">10</div>
+        <div class="id-label">Components Identified</div>
+        <p class="desc" style="margin-top:0.5rem;">Noisy gradient-based approximation. 5 TP, 5 FP, 0 FN. Prone to false positives.</p>
+      </div>
+      <div class="method-card">
+        <h4>Ablation Scanning</h4>
+        <div class="id-count">16</div>
+        <div class="id-label">Components Identified</div>
+        <p class="desc" style="margin-top:0.5rem;">Systematic component removal. 5 TP, 11 FP, 0 FN. Extensive over-identification.</p>
+      </div>
+      <div class="method-card">
+        <h4>Circuit Discovery</h4>
+        <div class="id-count">4</div>
+        <div class="id-label">Components Identified</div>
+        <p class="desc" style="margin-top:0.5rem;">Greedy iterative pruning. 4 TP, 0 FP, 1 FN. Perfect precision.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="components" style="background:#fff;">
+  <div class="container">
+    <div class="section-header">
+      <h2>Component Identification Map</h2>
+      <p>Select a method to see which transformer components were identified</p>
+    </div>
+    <div class="btn-group" style="justify-content:center;" id="compBtnGroup">
+      <button class="btn-toggle active" data-method="ActPatch">Activation Patching</button>
+      <button class="btn-toggle" data-method="GradAttr">Gradient Attribution</button>
+      <button class="btn-toggle" data-method="AblScan">Ablation Scanning</button>
+      <button class="btn-toggle" data-method="CircDisc">Circuit Discovery</button>
+    </div>
+    <div class="component-grid" id="componentGrid"></div>
+    <div class="comp-legend">
+      <span><span class="dot" style="background:#dbeafe; border:2px solid #3b82f6;"></span> True Positive</span>
+      <span><span class="dot" style="background:#fef3c7; border:2px solid #f59e0b;"></span> False Positive</span>
+      <span><span class="dot" style="background:#fee2e2; border:2px solid #ef4444;"></span> False Negative</span>
+      <span><span class="dot" style="background:#f1f5f9; border:2px solid #e2e8f0;"></span> True Negative</span>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="container">
+    <div class="section-header">
+      <h2>Main Evaluation Results</h2>
+      <p>Comprehensive multi-metric evaluation on the 4L/4H synthetic transformer benchmark</p>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th><th>|S|</th><th>Faithfulness</th><th>Completeness</th><th>Minimality</th><th>Stability</th><th>COS</th><th>Precision</th><th>Recall</th><th>F1</th><th>Composite</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Act. Patching</strong></td><td>7</td>
+              <td class="best">1.000</td><td class="best">0.992</td><td>0.650</td><td>0.417</td><td>0.571</td><td>0.714</td><td class="best">1.000</td><td>0.833</td><td>0.650</td>
+            </tr>
+            <tr>
+              <td><strong>Grad. Attribution</strong></td><td>10</td>
+              <td class="best">1.000</td><td>0.977</td><td>0.500</td><td>0.533</td><td>0.400</td><td>0.500</td><td class="best">1.000</td><td>0.667</td><td>0.595</td>
+            </tr>
+            <tr>
+              <td><strong>Ablation Scan</strong></td><td>16</td>
+              <td class="best">1.000</td><td>0.980</td><td>0.200</td><td>0.505</td><td>0.250</td><td>0.313</td><td class="best">1.000</td><td>0.476</td><td>0.385</td>
+            </tr>
+            <tr style="background:#f0f4ff;">
+              <td><strong>Circuit Discovery</strong></td><td>4</td>
+              <td>0.978</td><td>0.899</td><td class="best">0.800</td><td class="best">1.000</td><td class="best">1.000</td><td class="best">1.000</td><td>0.800</td><td class="best">0.889</td><td class="best">0.929</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:1.5rem;">
+      <div class="card">
+        <h3>Precision, Recall &amp; F1</h3>
+        <div class="chart-container"><canvas id="prfChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Components Identified vs Ground Truth (5)</h3>
+        <div class="chart-container"><canvas id="identChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="radar" style="background:#fff;">
+  <div class="container">
+    <div class="section-header">
+      <h2>Multi-Metric Profiles</h2>
+      <p>Radar chart showing the multi-dimensional evaluation of each method</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="chart-container"><canvas id="radarChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Metric Breakdown</h3>
+        <div id="metricBars"></div>
+        <div class="btn-group" style="margin-top:1rem; justify-content:center;" id="metricBtnGroup">
+          <button class="btn-toggle active" data-method="ActPatch">Act. Patch</button>
+          <button class="btn-toggle" data-method="GradAttr">Grad. Attr</button>
+          <button class="btn-toggle" data-method="AblScan">Abl. Scan</button>
+          <button class="btn-toggle" data-method="CircDisc">Circ. Disc</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="convergence">
+  <div class="container">
+    <div class="section-header">
+      <h2>Cross-Method Convergence</h2>
+      <p>Permutation testing reveals statistically significant agreement (z = 3.75, p = 0.001)</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Null Distribution vs Observed</h3>
+        <div class="chart-container"><canvas id="nullDistChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Pairwise Jaccard Similarity</h3>
+        <div class="chart-container"><canvas id="heatmapChart"></canvas></div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:1.5rem;">
+      <div class="card" style="text-align:center;">
+        <div style="font-size:2.2rem; font-weight:800; color:var(--primary);">3.75</div>
+        <div style="font-size:0.85rem; color:var(--text-secondary);">Z-Score (p = 0.001)</div>
+      </div>
+      <div class="card">
+        <h3>Consensus Set (All 4 methods)</h3>
+        <ul style="font-size:0.85rem; list-style:none; color:var(--text-secondary);">
+          <li>L0.attn_head[0]</li>
+          <li>L0.attn_head[1]</li>
+          <li>L1.mlp</li>
+          <li>L2.attn_head[0]</li>
+        </ul>
+        <p style="font-size:0.8rem; margin-top:0.5rem; color:var(--primary); font-weight:600;">4 of 5 ground-truth components</p>
+      </div>
+      <div class="card">
+        <h3>Majority Set (&gt;2 methods)</h3>
+        <ul style="font-size:0.85rem; list-style:none; color:var(--text-secondary);">
+          <li>L0.attn_head[0]</li>
+          <li>L0.attn_head[1]</li>
+          <li>L1.mlp</li>
+          <li>L2.attn_head[0]</li>
+          <li>L3.mlp</li>
+        </ul>
+        <p style="font-size:0.8rem; margin-top:0.5rem; color:var(--accent2); font-weight:600;">Exactly recovers all 5 ground-truth components</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="scalability" style="background:#fff;">
+  <div class="container">
+    <div class="section-header">
+      <h2>Scalability Across Model Sizes</h2>
+      <p>F1 scores and convergence z-scores across six architectural scales (6 to 156 components)</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>F1 Score vs Model Size</h3>
+        <div class="chart-container"><canvas id="scalF1Chart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Convergence Z-Score vs Model Size</h3>
+        <div class="chart-container"><canvas id="scalZChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:1.5rem;">
+      <h3>Scalability Results Table</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Config</th><th>N</th><th>AP F1</th><th>GA F1</th><th>AS F1</th><th>CD F1</th><th>z-score</th><th>p-value</th></tr></thead>
+          <tbody>
+            <tr><td>2L/2H</td><td>6</td><td>0.600</td><td>0.600</td><td>0.600</td><td class="best">0.750</td><td>0.760</td><td>0.260</td></tr>
+            <tr><td>4L/4H</td><td>20</td><td>0.833</td><td>0.667</td><td>0.476</td><td class="best">0.889</td><td>4.710</td><td>0.000</td></tr>
+            <tr><td>6L/6H</td><td>42</td><td>0.333</td><td>0.455</td><td>0.444</td><td class="best">0.889</td><td>1.682</td><td>0.062</td></tr>
+            <tr><td>8L/8H</td><td>72</td><td>0.213</td><td>0.286</td><td>0.189</td><td class="best">0.889</td><td>2.325</td><td>0.014</td></tr>
+            <tr><td>10L/10H</td><td>110</td><td>0.133</td><td>0.250</td><td>0.179</td><td class="best">0.889</td><td>1.173</td><td>0.124</td></tr>
+            <tr><td>12L/12H</td><td>156</td><td>0.071</td><td>0.175</td><td>0.111</td><td class="best">0.889</td><td>2.606</td><td>0.002</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="threshold">
+  <div class="container">
+    <div class="section-header">
+      <h2>Threshold Sensitivity Analysis</h2>
+      <p>How detection threshold affects performance metrics for different methods</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Activation Patching: Metrics vs Threshold</h3>
+        <div class="chart-container"><canvas id="threshChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Gradient Attribution: Metrics vs Threshold</h3>
+        <div class="chart-container"><canvas id="threshGradChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tradeoff" style="background:#fff;">
+  <div class="container">
+    <div class="section-header">
+      <h2>Faithfulness vs Minimality Trade-off</h2>
+      <p>Random subsets reveal the fundamental trade-off; ground truth and Circuit Discovery achieve near-optimal balance</p>
+    </div>
+    <div class="card">
+      <div class="chart-container" style="max-height:500px;"><canvas id="tradeoffChart"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section id="robustness">
+  <div class="container">
+    <div class="section-header">
+      <h2>Composite Score Robustness</h2>
+      <p>Method ranking CD &gt; AP &gt; GA &gt; AS preserved across all weight configurations</p>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Composite Scores by Weight Config</h3>
+        <div class="chart-container"><canvas id="robustChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Weight Configurations</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Weights</th><th>AP</th><th>GA</th><th>AS</th><th>CD</th></tr></thead>
+            <tbody>
+              <tr><td>Equal</td><td>0.795</td><td>0.666</td><td>0.415</td><td class="best">0.914</td></tr>
+              <tr><td>Faith.-heavy</td><td>0.829</td><td>0.725</td><td>0.500</td><td class="best">0.933</td></tr>
+              <tr><td>Minim.-heavy</td><td>0.744</td><td>0.607</td><td>0.318</td><td class="best">0.879</td></tr>
+              <tr><td>COS-heavy</td><td>0.713</td><td>0.559</td><td>0.349</td><td class="best">0.946</td></tr>
+              <tr><td>Faith.+Compl.</td><td>0.840</td><td>0.733</td><td>0.496</td><td class="best">0.931</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="findings" style="background:#fff;">
+  <div class="container">
+    <div class="section-header">
+      <h2>Key Findings</h2>
+      <p>Principal results from the CAUSAL-BENCH evaluation</p>
+    </div>
+    <div class="findings-grid">
+      <div class="finding-card">
+        <div class="finding-num">Finding 1</div>
+        <h4>Circuit Discovery Achieves Best Overall Score</h4>
+        <p>With a composite score of 0.929, Circuit Discovery leads through perfect stability (1.000), perfect COS (1.000), and highest minimality (0.800). It identifies only 4 components, all in the ground truth.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding 2</div>
+        <h4>Faithfulness-Minimality Trade-off</h4>
+        <p>Methods that identify more components achieve higher faithfulness but lower minimality and causal optimality. This fundamental trade-off is systematically exposed by the multi-metric framework.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding 3</div>
+        <h4>Cross-Method Convergence Works</h4>
+        <p>The majority-vote set exactly recovers all 5 ground-truth components (z = 3.75, p = 0.001), demonstrating that cross-method agreement is a reliable signal even without ground truth.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding 4</div>
+        <h4>Rankings Robust to Metric Weighting</h4>
+        <p>The ranking CD &gt; AP &gt; GA &gt; AS is preserved across all five weight configurations, with composite scores for CD ranging from 0.879 to 0.946, supporting the default equal-weight configuration.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding 5</div>
+        <h4>Circuit Discovery Scales Best</h4>
+        <p>F1 for CD remains constant at 0.889 across all model sizes (6-156 components), while threshold-based methods degrade significantly as the search space grows.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding 6</div>
+        <h4>Activation Patching Offers Best Recall Balance</h4>
+        <p>AP identifies all 5 ground-truth components (F1 = 0.833) with only 2 false positives, providing the best trade-off among methods with perfect recall.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p><strong>CAUSAL-BENCH</strong> -- A Principled Evaluation Framework for Mechanistic Interpretability Localization Methods</p>
+    <p style="margin-top:0.5rem;">KDD 2026 | Datasets Track | Category: Computation and Language (CL)</p>
+    <p style="margin-top:0.5rem;">Based on the open problem identified by <a href="https://www.emergentmind.com/papers/2601.14004">Zhang et al., Jan 2026</a></p>
+  </div>
+</footer>
+
+<script>
+(function() {
+  // ---- DATA ----
+  var methodColors = {
+    ActPatch: '#3b82f6', GradAttr: '#f59e0b', AblScan: '#10b981', CircDisc: '#8b5cf6'
+  };
+  var methodLabels = {
+    ActPatch: 'Act. Patching', GradAttr: 'Grad. Attribution', AblScan: 'Ablation Scan', CircDisc: 'Circuit Discovery'
+  };
+  var metricsData = {
+    ActPatch:  {F:1.000, C:0.992, M:0.650, S:0.417, COS:0.571},
+    GradAttr:  {F:1.000, C:0.977, M:0.500, S:0.533, COS:0.400},
+    AblScan:   {F:1.000, C:0.980, M:0.200, S:0.505, COS:0.250},
+    CircDisc:  {F:0.978, C:0.899, M:0.800, S:1.000, COS:1.000}
+  };
+
+  var componentsMap = {
+    ActPatch: { tp:["L0.attn_head[0]","L0.attn_head[1]","L1.mlp","L2.attn_head[0]","L3.mlp"], fp:["L0.attn_head[3]","L2.attn_head[2]"], fn:[] },
+    GradAttr: { tp:["L0.attn_head[0]","L0.attn_head[1]","L1.mlp","L2.attn_head[0]","L3.mlp"], fp:["L0.attn_head[2]","L0.mlp","L1.attn_head[3]","L2.attn_head[3]","L3.attn_head[2]"], fn:[] },
+    AblScan:  { tp:["L0.attn_head[0]","L0.attn_head[1]","L1.mlp","L2.attn_head[0]","L3.mlp"], fp:["L1.attn_head[0]","L1.attn_head[1]","L1.attn_head[2]","L2.attn_head[1]","L2.attn_head[2]","L2.attn_head[3]","L2.mlp","L3.attn_head[0]","L3.attn_head[1]","L3.attn_head[2]","L3.attn_head[3]"], fn:[] },
+    CircDisc: { tp:["L0.attn_head[0]","L0.attn_head[1]","L1.mlp","L2.attn_head[0]"], fp:[], fn:["L3.mlp"] }
+  };
+
+  var allComps = [
+    "L0.attn_head[0]","L0.attn_head[1]","L0.attn_head[2]","L0.attn_head[3]","L0.mlp",
+    "L1.attn_head[0]","L1.attn_head[1]","L1.attn_head[2]","L1.attn_head[3]","L1.mlp",
+    "L2.attn_head[0]","L2.attn_head[1]","L2.attn_head[2]","L2.attn_head[3]","L2.mlp",
+    "L3.attn_head[0]","L3.attn_head[1]","L3.attn_head[2]","L3.attn_head[3]","L3.mlp"
+  ];
+
+  // ---- COMPONENT MAP ----
+  function buildComponentMap(method) {
+    var grid = document.getElementById('componentGrid');
+    var d = componentsMap[method];
+    while (grid.firstChild) grid.removeChild(grid.firstChild);
+    allComps.forEach(function(c) {
+      var cls = 'tn';
+      if (d.tp.indexOf(c) !== -1) cls = 'gt';
+      else if (d.fp.indexOf(c) !== -1) cls = 'fp';
+      else if (d.fn.indexOf(c) !== -1) cls = 'fn';
+      var el = document.createElement('div');
+      el.className = 'comp-cell ' + cls;
+      el.textContent = c.replace('attn_head','h').replace('.mlp','.MLP');
+      grid.appendChild(el);
+    });
+  }
+
+  document.getElementById('compBtnGroup').addEventListener('click', function(e) {
+    if (e.target.tagName === 'BUTTON') {
+      var btns = this.querySelectorAll('.btn-toggle');
+      for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+      e.target.classList.add('active');
+      buildComponentMap(e.target.getAttribute('data-method'));
+    }
+  });
+  buildComponentMap('ActPatch');
+
+  // ---- METRIC BARS ----
+  var barColors = {F:'#3b82f6', C:'#10b981', M:'#f59e0b', S:'#8b5cf6', COS:'#ef4444'};
+  var metricNames = [{k:'F',l:'Faithfulness'},{k:'C',l:'Completeness'},{k:'M',l:'Minimality'},{k:'S',l:'Stability'},{k:'COS',l:'Causal Optimality'}];
+
+  function buildMetricBars(method) {
+    var d = metricsData[method];
+    var wrap = document.getElementById('metricBars');
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    metricNames.forEach(function(m) {
+      var outer = document.createElement('div');
+      outer.className = 'metric-bar-wrap';
+      var lbl = document.createElement('div');
+      lbl.className = 'metric-bar-label';
+      var s1 = document.createElement('span');
+      s1.textContent = m.l;
+      var s2 = document.createElement('span');
+      s2.textContent = d[m.k].toFixed(3);
+      lbl.appendChild(s1);
+      lbl.appendChild(s2);
+      var bg = document.createElement('div');
+      bg.className = 'metric-bar-bg';
+      var fill = document.createElement('div');
+      fill.className = 'metric-bar-fill';
+      fill.style.width = (d[m.k] * 100) + '%';
+      fill.style.background = barColors[m.k];
+      bg.appendChild(fill);
+      outer.appendChild(lbl);
+      outer.appendChild(bg);
+      wrap.appendChild(outer);
+    });
+  }
+
+  document.getElementById('metricBtnGroup').addEventListener('click', function(e) {
+    if (e.target.tagName === 'BUTTON') {
+      var btns = this.querySelectorAll('.btn-toggle');
+      for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+      e.target.classList.add('active');
+      buildMetricBars(e.target.getAttribute('data-method'));
+    }
+  });
+  buildMetricBars('ActPatch');
+
+  // ---- CHARTS ----
+  var commonOpts = { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } } };
+
+  // Precision/Recall/F1
+  new Chart(document.getElementById('prfChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Act. Patching', 'Grad. Attribution', 'Ablation Scan', 'Circuit Discovery'],
+      datasets: [
+        { label: 'Precision', data: [0.714, 0.500, 0.313, 1.000], backgroundColor: '#3b82f6' },
+        { label: 'Recall', data: [1.000, 1.000, 1.000, 0.800], backgroundColor: '#10b981' },
+        { label: 'F1', data: [0.833, 0.667, 0.476, 0.889], backgroundColor: '#8b5cf6' }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { y: { beginAtZero: true, max: 1.05 } } }
+  });
+
+  // Identified components
+  new Chart(document.getElementById('identChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Act. Patching', 'Grad. Attribution', 'Ablation Scan', 'Circuit Discovery'],
+      datasets: [
+        { label: 'True Positives', data: [5, 5, 5, 4], backgroundColor: '#3b82f6' },
+        { label: 'False Positives', data: [2, 5, 11, 0], backgroundColor: '#f59e0b' },
+        { label: 'False Negatives', data: [0, 0, 0, 1], backgroundColor: '#ef4444' }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } } }
+  });
+
+  // Radar
+  var radarDS = [];
+  var methods = ['ActPatch','GradAttr','AblScan','CircDisc'];
+  methods.forEach(function(m) {
+    radarDS.push({
+      label: methodLabels[m],
+      data: [metricsData[m].F, metricsData[m].C, metricsData[m].M, metricsData[m].S, metricsData[m].COS],
+      borderColor: methodColors[m],
+      backgroundColor: methodColors[m] + '20',
+      pointBackgroundColor: methodColors[m],
+      borderWidth: 2, pointRadius: 3
+    });
+  });
+  new Chart(document.getElementById('radarChart'), {
+    type: 'radar',
+    data: { labels: ['Faithfulness', 'Completeness', 'Minimality', 'Stability', 'COS'], datasets: radarDS },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { r: { min: 0, max: 1, ticks: { stepSize: 0.2, font: { size: 10 } }, pointLabels: { font: { size: 11 } } } } }
+  });
+
+  // Null Distribution
+  var nullSample = [0.298,0.243,0.314,0.254,0.244,0.229,0.253,0.274,0.231,0.265,0.279,0.279,0.231,0.254,0.256,0.343,0.226,0.216,0.278,0.207,0.292,0.236,0.222,0.266,0.220,0.294,0.227,0.213,0.260,0.238,0.224,0.305,0.268,0.270,0.238,0.277,0.256,0.288,0.256,0.258,0.251,0.298,0.291,0.250,0.244,0.310,0.230,0.271,0.243,0.201,0.257,0.222,0.243,0.221,0.276,0.232,0.283,0.269,0.323,0.244,0.255,0.393,0.331,0.279,0.289,0.310,0.263,0.260,0.274,0.267,0.243,0.272,0.256,0.230,0.230,0.249,0.217,0.286,0.237,0.243];
+  var binEdges = [];
+  var binLabels = [];
+  var binCnts = [];
+  for (var b = 0.17; b <= 0.42; b += 0.01) {
+    binEdges.push(Math.round(b * 100) / 100);
+    binLabels.push(b.toFixed(2));
+  }
+  for (var i = 0; i < binEdges.length; i++) {
+    var lo = binEdges[i];
+    var hi = (i < binEdges.length - 1) ? binEdges[i + 1] : 1;
+    var cnt = 0;
+    for (var j = 0; j < nullSample.length; j++) {
+      if (nullSample[j] >= lo && nullSample[j] < hi) cnt++;
+    }
+    binCnts.push(cnt);
+  }
+  new Chart(document.getElementById('nullDistChart'), {
+    type: 'bar',
+    data: {
+      labels: binLabels,
+      datasets: [{ label: 'Null Distribution', data: binCnts, backgroundColor: '#94a3b8', borderRadius: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: { x: { title: { display: true, text: 'Mean Pairwise Jaccard Similarity' } }, y: { title: { display: true, text: 'Count' }, beginAtZero: true } }
+    },
+    plugins: [{
+      id: 'obsLine',
+      afterDraw: function(chart) {
+        var ctx = chart.ctx;
+        var xScale = chart.scales.x;
+        var yScale = chart.scales.y;
+        var xFrac = (0.393 - 0.17) / (0.43 - 0.17);
+        var xPx = xScale.left + xFrac * (xScale.right - xScale.left);
+        ctx.save();
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath();
+        ctx.moveTo(xPx, yScale.top);
+        ctx.lineTo(xPx, yScale.bottom);
+        ctx.stroke();
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('Observed = 0.393', xPx + 5, yScale.top + 15);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // Pairwise Jaccard
+  new Chart(document.getElementById('heatmapChart'), {
+    type: 'bar',
+    data: {
+      labels: ['AP-GA','AP-AS','AP-CD','GA-AS','GA-CD','AS-CD'],
+      datasets: [{ label: 'Jaccard Similarity', data: [0.417, 0.353, 0.571, 0.368, 0.400, 0.250], backgroundColor: ['#60a5fa','#60a5fa','#3b82f6','#60a5fa','#60a5fa','#93c5fd'], borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true, indexAxis: 'y',
+      scales: { x: { min: 0, max: 0.7, title: { display: true, text: 'Jaccard Similarity' } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Scalability F1
+  var scalConfigs = ['2L/2H (6)','4L/4H (20)','6L/6H (42)','8L/8H (72)','10L/10H (110)','12L/12H (156)'];
+  new Chart(document.getElementById('scalF1Chart'), {
+    type: 'line',
+    data: {
+      labels: scalConfigs,
+      datasets: [
+        {label:'Act. Patching', data:[0.600,0.833,0.333,0.213,0.133,0.071], borderColor:'#3b82f6', fill:false, tension:0.3, pointRadius:4},
+        {label:'Grad. Attribution', data:[0.600,0.667,0.455,0.286,0.250,0.175], borderColor:'#f59e0b', fill:false, tension:0.3, pointRadius:4},
+        {label:'Ablation Scan', data:[0.600,0.476,0.444,0.189,0.179,0.111], borderColor:'#10b981', fill:false, tension:0.3, pointRadius:4},
+        {label:'Circuit Discovery', data:[0.750,0.889,0.889,0.889,0.889,0.889], borderColor:'#8b5cf6', borderWidth:3, fill:false, tension:0.3, pointRadius:5}
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { y: { min: 0, max: 1, title: { display: true, text: 'F1 Score' } } } }
+  });
+
+  // Scalability Z
+  var scalZ = [0.760, 4.710, 1.682, 2.325, 1.173, 2.606];
+  new Chart(document.getElementById('scalZChart'), {
+    type: 'bar',
+    data: {
+      labels: scalConfigs,
+      datasets: [{ label: 'Z-Score', data: scalZ, backgroundColor: scalZ.map(function(z) { return z >= 1.96 ? '#3b82f6' : '#93c5fd'; }), borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Z-Score' } } } },
+    plugins: [{
+      id: 'sigLine',
+      afterDraw: function(chart) {
+        var ctx = chart.ctx;
+        var yScale = chart.scales.y;
+        var xScale = chart.scales.x;
+        var yPx = yScale.getPixelForValue(1.96);
+        ctx.save();
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath();
+        ctx.moveTo(xScale.left, yPx);
+        ctx.lineTo(xScale.right, yPx);
+        ctx.stroke();
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('z = 1.96', xScale.right - 50, yPx - 5);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // Threshold - Activation Patching
+  new Chart(document.getElementById('threshChart'), {
+    type: 'line',
+    data: {
+      labels: [0.001,0.005,0.01,0.02,0.03,0.04,0.05,0.07,0.1,0.15,0.2,0.3],
+      datasets: [
+        {label:'Faithfulness', data:[0.962,1.000,0.972,1.000,1.000,0.994,0.910,0.300,0.688,0,0,0], borderColor:'#3b82f6', tension:0.3, pointRadius:3, fill:false},
+        {label:'F1', data:[0.833,0.625,0.714,0.588,0.714,1.000,0.889,0.571,0.750,0,0,0], borderColor:'#8b5cf6', borderWidth:3, tension:0.3, pointRadius:4, fill:false},
+        {label:'Minimality', data:[0.650,0.450,0.550,0.400,0.550,0.750,0.800,0.900,0.850,1.000,1.000,1.000], borderColor:'#f59e0b', tension:0.3, pointRadius:3, fill:false},
+        {label:'COS', data:[0.571,0.364,0.444,0.333,0.444,0.800,1.000,1.000,1.000,1.000,1.000,1.000], borderColor:'#ef4444', tension:0.3, pointRadius:3, fill:false, borderDash:[4,2]}
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { x: { title: { display: true, text: 'Threshold' } }, y: { min: 0, max: 1.05 } } },
+    plugins: [{
+      id: 'optThresh',
+      afterDraw: function(chart) {
+        var ctx = chart.ctx;
+        var xScale = chart.scales.x;
+        var yScale = chart.scales.y;
+        var xPx = xScale.getPixelForValue(5);
+        ctx.save();
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(xPx, yScale.top);
+        ctx.lineTo(xPx, yScale.bottom);
+        ctx.stroke();
+        ctx.fillStyle = '#10b981';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('Optimal', xPx + 3, yScale.top + 12);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // Threshold - Gradient Attribution
+  new Chart(document.getElementById('threshGradChart'), {
+    type: 'line',
+    data: {
+      labels: [0.05,0.1,0.15,0.2,0.25,0.3,0.4,0.5,0.6,0.8,1.0],
+      datasets: [
+        {label:'Faithfulness', data:[1.000,1.000,1.000,1.000,0.920,1.000,1.000,0.967,0.993,0.932,0.684], borderColor:'#3b82f6', tension:0.3, pointRadius:3, fill:false},
+        {label:'F1', data:[0.588,0.667,0.667,0.667,0.667,0.909,0.909,0.909,1.000,0.889,0.750], borderColor:'#8b5cf6', borderWidth:3, tension:0.3, pointRadius:4, fill:false},
+        {label:'Minimality', data:[0.400,0.500,0.500,0.500,0.500,0.700,0.700,0.700,0.750,0.800,0.850], borderColor:'#f59e0b', tension:0.3, pointRadius:3, fill:false},
+        {label:'COS', data:[0.333,0.400,0.400,0.400,0.400,0.667,0.667,0.667,0.800,1.000,1.000], borderColor:'#ef4444', tension:0.3, pointRadius:3, fill:false, borderDash:[4,2]}
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { x: { title: { display: true, text: 'Threshold' } }, y: { min: 0, max: 1.05 } } }
+  });
+
+  // Trade-off scatter
+  var randPts = [
+    {x:0.024,y:0.95},{x:0,y:0.95},{x:0.026,y:0.95},{x:0.310,y:0.90},{x:0.071,y:0.90},
+    {x:0,y:0.90},{x:0.039,y:0.85},{x:0.089,y:0.85},{x:0.351,y:0.85},
+    {x:0.010,y:0.80},{x:0.310,y:0.80},{x:0.748,y:0.80},
+    {x:0.287,y:0.75},{x:0.094,y:0.75},{x:0.301,y:0.75},
+    {x:0.054,y:0.70},{x:0.306,y:0.70},{x:0.327,y:0.70},
+    {x:0.277,y:0.65},{x:0.688,y:0.65},{x:0.732,y:0.65},
+    {x:0.676,y:0.60},{x:0.719,y:0.60},{x:0.971,y:0.60},
+    {x:0.305,y:0.55},{x:0.670,y:0.55},{x:0.928,y:0.55},
+    {x:0.682,y:0.50},{x:0.329,y:0.50},{x:0.087,y:0.50},
+    {x:0.925,y:0.40},{x:0.759,y:0.40},{x:0.945,y:0.40},
+    {x:0.939,y:0.30},{x:0.998,y:0.30},{x:0.711,y:0.30},
+    {x:0.909,y:0.25},{x:1.000,y:0.25},{x:0.675,y:0.25},
+    {x:0.886,y:0.20},{x:0.937,y:0.20},{x:0.973,y:0.20},
+    {x:0.995,y:0.15},{x:0.994,y:0.15},{x:0.913,y:0.15},
+    {x:0.961,y:0.10},{x:1.000,y:0.10},{x:0.943,y:0.10},
+    {x:0.995,y:0.05},{x:1.000,y:0.05},{x:0.987,y:0.05},
+    {x:0.990,y:0.00},{x:1.000,y:0.00},{x:1.000,y:0.00}
+  ];
+
+  new Chart(document.getElementById('tradeoffChart'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'Random Subsets', data: randPts, backgroundColor: 'rgba(148,163,184,0.5)', pointRadius: 5, pointHoverRadius: 7 },
+        { label: 'Ground Truth', data: [{x:0.996, y:0.750}], backgroundColor: '#ef4444', pointRadius: 12, pointStyle: 'star', borderColor: '#ef4444', borderWidth: 2 },
+        { label: 'Act. Patching', data: [{x:1.000, y:0.650}], backgroundColor: '#3b82f6', pointRadius: 9, pointStyle: 'rectRot', borderColor: '#3b82f6', borderWidth: 2 },
+        { label: 'Grad. Attribution', data: [{x:1.000, y:0.500}], backgroundColor: '#f59e0b', pointRadius: 9, pointStyle: 'rectRot', borderColor: '#f59e0b', borderWidth: 2 },
+        { label: 'Ablation Scan', data: [{x:1.000, y:0.200}], backgroundColor: '#10b981', pointRadius: 9, pointStyle: 'rectRot', borderColor: '#10b981', borderWidth: 2 },
+        { label: 'Circuit Discovery', data: [{x:0.978, y:0.800}], backgroundColor: '#8b5cf6', pointRadius: 9, pointStyle: 'rectRot', borderColor: '#8b5cf6', borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true, aspectRatio: 1.5,
+      plugins: { legend: { labels: { font: { size: 11 } } } },
+      scales: {
+        x: { min: 0, max: 1.05, title: { display: true, text: 'Faithfulness' } },
+        y: { min: 0, max: 1.0, title: { display: true, text: 'Minimality' } }
+      }
+    }
+  });
+
+  // Robustness
+  new Chart(document.getElementById('robustChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Equal','Faith.-heavy','Minim.-heavy','COS-heavy','Faith.+Compl.'],
+      datasets: [
+        {label:'Act. Patching', data:[0.795,0.829,0.744,0.713,0.840], backgroundColor:'#3b82f6', borderRadius:3},
+        {label:'Grad. Attribution', data:[0.666,0.725,0.607,0.559,0.733], backgroundColor:'#f59e0b', borderRadius:3},
+        {label:'Ablation Scan', data:[0.415,0.500,0.318,0.349,0.496], backgroundColor:'#10b981', borderRadius:3},
+        {label:'Circuit Discovery', data:[0.914,0.933,0.879,0.946,0.931], backgroundColor:'#8b5cf6', borderRadius:3}
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { y: { min: 0, max: 1, title: { display: true, text: 'Composite Score' } } } }
+  });
+
+  // ---- NAV ACTIVE STATE ----
+  var sections = document.querySelectorAll('section[id]');
+  var navLinks = document.querySelectorAll('nav a:not(.nav-brand)');
+  window.addEventListener('scroll', function() {
+    var current = '';
+    for (var i = 0; i < sections.length; i++) {
+      if (window.scrollY >= sections[i].offsetTop - 120) current = sections[i].getAttribute('id');
+    }
+    for (var j = 0; j < navLinks.length; j++) {
+      navLinks[j].classList.remove('active');
+      if (navLinks[j].getAttribute('href') === '#' + current) navLinks[j].classList.add('active');
+    }
+  });
+})();
+</script>
+</body>
+</html>

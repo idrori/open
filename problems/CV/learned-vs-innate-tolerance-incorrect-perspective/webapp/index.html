@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learned vs Innate Tolerance for Incorrect Perspective</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a365d;
+  --primary-light: #2c5282;
+  --accent: #e67e22;
+  --accent2: #2ecc71;
+  --bg: #f7fafc;
+  --card-bg: #ffffff;
+  --text: #2d3748;
+  --text-muted: #718096;
+  --border: #e2e8f0;
+  --conv-color: #3498db;
+  --attn-color: #9b59b6;
+  --mlp-color: #e74c3c;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--primary);
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+nav .nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+}
+nav a {
+  color: rgba(255,255,255,0.85);
+  text-decoration: none;
+  padding: 14px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+  border-bottom: 3px solid transparent;
+}
+nav a:hover, nav a.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+  border-bottom-color: var(--accent);
+}
+nav .nav-brand {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fff;
+  padding: 14px 20px;
+  border-bottom: none;
+}
+
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 60%, #2b6cb0 100%);
+  color: #fff;
+  padding: 80px 20px 60px;
+  text-align: center;
+}
+.hero h1 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  max-width: 900px;
+  margin: 0 auto 16px;
+  line-height: 1.25;
+}
+.hero .subtitle {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  max-width: 700px;
+  margin: 0 auto 30px;
+  line-height: 1.6;
+}
+.hero .meta-badges {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hero .badge {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.findings-strip {
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  padding: 40px 20px;
+}
+.findings-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+.finding-card {
+  text-align: center;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.finding-card .number {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+.finding-card .label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+section {
+  padding: 60px 20px;
+}
+section:nth-child(even) {
+  background: #fff;
+}
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+.section-desc {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 32px;
+  max-width: 800px;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  margin-bottom: 24px;
+}
+.card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 16px;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 24px;
+}
+.chart-box {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.chart-box h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 16px;
+}
+.chart-box canvas {
+  max-height: 400px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+thead {
+  background: var(--primary);
+  color: #fff;
+}
+th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+tbody tr:hover {
+  background: #f0f5ff;
+}
+.family-conv { color: var(--conv-color); font-weight: 600; }
+.family-attn { color: var(--attn-color); font-weight: 600; }
+.family-mlp  { color: var(--mlp-color); font-weight: 600; }
+
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.controls button {
+  padding: 8px 20px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.88rem;
+  transition: all 0.2s;
+}
+.controls button:hover {
+  border-color: var(--primary-light);
+  color: var(--primary);
+}
+.controls button.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+.method-item {
+  padding: 20px;
+  background: var(--bg);
+  border-radius: 10px;
+  border-left: 4px solid var(--accent);
+}
+.method-item h4 {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--primary);
+}
+.method-item p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.equation-box {
+  background: #edf2f7;
+  border-radius: 10px;
+  padding: 24px 32px;
+  text-align: center;
+  font-size: 1.15rem;
+  margin: 20px 0;
+  border: 1px solid var(--border);
+  font-family: 'Georgia', serif;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.7rem; }
+  .hero { padding: 50px 16px 40px; }
+  .chart-grid { grid-template-columns: 1fr; }
+  nav .nav-inner { gap: 0; }
+  nav a { padding: 12px 12px; font-size: 0.8rem; }
+  section { padding: 40px 16px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <span class="nav-brand">KDD 2026</span>
+    <a href="#findings">Key Findings</a>
+    <a href="#problem">Problem</a>
+    <a href="#methods">Methods</a>
+    <a href="#degradation">Degradation</a>
+    <a href="#decomposition">Decomposition</a>
+    <a href="#correlation">Correlation</a>
+    <a href="#distortion">By Distortion</a>
+    <a href="#heatmap">Heatmap</a>
+    <a href="#tables">Data Tables</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>Learned vs Innate Tolerance for Incorrect Perspective</h1>
+  <p class="subtitle">A factorial framework decomposing perspective tolerance in vision architectures into innate (architectural) and learned (training) components across 288 experimental conditions.</p>
+  <div class="meta-badges">
+    <span class="badge">Category: Computer Vision</span>
+    <span class="badge">Track: Research</span>
+    <span class="badge">6 Architectures</span>
+    <span class="badge">4 Distortion Types</span>
+    <span class="badge">288 Conditions</span>
+  </div>
+</div>
+
+<div class="findings-strip" id="findings">
+  <div class="findings-grid">
+    <div class="finding-card">
+      <div class="number">0.6432</div>
+      <div class="label">Highest innate tolerance (ResNet-50) -- retains ~64% of base accuracy without perspective-diverse training</div>
+    </div>
+    <div class="finding-card">
+      <div class="number">r = -0.9937</div>
+      <div class="label">Near-perfect negative correlation between spatial invariance score and learned fraction</div>
+    </div>
+    <div class="finding-card">
+      <div class="number">22.59%</div>
+      <div class="label">MLP-Mixer-B learned fraction -- highest reliance on training data diversity among all architectures</div>
+    </div>
+    <div class="finding-card">
+      <div class="number">288</div>
+      <div class="label">Total experimental conditions: 6 architectures x 2 regimes x 4 distortions x 6 severity levels</div>
+    </div>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="container">
+    <h2 class="section-title">Problem Statement</h2>
+    <p class="section-desc">Modern vision architectures vary dramatically in their ability to recognize objects under perspective distortions, yet the source of this tolerance remains poorly understood.</p>
+    <div class="card">
+      <p>Two broad sources of perspective tolerance exist: <strong>innate tolerance</strong> arising from architectural design choices (e.g., convolutional weight sharing, pooling hierarchies) and <strong>learned tolerance</strong> acquired through training on perspective-diverse data. Prior studies typically conflate these two sources, making it difficult to attribute observed robustness. This work disentangles these contributions through a controlled factorial experimental design.</p>
+    </div>
+  </div>
+</section>
+
+<section id="methods">
+  <div class="container">
+    <h2 class="section-title">Methodology</h2>
+    <p class="section-desc">Factorial design with two training regimes (diverse vs. restricted) across calibrated perspective distortions.</p>
+
+    <div class="equation-box">
+      &tau;<sub>total</sub> = &tau;<sub>innate</sub> + &tau;<sub>learned</sub>
+    </div>
+
+    <div class="method-grid">
+      <div class="method-item">
+        <h4>Tilt</h4>
+        <p>Rotation around horizontal axis up to 60 degrees, simulating looking up/down at objects.</p>
+      </div>
+      <div class="method-item">
+        <h4>Pan</h4>
+        <p>Rotation around vertical axis up to 60 degrees, simulating lateral viewpoint change.</p>
+      </div>
+      <div class="method-item">
+        <h4>Off-axis</h4>
+        <p>Translation of the principal point, simulating objects at the periphery of the field of view.</p>
+      </div>
+      <div class="method-item">
+        <h4>Combined</h4>
+        <p>Composition of all three primitives, representing worst-case compound distortion.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px">
+      <h3>Architectures Evaluated</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Architecture</th><th>Family</th><th>Spatial Inv. Score (&sigma;)</th><th>Depth</th><th>Params (M)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ResNet-50</td><td class="family-conv">Convolutional</td><td>0.72</td><td>50</td><td>25.6</td></tr>
+            <tr><td>ConvNeXt-T</td><td class="family-conv">Convolutional</td><td>0.68</td><td>28</td><td>28.6</td></tr>
+            <tr><td>ViT-B/16</td><td class="family-attn">Attention</td><td>0.45</td><td>12</td><td>86.6</td></tr>
+            <tr><td>DeiT-S</td><td class="family-attn">Attention</td><td>0.48</td><td>12</td><td>22.1</td></tr>
+            <tr><td>Swin-T</td><td class="family-attn">Attention</td><td>0.61</td><td>24</td><td>28.3</td></tr>
+            <tr><td>MLP-Mixer-B</td><td class="family-mlp">MLP</td><td>0.35</td><td>12</td><td>59.9</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="degradation">
+  <div class="container">
+    <h2 class="section-title">Accuracy Degradation Curves</h2>
+    <p class="section-desc">How accuracy drops with increasing distortion severity. Solid = diverse training, dashed = restricted training.</p>
+    <div class="controls" id="distortion-controls">
+      <button class="active" data-distortion="combined">Combined</button>
+      <button data-distortion="tilt">Tilt</button>
+      <button data-distortion="pan">Pan</button>
+      <button data-distortion="off-axis">Off-axis</button>
+    </div>
+    <div class="chart-box">
+      <canvas id="degradationChart" height="380"></canvas>
+    </div>
+  </div>
+</section>
+
+<section id="decomposition">
+  <div class="container">
+    <h2 class="section-title">Tolerance Decomposition</h2>
+    <p class="section-desc">Stacked innate and learned components per architecture, averaged across all severity levels and distortion types.</p>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Innate vs Learned Tolerance</h3>
+        <canvas id="decompositionChart" height="350"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Learned Fraction by Architecture</h3>
+        <canvas id="learnedFractionChart" height="350"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="correlation">
+  <div class="container">
+    <h2 class="section-title">Spatial Invariance vs Learned Fraction</h2>
+    <p class="section-desc">A near-perfect negative correlation (r = -0.9937) reveals a fundamental capacity-data tradeoff.</p>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Correlation: &sigma; vs &phi; (r = -0.9937)</h3>
+        <canvas id="correlationChart" height="350"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Family Comparison: Mean Tolerance</h3>
+        <canvas id="familyChart" height="350"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="distortion">
+  <div class="container">
+    <h2 class="section-title">Analysis by Distortion Type</h2>
+    <p class="section-desc">Off-axis distortions are best tolerated innately. Combined distortions yield the highest learned fraction.</p>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Innate vs Learned by Distortion Type</h3>
+        <canvas id="distortionChart" height="350"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Severity-Dependent Gap (Combined Distortion)</h3>
+        <canvas id="gapChart" height="350"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="heatmap">
+  <div class="container">
+    <h2 class="section-title">Learned Fraction Heatmap</h2>
+    <p class="section-desc">Learned fraction at high severity (s >= 0.6) across all architecture-distortion combinations. Darker shading indicates greater dependence on diverse training.</p>
+    <div class="chart-box">
+      <canvas id="heatmapChart" height="300"></canvas>
+    </div>
+  </div>
+</section>
+
+<section id="tables">
+  <div class="container">
+    <h2 class="section-title">Data Tables</h2>
+    <p class="section-desc">Complete numerical results from all experimental conditions.</p>
+
+    <div class="card">
+      <h3>Tolerance Decomposition by Architecture</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Architecture</th><th>Family</th><th>&sigma;</th><th>&tau;<sub>innate</sub></th><th>&tau;<sub>learned</sub></th><th>&phi; (Learned Frac.)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ResNet-50</td><td class="family-conv">Conv</td><td>0.72</td><td>0.6432 &plusmn; 0.1307</td><td>0.1197 &plusmn; 0.0357</td><td>16.46%</td></tr>
+            <tr><td>ConvNeXt-T</td><td class="family-conv">Conv</td><td>0.68</td><td>0.6322 &plusmn; 0.1300</td><td>0.1208 &plusmn; 0.0313</td><td>16.80%</td></tr>
+            <tr><td>ViT-B/16</td><td class="family-attn">Attention</td><td>0.45</td><td>0.5658 &plusmn; 0.1431</td><td>0.1377 &plusmn; 0.0432</td><td>20.78%</td></tr>
+            <tr><td>DeiT-S</td><td class="family-attn">Attention</td><td>0.48</td><td>0.5759 &plusmn; 0.1394</td><td>0.1335 &plusmn; 0.0337</td><td>19.90%</td></tr>
+            <tr><td>Swin-T</td><td class="family-attn">Attention</td><td>0.61</td><td>0.6171 &plusmn; 0.1422</td><td>0.1310 &plusmn; 0.0421</td><td>18.50%</td></tr>
+            <tr><td>MLP-Mixer-B</td><td class="family-mlp">MLP</td><td>0.35</td><td>0.5405 &plusmn; 0.1383</td><td>0.1475 &plusmn; 0.0417</td><td>22.59%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Tolerance Decomposition by Distortion Type</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Distortion</th><th>&tau;<sub>innate</sub></th><th>&tau;<sub>learned</sub></th><th>&phi; (Learned Frac.)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Tilt</td><td>0.6148 &plusmn; 0.1344</td><td>0.1329 &plusmn; 0.0366</td><td>18.67%</td></tr>
+            <tr><td>Pan</td><td>0.5823 &plusmn; 0.1367</td><td>0.1324 &plusmn; 0.0389</td><td>19.57%</td></tr>
+            <tr><td>Off-axis</td><td>0.6509 &plusmn; 0.1299</td><td>0.1299 &plusmn; 0.0428</td><td>17.40%</td></tr>
+            <tr><td>Combined</td><td>0.5352 &plusmn; 0.1422</td><td>0.1317 &plusmn; 0.0390</td><td>21.04%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Base Accuracy (Severity = 0, Diverse Training)</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Architecture</th><th>Base Accuracy (a<sub>0</sub>)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ResNet-50</td><td>0.7640</td></tr>
+            <tr><td>ConvNeXt-T</td><td>0.8173</td></tr>
+            <tr><td>ViT-B/16</td><td>0.8101</td></tr>
+            <tr><td>DeiT-S</td><td>0.7980</td></tr>
+            <tr><td>Swin-T</td><td>0.8211</td></tr>
+            <tr><td>MLP-Mixer-B</td><td>0.7480</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Detailed Results: Combined Distortion</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Architecture</th><th>Severity</th><th>Acc. (Diverse)</th><th>Acc. (Restricted)</th><th>&tau;<sub>innate</sub></th><th>&tau;<sub>learned</sub></th><th>&phi;</th></tr>
+          </thead>
+          <tbody id="detailedTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer style="background:var(--primary);color:rgba(255,255,255,0.7);text-align:center;padding:30px 20px;font-size:0.85rem;">
+  <p>KDD 2026 Research Track -- Learned vs Innate Tolerance for Incorrect Perspective</p>
+  <p style="margin-top:6px;opacity:0.6;">288 experimental conditions | 6 architectures | 4 distortion types | 6 severity levels</p>
+</footer>
+
+<script>
+// ============================================================
+// EMBEDDED DATA
+// ============================================================
+var architectureSummary = [
+  {"architecture":"ResNet-50","family":"convolutional","spatial_invariance_score":0.72,"mean_innate_tolerance":0.6432,"std_innate_tolerance":0.1307,"mean_learned_tolerance":0.1197,"std_learned_tolerance":0.0357,"mean_learned_fraction":0.1646},
+  {"architecture":"ConvNeXt-T","family":"convolutional","spatial_invariance_score":0.68,"mean_innate_tolerance":0.6322,"std_innate_tolerance":0.13,"mean_learned_tolerance":0.1208,"std_learned_tolerance":0.0313,"mean_learned_fraction":0.168},
+  {"architecture":"ViT-B/16","family":"attention","spatial_invariance_score":0.45,"mean_innate_tolerance":0.5658,"std_innate_tolerance":0.1431,"mean_learned_tolerance":0.1377,"std_learned_tolerance":0.0432,"mean_learned_fraction":0.2078},
+  {"architecture":"DeiT-S","family":"attention","spatial_invariance_score":0.48,"mean_innate_tolerance":0.5759,"std_innate_tolerance":0.1394,"mean_learned_tolerance":0.1335,"std_learned_tolerance":0.0337,"mean_learned_fraction":0.199},
+  {"architecture":"Swin-T","family":"attention","spatial_invariance_score":0.61,"mean_innate_tolerance":0.6171,"std_innate_tolerance":0.1422,"mean_learned_tolerance":0.131,"std_learned_tolerance":0.0421,"mean_learned_fraction":0.185},
+  {"architecture":"MLP-Mixer-B","family":"mlp","spatial_invariance_score":0.35,"mean_innate_tolerance":0.5405,"std_innate_tolerance":0.1383,"mean_learned_tolerance":0.1475,"std_learned_tolerance":0.0417,"mean_learned_fraction":0.2259}
+];
+
+var distortionSummary = {
+  "tilt":{"mean_innate_tolerance":0.6148,"std_innate_tolerance":0.1344,"mean_learned_tolerance":0.1329,"std_learned_tolerance":0.0366,"mean_learned_fraction":0.1867},
+  "pan":{"mean_innate_tolerance":0.5823,"std_innate_tolerance":0.1367,"mean_learned_tolerance":0.1324,"std_learned_tolerance":0.0389,"mean_learned_fraction":0.1957},
+  "off-axis":{"mean_innate_tolerance":0.6509,"std_innate_tolerance":0.1299,"mean_learned_tolerance":0.1299,"std_learned_tolerance":0.0428,"mean_learned_fraction":0.174},
+  "combined":{"mean_innate_tolerance":0.5352,"std_innate_tolerance":0.1422,"mean_learned_tolerance":0.1317,"std_learned_tolerance":0.039,"mean_learned_fraction":0.2104}
+};
+
+var decomposition = {
+  "ResNet-50":{"tilt":{"0.0":{"accuracy_diverse":0.764,"accuracy_restricted":0.7577,"innate_tolerance":0.9918,"learned_tolerance":0.0082,"learned_fraction":0.0082},"0.2":{"accuracy_diverse":0.7073,"accuracy_restricted":0.6483,"innate_tolerance":0.8486,"learned_tolerance":0.0772,"learned_fraction":0.0834},"0.4":{"accuracy_diverse":0.6351,"accuracy_restricted":0.5644,"innate_tolerance":0.7387,"learned_tolerance":0.0925,"learned_fraction":0.1113},"0.6":{"accuracy_diverse":0.5918,"accuracy_restricted":0.488,"innate_tolerance":0.6387,"learned_tolerance":0.1359,"learned_fraction":0.1754},"0.8":{"accuracy_diverse":0.563,"accuracy_restricted":0.4378,"innate_tolerance":0.573,"learned_tolerance":0.1639,"learned_fraction":0.2224},"1.0":{"accuracy_diverse":0.5042,"accuracy_restricted":0.3827,"innate_tolerance":0.5009,"learned_tolerance":0.159,"learned_fraction":0.241}},"pan":{"0.0":{"accuracy_diverse":0.764,"accuracy_restricted":0.764,"innate_tolerance":1.0,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.6862,"accuracy_restricted":0.6428,"innate_tolerance":0.8414,"learned_tolerance":0.0568,"learned_fraction":0.0632},"0.4":{"accuracy_diverse":0.6217,"accuracy_restricted":0.537,"innate_tolerance":0.7029,"learned_tolerance":0.1109,"learned_fraction":0.1362},"0.6":{"accuracy_diverse":0.5597,"accuracy_restricted":0.4571,"innate_tolerance":0.5983,"learned_tolerance":0.1343,"learned_fraction":0.1833},"0.8":{"accuracy_diverse":0.5242,"accuracy_restricted":0.4112,"innate_tolerance":0.5382,"learned_tolerance":0.1479,"learned_fraction":0.2156},"1.0":{"accuracy_diverse":0.468,"accuracy_restricted":0.368,"innate_tolerance":0.4817,"learned_tolerance":0.1309,"learned_fraction":0.2137}},"off-axis":{"0.0":{"accuracy_diverse":0.7627,"accuracy_restricted":0.764,"innate_tolerance":1.0,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.7095,"accuracy_restricted":0.6726,"innate_tolerance":0.8804,"learned_tolerance":0.0483,"learned_fraction":0.052},"0.4":{"accuracy_diverse":0.6705,"accuracy_restricted":0.5698,"innate_tolerance":0.7458,"learned_tolerance":0.1318,"learned_fraction":0.1502},"0.6":{"accuracy_diverse":0.6141,"accuracy_restricted":0.5226,"innate_tolerance":0.684,"learned_tolerance":0.1198,"learned_fraction":0.149},"0.8":{"accuracy_diverse":0.5662,"accuracy_restricted":0.4701,"innate_tolerance":0.6153,"learned_tolerance":0.1258,"learned_fraction":0.1697},"1.0":{"accuracy_diverse":0.5395,"accuracy_restricted":0.4261,"innate_tolerance":0.5577,"learned_tolerance":0.1484,"learned_fraction":0.2102}},"combined":{"0.0":{"accuracy_diverse":0.7611,"accuracy_restricted":0.7543,"innate_tolerance":0.9873,"learned_tolerance":0.0089,"learned_fraction":0.0089},"0.2":{"accuracy_diverse":0.6571,"accuracy_restricted":0.6114,"innate_tolerance":0.8003,"learned_tolerance":0.0598,"learned_fraction":0.0695},"0.4":{"accuracy_diverse":0.5849,"accuracy_restricted":0.4963,"innate_tolerance":0.6496,"learned_tolerance":0.116,"learned_fraction":0.1515},"0.6":{"accuracy_diverse":0.52,"accuracy_restricted":0.428,"innate_tolerance":0.5602,"learned_tolerance":0.1204,"learned_fraction":0.1769},"0.8":{"accuracy_diverse":0.4813,"accuracy_restricted":0.3811,"innate_tolerance":0.4988,"learned_tolerance":0.1312,"learned_fraction":0.2082},"1.0":{"accuracy_diverse":0.4539,"accuracy_restricted":0.3133,"innate_tolerance":0.4101,"learned_tolerance":0.184,"learned_fraction":0.3098}}},
+  "ConvNeXt-T":{"tilt":{"0.0":{"accuracy_diverse":0.8173,"accuracy_restricted":0.821,"innate_tolerance":1.0045,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.7643,"accuracy_restricted":0.6897,"innate_tolerance":0.8439,"learned_tolerance":0.0913,"learned_fraction":0.0976},"0.4":{"accuracy_diverse":0.6937,"accuracy_restricted":0.5868,"innate_tolerance":0.718,"learned_tolerance":0.1308,"learned_fraction":0.1541},"0.6":{"accuracy_diverse":0.619,"accuracy_restricted":0.5143,"innate_tolerance":0.6293,"learned_tolerance":0.1281,"learned_fraction":0.1691},"0.8":{"accuracy_diverse":0.5649,"accuracy_restricted":0.4397,"innate_tolerance":0.538,"learned_tolerance":0.1532,"learned_fraction":0.2216},"1.0":{"accuracy_diverse":0.5269,"accuracy_restricted":0.4123,"innate_tolerance":0.5045,"learned_tolerance":0.1402,"learned_fraction":0.2175}},"pan":{"0.0":{"accuracy_diverse":0.821,"accuracy_restricted":0.8139,"innate_tolerance":0.9958,"learned_tolerance":0.0087,"learned_fraction":0.0086},"0.2":{"accuracy_diverse":0.7216,"accuracy_restricted":0.6681,"innate_tolerance":0.8174,"learned_tolerance":0.0655,"learned_fraction":0.0741},"0.4":{"accuracy_diverse":0.6528,"accuracy_restricted":0.5652,"innate_tolerance":0.6915,"learned_tolerance":0.1072,"learned_fraction":0.1342},"0.6":{"accuracy_diverse":0.5904,"accuracy_restricted":0.5045,"innate_tolerance":0.6173,"learned_tolerance":0.1051,"learned_fraction":0.1455},"0.8":{"accuracy_diverse":0.548,"accuracy_restricted":0.4321,"innate_tolerance":0.5287,"learned_tolerance":0.1418,"learned_fraction":0.2115},"1.0":{"accuracy_diverse":0.5118,"accuracy_restricted":0.3865,"innate_tolerance":0.4729,"learned_tolerance":0.1533,"learned_fraction":0.2448}},"off-axis":{"0.0":{"accuracy_diverse":0.821,"accuracy_restricted":0.821,"innate_tolerance":1.0045,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.7558,"accuracy_restricted":0.7083,"innate_tolerance":0.8666,"learned_tolerance":0.0581,"learned_fraction":0.0628},"0.4":{"accuracy_diverse":0.6987,"accuracy_restricted":0.6272,"innate_tolerance":0.7674,"learned_tolerance":0.0875,"learned_fraction":0.1023},"0.6":{"accuracy_diverse":0.6469,"accuracy_restricted":0.5389,"innate_tolerance":0.6594,"learned_tolerance":0.1321,"learned_fraction":0.167},"0.8":{"accuracy_diverse":0.6155,"accuracy_restricted":0.4859,"innate_tolerance":0.5945,"learned_tolerance":0.1586,"learned_fraction":0.2106},"1.0":{"accuracy_diverse":0.5709,"accuracy_restricted":0.4394,"innate_tolerance":0.5376,"learned_tolerance":0.1609,"learned_fraction":0.2303}},"combined":{"0.0":{"accuracy_diverse":0.8118,"accuracy_restricted":0.8097,"innate_tolerance":0.9907,"learned_tolerance":0.0026,"learned_fraction":0.0026},"0.2":{"accuracy_diverse":0.6986,"accuracy_restricted":0.6385,"innate_tolerance":0.7812,"learned_tolerance":0.0735,"learned_fraction":0.086},"0.4":{"accuracy_diverse":0.6154,"accuracy_restricted":0.5315,"innate_tolerance":0.6503,"learned_tolerance":0.1027,"learned_fraction":0.1363},"0.6":{"accuracy_diverse":0.5481,"accuracy_restricted":0.4359,"innate_tolerance":0.5333,"learned_tolerance":0.1373,"learned_fraction":0.2047},"0.8":{"accuracy_diverse":0.4939,"accuracy_restricted":0.3739,"innate_tolerance":0.4575,"learned_tolerance":0.1468,"learned_fraction":0.243},"1.0":{"accuracy_diverse":0.4706,"accuracy_restricted":0.3547,"innate_tolerance":0.434,"learned_tolerance":0.1418,"learned_fraction":0.2463}}},
+  "ViT-B/16":{"tilt":{"0.0":{"accuracy_diverse":0.8101,"accuracy_restricted":0.7993,"innate_tolerance":0.9867,"learned_tolerance":0.0133,"learned_fraction":0.0133},"0.2":{"accuracy_diverse":0.7165,"accuracy_restricted":0.6406,"innate_tolerance":0.7908,"learned_tolerance":0.0937,"learned_fraction":0.1059},"0.4":{"accuracy_diverse":0.6387,"accuracy_restricted":0.5319,"innate_tolerance":0.6566,"learned_tolerance":0.1318,"learned_fraction":0.1672},"0.6":{"accuracy_diverse":0.5537,"accuracy_restricted":0.4363,"innate_tolerance":0.5386,"learned_tolerance":0.1449,"learned_fraction":0.212},"0.8":{"accuracy_diverse":0.5256,"accuracy_restricted":0.3971,"innate_tolerance":0.4902,"learned_tolerance":0.1586,"learned_fraction":0.2445},"1.0":{"accuracy_diverse":0.4999,"accuracy_restricted":0.3469,"innate_tolerance":0.4282,"learned_tolerance":0.1889,"learned_fraction":0.3061}},"pan":{"0.0":{"accuracy_diverse":0.812,"accuracy_restricted":0.8106,"innate_tolerance":1.0006,"learned_tolerance":0.0017,"learned_fraction":0.0017},"0.2":{"accuracy_diverse":0.6914,"accuracy_restricted":0.6217,"innate_tolerance":0.7674,"learned_tolerance":0.086,"learned_fraction":0.1008},"0.4":{"accuracy_diverse":0.59,"accuracy_restricted":0.4975,"innate_tolerance":0.6141,"learned_tolerance":0.1142,"learned_fraction":0.1568},"0.6":{"accuracy_diverse":0.5438,"accuracy_restricted":0.4211,"innate_tolerance":0.5198,"learned_tolerance":0.1515,"learned_fraction":0.2256},"0.8":{"accuracy_diverse":0.4951,"accuracy_restricted":0.3549,"innate_tolerance":0.4381,"learned_tolerance":0.1731,"learned_fraction":0.2832},"1.0":{"accuracy_diverse":0.4632,"accuracy_restricted":0.3156,"innate_tolerance":0.3896,"learned_tolerance":0.1822,"learned_fraction":0.3187}},"off-axis":{"0.0":{"accuracy_diverse":0.8056,"accuracy_restricted":0.8091,"innate_tolerance":0.9988,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.7156,"accuracy_restricted":0.6902,"innate_tolerance":0.852,"learned_tolerance":0.0314,"learned_fraction":0.0355},"0.4":{"accuracy_diverse":0.6489,"accuracy_restricted":0.5592,"innate_tolerance":0.6903,"learned_tolerance":0.1107,"learned_fraction":0.1382},"0.6":{"accuracy_diverse":0.6135,"accuracy_restricted":0.4817,"innate_tolerance":0.5946,"learned_tolerance":0.1627,"learned_fraction":0.2148},"0.8":{"accuracy_diverse":0.5546,"accuracy_restricted":0.4319,"innate_tolerance":0.5331,"learned_tolerance":0.1515,"learned_fraction":0.2212},"1.0":{"accuracy_diverse":0.5251,"accuracy_restricted":0.3824,"innate_tolerance":0.472,"learned_tolerance":0.1762,"learned_fraction":0.2718}},"combined":{"0.0":{"accuracy_diverse":0.8115,"accuracy_restricted":0.812,"innate_tolerance":1.0023,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.6571,"accuracy_restricted":0.6146,"innate_tolerance":0.7587,"learned_tolerance":0.0525,"learned_fraction":0.0647},"0.4":{"accuracy_diverse":0.5799,"accuracy_restricted":0.4671,"innate_tolerance":0.5766,"learned_tolerance":0.1392,"learned_fraction":0.1945},"0.6":{"accuracy_diverse":0.49,"accuracy_restricted":0.3738,"innate_tolerance":0.4614,"learned_tolerance":0.1434,"learned_fraction":0.2371},"0.8":{"accuracy_diverse":0.461,"accuracy_restricted":0.3227,"innate_tolerance":0.3983,"learned_tolerance":0.1707,"learned_fraction":0.3},"1.0":{"accuracy_diverse":0.4354,"accuracy_restricted":0.2801,"innate_tolerance":0.3458,"learned_tolerance":0.1917,"learned_fraction":0.3567}}},
+  "DeiT-S":{"tilt":{"0.0":{"accuracy_diverse":0.798,"accuracy_restricted":0.7935,"innate_tolerance":0.9944,"learned_tolerance":0.0056,"learned_fraction":0.0056},"0.2":{"accuracy_diverse":0.7119,"accuracy_restricted":0.636,"innate_tolerance":0.797,"learned_tolerance":0.0951,"learned_fraction":0.1066},"0.4":{"accuracy_diverse":0.6238,"accuracy_restricted":0.5477,"innate_tolerance":0.6863,"learned_tolerance":0.0954,"learned_fraction":0.122},"0.6":{"accuracy_diverse":0.57,"accuracy_restricted":0.4483,"innate_tolerance":0.5618,"learned_tolerance":0.1525,"learned_fraction":0.2135},"0.8":{"accuracy_diverse":0.5171,"accuracy_restricted":0.3906,"innate_tolerance":0.4895,"learned_tolerance":0.1585,"learned_fraction":0.2446},"1.0":{"accuracy_diverse":0.4874,"accuracy_restricted":0.3634,"innate_tolerance":0.4554,"learned_tolerance":0.1554,"learned_fraction":0.2544}},"pan":{"0.0":{"accuracy_diverse":0.7824,"accuracy_restricted":0.798,"innate_tolerance":1.0,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.6933,"accuracy_restricted":0.6231,"innate_tolerance":0.7808,"learned_tolerance":0.088,"learned_fraction":0.1013},"0.4":{"accuracy_diverse":0.5997,"accuracy_restricted":0.5128,"innate_tolerance":0.6426,"learned_tolerance":0.1089,"learned_fraction":0.1449},"0.6":{"accuracy_diverse":0.5399,"accuracy_restricted":0.4307,"innate_tolerance":0.5397,"learned_tolerance":0.1368,"learned_fraction":0.2023},"0.8":{"accuracy_diverse":0.4912,"accuracy_restricted":0.3619,"innate_tolerance":0.4535,"learned_tolerance":0.162,"learned_fraction":0.2632},"1.0":{"accuracy_diverse":0.4701,"accuracy_restricted":0.3343,"innate_tolerance":0.4189,"learned_tolerance":0.1702,"learned_fraction":0.2889}},"off-axis":{"0.0":{"accuracy_diverse":0.7956,"accuracy_restricted":0.7754,"innate_tolerance":0.9717,"learned_tolerance":0.0253,"learned_fraction":0.0254},"0.2":{"accuracy_diverse":0.7253,"accuracy_restricted":0.6661,"innate_tolerance":0.8347,"learned_tolerance":0.0742,"learned_fraction":0.0816},"0.4":{"accuracy_diverse":0.66,"accuracy_restricted":0.5582,"innate_tolerance":0.6995,"learned_tolerance":0.1276,"learned_fraction":0.1542},"0.6":{"accuracy_diverse":0.6007,"accuracy_restricted":0.4892,"innate_tolerance":0.613,"learned_tolerance":0.1397,"learned_fraction":0.1856},"0.8":{"accuracy_diverse":0.5446,"accuracy_restricted":0.4211,"innate_tolerance":0.5277,"learned_tolerance":0.1548,"learned_fraction":0.2268},"1.0":{"accuracy_diverse":0.5066,"accuracy_restricted":0.3847,"innate_tolerance":0.4821,"learned_tolerance":0.1528,"learned_fraction":0.2406}},"combined":{"0.0":{"accuracy_diverse":0.7856,"accuracy_restricted":0.7816,"innate_tolerance":0.9794,"learned_tolerance":0.005,"learned_fraction":0.0051},"0.2":{"accuracy_diverse":0.6531,"accuracy_restricted":0.5932,"innate_tolerance":0.7434,"learned_tolerance":0.0751,"learned_fraction":0.0917},"0.4":{"accuracy_diverse":0.553,"accuracy_restricted":0.4649,"innate_tolerance":0.5826,"learned_tolerance":0.1104,"learned_fraction":0.1593},"0.6":{"accuracy_diverse":0.4888,"accuracy_restricted":0.3667,"innate_tolerance":0.4595,"learned_tolerance":0.153,"learned_fraction":0.2498},"0.8":{"accuracy_diverse":0.451,"accuracy_restricted":0.3188,"innate_tolerance":0.3995,"learned_tolerance":0.1657,"learned_fraction":0.2931},"1.0":{"accuracy_diverse":0.4353,"accuracy_restricted":0.2804,"innate_tolerance":0.3514,"learned_tolerance":0.1941,"learned_fraction":0.3558}}},
+  "Swin-T":{"tilt":{"0.0":{"accuracy_diverse":0.8211,"accuracy_restricted":0.835,"innate_tolerance":1.0169,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.746,"accuracy_restricted":0.7145,"innate_tolerance":0.8702,"learned_tolerance":0.0384,"learned_fraction":0.0422},"0.4":{"accuracy_diverse":0.6712,"accuracy_restricted":0.5932,"innate_tolerance":0.7224,"learned_tolerance":0.095,"learned_fraction":0.1162},"0.6":{"accuracy_diverse":0.6138,"accuracy_restricted":0.4949,"innate_tolerance":0.6027,"learned_tolerance":0.1448,"learned_fraction":0.1937},"0.8":{"accuracy_diverse":0.5751,"accuracy_restricted":0.4365,"innate_tolerance":0.5316,"learned_tolerance":0.1688,"learned_fraction":0.241},"1.0":{"accuracy_diverse":0.5372,"accuracy_restricted":0.398,"innate_tolerance":0.4847,"learned_tolerance":0.1695,"learned_fraction":0.2591}},"pan":{"0.0":{"accuracy_diverse":0.8269,"accuracy_restricted":0.835,"innate_tolerance":1.0169,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.7384,"accuracy_restricted":0.6744,"innate_tolerance":0.8213,"learned_tolerance":0.0779,"learned_fraction":0.0867},"0.4":{"accuracy_diverse":0.6586,"accuracy_restricted":0.5448,"innate_tolerance":0.6635,"learned_tolerance":0.1386,"learned_fraction":0.1728},"0.6":{"accuracy_diverse":0.5864,"accuracy_restricted":0.4723,"innate_tolerance":0.5752,"learned_tolerance":0.139,"learned_fraction":0.1946},"0.8":{"accuracy_diverse":0.5459,"accuracy_restricted":0.4015,"innate_tolerance":0.489,"learned_tolerance":0.1759,"learned_fraction":0.2645},"1.0":{"accuracy_diverse":0.5132,"accuracy_restricted":0.3601,"innate_tolerance":0.4386,"learned_tolerance":0.1865,"learned_fraction":0.2983}},"off-axis":{"0.0":{"accuracy_diverse":0.835,"accuracy_restricted":0.835,"innate_tolerance":1.0169,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.769,"accuracy_restricted":0.7127,"innate_tolerance":0.868,"learned_tolerance":0.0686,"learned_fraction":0.0732},"0.4":{"accuracy_diverse":0.7098,"accuracy_restricted":0.6179,"innate_tolerance":0.7525,"learned_tolerance":0.1119,"learned_fraction":0.1295},"0.6":{"accuracy_diverse":0.6525,"accuracy_restricted":0.5284,"innate_tolerance":0.6435,"learned_tolerance":0.1511,"learned_fraction":0.1902},"0.8":{"accuracy_diverse":0.6012,"accuracy_restricted":0.465,"innate_tolerance":0.5663,"learned_tolerance":0.1659,"learned_fraction":0.2265},"1.0":{"accuracy_diverse":0.5574,"accuracy_restricted":0.4219,"innate_tolerance":0.5138,"learned_tolerance":0.165,"learned_fraction":0.2431}},"combined":{"0.0":{"accuracy_diverse":0.8303,"accuracy_restricted":0.835,"innate_tolerance":1.0169,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.7141,"accuracy_restricted":0.6481,"innate_tolerance":0.7893,"learned_tolerance":0.0804,"learned_fraction":0.0924},"0.4":{"accuracy_diverse":0.5985,"accuracy_restricted":0.5237,"innate_tolerance":0.6378,"learned_tolerance":0.0911,"learned_fraction":0.125},"0.6":{"accuracy_diverse":0.5302,"accuracy_restricted":0.4326,"innate_tolerance":0.5269,"learned_tolerance":0.1189,"learned_fraction":0.1841},"0.8":{"accuracy_diverse":0.4916,"accuracy_restricted":0.3683,"innate_tolerance":0.4485,"learned_tolerance":0.1502,"learned_fraction":0.2508},"1.0":{"accuracy_diverse":0.4757,"accuracy_restricted":0.3255,"innate_tolerance":0.3964,"learned_tolerance":0.1829,"learned_fraction":0.3157}}},
+  "MLP-Mixer-B":{"tilt":{"0.0":{"accuracy_diverse":0.748,"accuracy_restricted":0.7421,"innate_tolerance":0.9921,"learned_tolerance":0.0079,"learned_fraction":0.0079},"0.2":{"accuracy_diverse":0.6387,"accuracy_restricted":0.5818,"innate_tolerance":0.7778,"learned_tolerance":0.0761,"learned_fraction":0.0891},"0.4":{"accuracy_diverse":0.5696,"accuracy_restricted":0.4763,"innate_tolerance":0.6368,"learned_tolerance":0.1247,"learned_fraction":0.1638},"0.6":{"accuracy_diverse":0.5177,"accuracy_restricted":0.3941,"innate_tolerance":0.5269,"learned_tolerance":0.1652,"learned_fraction":0.2387},"0.8":{"accuracy_diverse":0.479,"accuracy_restricted":0.3419,"innate_tolerance":0.4571,"learned_tolerance":0.1833,"learned_fraction":0.2862},"1.0":{"accuracy_diverse":0.4351,"accuracy_restricted":0.3043,"innate_tolerance":0.4068,"learned_tolerance":0.1749,"learned_fraction":0.3006}},"pan":{"0.0":{"accuracy_diverse":0.748,"accuracy_restricted":0.731,"innate_tolerance":0.9773,"learned_tolerance":0.0227,"learned_fraction":0.0227},"0.2":{"accuracy_diverse":0.6058,"accuracy_restricted":0.5522,"innate_tolerance":0.7382,"learned_tolerance":0.0717,"learned_fraction":0.0885},"0.4":{"accuracy_diverse":0.5469,"accuracy_restricted":0.4518,"innate_tolerance":0.604,"learned_tolerance":0.1271,"learned_fraction":0.1739},"0.6":{"accuracy_diverse":0.4731,"accuracy_restricted":0.3651,"innate_tolerance":0.4881,"learned_tolerance":0.1444,"learned_fraction":0.2283},"0.8":{"accuracy_diverse":0.4484,"accuracy_restricted":0.3261,"innate_tolerance":0.436,"learned_tolerance":0.1635,"learned_fraction":0.2727},"1.0":{"accuracy_diverse":0.4346,"accuracy_restricted":0.2686,"innate_tolerance":0.3591,"learned_tolerance":0.2219,"learned_fraction":0.382}},"off-axis":{"0.0":{"accuracy_diverse":0.748,"accuracy_restricted":0.7435,"innate_tolerance":0.994,"learned_tolerance":0.006,"learned_fraction":0.006},"0.2":{"accuracy_diverse":0.6637,"accuracy_restricted":0.6112,"innate_tolerance":0.8171,"learned_tolerance":0.0702,"learned_fraction":0.0791},"0.4":{"accuracy_diverse":0.6056,"accuracy_restricted":0.4862,"innate_tolerance":0.65,"learned_tolerance":0.1596,"learned_fraction":0.1972},"0.6":{"accuracy_diverse":0.5452,"accuracy_restricted":0.4265,"innate_tolerance":0.5702,"learned_tolerance":0.1587,"learned_fraction":0.2177},"0.8":{"accuracy_diverse":0.5159,"accuracy_restricted":0.369,"innate_tolerance":0.4933,"learned_tolerance":0.1964,"learned_fraction":0.2847},"1.0":{"accuracy_diverse":0.4784,"accuracy_restricted":0.3322,"innate_tolerance":0.4441,"learned_tolerance":0.1955,"learned_fraction":0.3056}},"combined":{"0.0":{"accuracy_diverse":0.7464,"accuracy_restricted":0.748,"innate_tolerance":1.0,"learned_tolerance":0.0,"learned_fraction":0.0},"0.2":{"accuracy_diverse":0.5959,"accuracy_restricted":0.5257,"innate_tolerance":0.7028,"learned_tolerance":0.0939,"learned_fraction":0.1178},"0.4":{"accuracy_diverse":0.5056,"accuracy_restricted":0.4063,"innate_tolerance":0.5432,"learned_tolerance":0.1328,"learned_fraction":0.1964},"0.6":{"accuracy_diverse":0.4418,"accuracy_restricted":0.3215,"innate_tolerance":0.4298,"learned_tolerance":0.1608,"learned_fraction":0.2723},"0.8":{"accuracy_diverse":0.4037,"accuracy_restricted":0.2845,"innate_tolerance":0.3803,"learned_tolerance":0.1594,"learned_fraction":0.2953},"1.0":{"accuracy_diverse":0.3881,"accuracy_restricted":0.2605,"innate_tolerance":0.3483,"learned_tolerance":0.1706,"learned_fraction":0.3288}}}
+};
+
+var archs = ['ResNet-50','ConvNeXt-T','ViT-B/16','DeiT-S','Swin-T','MLP-Mixer-B'];
+var severities = ['0.0','0.2','0.4','0.6','0.8','1.0'];
+var archColors = {
+  'ResNet-50':   {line:'#3498db', bg:'rgba(52,152,219,0.1)'},
+  'ConvNeXt-T':  {line:'#2980b9', bg:'rgba(41,128,185,0.1)'},
+  'ViT-B/16':    {line:'#9b59b6', bg:'rgba(155,89,182,0.1)'},
+  'DeiT-S':      {line:'#8e44ad', bg:'rgba(142,68,173,0.1)'},
+  'Swin-T':      {line:'#1abc9c', bg:'rgba(26,188,156,0.1)'},
+  'MLP-Mixer-B': {line:'#e74c3c', bg:'rgba(231,76,60,0.1)'}
+};
+
+// ---- Chart 1: Degradation Curves ----
+var degradationChart;
+function buildDegradationChart(distType) {
+  var ctx = document.getElementById('degradationChart').getContext('2d');
+  if (degradationChart) degradationChart.destroy();
+  var datasets = [];
+  archs.forEach(function(arch) {
+    var dDiv = severities.map(function(s) { return decomposition[arch][distType][s].accuracy_diverse; });
+    var dRes = severities.map(function(s) { return decomposition[arch][distType][s].accuracy_restricted; });
+    datasets.push({
+      label: arch + ' (diverse)',
+      data: dDiv,
+      borderColor: archColors[arch].line,
+      backgroundColor: archColors[arch].bg,
+      borderWidth: 2.5, pointRadius: 4, tension: 0.3
+    });
+    datasets.push({
+      label: arch + ' (restricted)',
+      data: dRes,
+      borderColor: archColors[arch].line,
+      backgroundColor: 'transparent',
+      borderWidth: 2, borderDash: [6,4], pointRadius: 3, tension: 0.3
+    });
+  });
+  degradationChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: severities.map(function(s){return 's='+s;}), datasets: datasets },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, usePointStyle: true } },
+        title: { display: true, text: 'Accuracy vs Severity (' + distType + ')', font: { size: 14 } }
+      },
+      scales: {
+        y: { title: { display: true, text: 'Accuracy' }, min: 0.2, max: 0.9 },
+        x: { title: { display: true, text: 'Severity' } }
+      }
+    }
+  });
+}
+
+document.querySelectorAll('#distortion-controls button').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('#distortion-controls button').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    buildDegradationChart(btn.dataset.distortion);
+  });
+});
+buildDegradationChart('combined');
+
+// ---- Chart 2: Decomposition stacked bar ----
+(function() {
+  var ctx = document.getElementById('decompositionChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: archs,
+      datasets: [
+        { label: 'Innate Tolerance', data: architectureSummary.map(function(a){return a.mean_innate_tolerance;}), backgroundColor: '#3498db', borderRadius: 3 },
+        { label: 'Learned Tolerance', data: architectureSummary.map(function(a){return a.mean_learned_tolerance;}), backgroundColor: '#e67e22', borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Tolerance' }, max: 0.85 } },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+})();
+
+// ---- Chart 3: Learned Fraction bar ----
+(function() {
+  var ctx = document.getElementById('learnedFractionChart').getContext('2d');
+  var familyColors = architectureSummary.map(function(a) {
+    if (a.family === 'convolutional') return '#3498db';
+    if (a.family === 'attention') return '#9b59b6';
+    return '#e74c3c';
+  });
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: archs,
+      datasets: [{ label: 'Learned Fraction (phi)', data: architectureSummary.map(function(a){return a.mean_learned_fraction * 100;}), backgroundColor: familyColors, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { title: { display: true, text: 'Learned Fraction (%)' }, min: 10, max: 25 } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y.toFixed(2) + '%'; } } } }
+    }
+  });
+})();
+
+// ---- Chart 4: Correlation scatter ----
+(function() {
+  var ctx = document.getElementById('correlationChart').getContext('2d');
+  var pts = architectureSummary.map(function(a){return { x: a.spatial_invariance_score, y: a.mean_learned_fraction * 100 };});
+  var familyColors = architectureSummary.map(function(a) {
+    if (a.family === 'convolutional') return '#3498db';
+    if (a.family === 'attention') return '#9b59b6';
+    return '#e74c3c';
+  });
+  var xVals = pts.map(function(p){return p.x;});
+  var yVals = pts.map(function(p){return p.y;});
+  var n = xVals.length;
+  var sumX = xVals.reduce(function(a,b){return a+b;},0);
+  var sumY = yVals.reduce(function(a,b){return a+b;},0);
+  var sumXY = xVals.reduce(function(a,b,i){return a+b*yVals[i];},0);
+  var sumX2 = xVals.reduce(function(a,b){return a+b*b;},0);
+  var slope = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX);
+  var intercept = (sumY - slope*sumX) / n;
+  var xMin = 0.3, xMax = 0.78;
+
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'Architectures', data: pts, backgroundColor: familyColors, pointRadius: 8, pointHoverRadius: 10 },
+        { label: 'Regression (r=-0.9937)', type: 'line', data: [{x:xMin,y:slope*xMin+intercept},{x:xMax,y:slope*xMax+intercept}], borderColor: 'rgba(0,0,0,0.3)', borderDash: [6,3], borderWidth: 2, pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { title: { display: true, text: 'Spatial Invariance Score (sigma)' }, min: 0.3, max: 0.78 },
+        y: { title: { display: true, text: 'Learned Fraction (%)' }, min: 14, max: 24 }
+      },
+      plugins: {
+        tooltip: { callbacks: { label: function(ctx) { if (ctx.datasetIndex === 0) { var a = architectureSummary[ctx.dataIndex]; return a.architecture + ': sigma=' + a.spatial_invariance_score + ', phi=' + (a.mean_learned_fraction*100).toFixed(1) + '%'; } return ''; } } },
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+})();
+
+// ---- Chart 5: Family comparison ----
+(function() {
+  var ctx = document.getElementById('familyChart').getContext('2d');
+  var families = {
+    'Convolutional': architectureSummary.filter(function(a){return a.family==='convolutional';}),
+    'Attention': architectureSummary.filter(function(a){return a.family==='attention';}),
+    'MLP': architectureSummary.filter(function(a){return a.family==='mlp';})
+  };
+  var labels = Object.keys(families);
+  var innateAvgs = labels.map(function(f){ var arr=families[f]; return arr.reduce(function(s,a){return s+a.mean_innate_tolerance;},0)/arr.length; });
+  var learnedAvgs = labels.map(function(f){ var arr=families[f]; return arr.reduce(function(s,a){return s+a.mean_learned_tolerance;},0)/arr.length; });
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Innate Tolerance', data: innateAvgs, backgroundColor: '#3498db', borderRadius: 4 },
+        { label: 'Learned Tolerance', data: learnedAvgs, backgroundColor: '#e67e22', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { x: {}, y: { title: { display: true, text: 'Mean Tolerance' }, max: 0.7 } },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+})();
+
+// ---- Chart 6: Distortion type bars ----
+(function() {
+  var ctx = document.getElementById('distortionChart').getContext('2d');
+  var dTypes = ['tilt','pan','off-axis','combined'];
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: dTypes.map(function(d){return d.charAt(0).toUpperCase()+d.slice(1);}),
+      datasets: [
+        { label: 'Innate Tolerance', data: dTypes.map(function(d){return distortionSummary[d].mean_innate_tolerance;}), backgroundColor: '#3498db', borderRadius: 4 },
+        { label: 'Learned Tolerance', data: dTypes.map(function(d){return distortionSummary[d].mean_learned_tolerance;}), backgroundColor: '#e67e22', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { title: { display: true, text: 'Mean Tolerance' }, max: 0.85 } },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+})();
+
+// ---- Chart 7: Severity-dependent gap ----
+(function() {
+  var ctx = document.getElementById('gapChart').getContext('2d');
+  var datasets = archs.map(function(arch) {
+    var gaps = severities.map(function(s) { var d=decomposition[arch]['combined'][s]; return d.accuracy_diverse-d.accuracy_restricted; });
+    return { label: arch, data: gaps, borderColor: archColors[arch].line, backgroundColor: archColors[arch].bg, borderWidth: 2.5, pointRadius: 4, tension: 0.3, fill: false };
+  });
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels: severities.map(function(s){return 's='+s;}), datasets: datasets },
+    options: {
+      responsive: true,
+      scales: {
+        y: { title: { display: true, text: 'Accuracy Gap (Diverse - Restricted)' }, min: -0.01, max: 0.18 },
+        x: { title: { display: true, text: 'Severity' } }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, usePointStyle: true } },
+        title: { display: true, text: 'Severity-Dependent Training Gap (Combined Distortion)', font: { size: 14 } }
+      }
+    }
+  });
+})();
+
+// ---- Chart 8: Heatmap ----
+(function() {
+  var ctx = document.getElementById('heatmapChart').getContext('2d');
+  var dTypes = ['tilt','pan','off-axis','combined'];
+  var data = [];
+  archs.forEach(function(arch, ai) {
+    dTypes.forEach(function(dt, di) {
+      var vals = ['0.6','0.8','1.0'].map(function(s){return decomposition[arch][dt][s].learned_fraction;});
+      var avg = vals.reduce(function(a,b){return a+b;},0)/vals.length;
+      data.push({ x: di, y: ai, v: avg });
+    });
+  });
+  var allV = data.map(function(d){return d.v;});
+  var minV = Math.min.apply(null, allV);
+  var maxV = Math.max.apply(null, allV);
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: dTypes.map(function(d){return d.charAt(0).toUpperCase()+d.slice(1);}),
+      datasets: archs.map(function(arch, ai) {
+        var archData = dTypes.map(function(dt, di) {
+          var entry = data.filter(function(d){return d.x===di && d.y===ai;})[0];
+          return entry ? entry.v : 0;
+        });
+        var colors = archData.map(function(v) {
+          var t = (v - minV) / (maxV - minV);
+          var r = Math.round(26 + t * (192 - 26));
+          var g = Math.round(26 + t * (57 - 26));
+          var b = Math.round(26 + t * (80 - 26));
+          return 'rgba(' + r + ',' + g + ',' + b + ',' + (0.4 + t * 0.6) + ')';
+        });
+        return { label: arch, data: archData.map(function(v){return v*100;}), backgroundColor: colors, borderRadius: 3 };
+      })
+    },
+    options: {
+      responsive: true,
+      scales: { y: { title: { display: true, text: 'Learned Fraction (%)' }, min: 15, max: 38 } },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toFixed(1)+'%';} } }
+      }
+    }
+  });
+})();
+
+// ---- Detailed Table ----
+(function() {
+  var tbody = document.getElementById('detailedTableBody');
+  archs.forEach(function(arch) {
+    severities.forEach(function(s) {
+      var d = decomposition[arch]['combined'][s];
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td'); td1.textContent = arch;
+      var td2 = document.createElement('td'); td2.textContent = s;
+      var td3 = document.createElement('td'); td3.textContent = d.accuracy_diverse.toFixed(4);
+      var td4 = document.createElement('td'); td4.textContent = d.accuracy_restricted.toFixed(4);
+      var td5 = document.createElement('td'); td5.textContent = d.innate_tolerance.toFixed(4);
+      var td6 = document.createElement('td'); td6.textContent = d.learned_tolerance.toFixed(4);
+      var td7 = document.createElement('td'); td7.textContent = (d.learned_fraction * 100).toFixed(2) + '%';
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+      tr.appendChild(td5); tr.appendChild(td6); tr.appendChild(td7);
+      tbody.appendChild(tr);
+    });
+  });
+})();
+
+// ---- Smooth scroll & active nav ----
+document.querySelectorAll('nav a').forEach(function(a) {
+  a.addEventListener('click', function(e) {
+    e.preventDefault();
+    var target = document.querySelector(a.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
+window.addEventListener('scroll', function() {
+  var sections = document.querySelectorAll('section, .findings-strip');
+  var current = '';
+  sections.forEach(function(sec) {
+    if (sec.getBoundingClientRect().top <= 100) current = sec.id;
+  });
+  document.querySelectorAll('nav a').forEach(function(a) {
+    if (a.getAttribute('href') === '#' + current) {
+      a.classList.add('active');
+    } else {
+      a.classList.remove('active');
+    }
+  });
+});
+</script>
+</body>
+</html>

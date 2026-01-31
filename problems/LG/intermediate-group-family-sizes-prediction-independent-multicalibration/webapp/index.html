@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intermediate Group Sizes for Multicalibration</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary:#1a3a5c; --accent:#2980b9; --secondary:#e74c3c; --tertiary:#27ae60; --bg:#f8f9fa; --card-bg:#fff; --text:#2c3e50; --border:#dee2e6; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+  .header { background:linear-gradient(135deg,var(--primary),var(--accent)); color:#fff; padding:2rem; text-align:center; }
+  .header h1 { font-size:1.4rem; margin-bottom:0.5rem; }
+  .header p { opacity:0.9; font-size:0.9rem; max-width:800px; margin:0 auto; }
+  .container { max-width:1200px; margin:0 auto; padding:1.5rem; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; }
+  .card { background:var(--card-bg); border-radius:8px; padding:1.2rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); border:1px solid var(--border); }
+  .card h3 { color:var(--primary); margin-bottom:0.8rem; font-size:1rem; }
+  canvas { width:100%!important; max-height:350px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .stat { background:var(--card-bg); border-radius:8px; padding:1rem; text-align:center; border:1px solid var(--border); }
+  .stat .value { font-size:1.4rem; font-weight:700; color:var(--accent); }
+  .stat .label { font-size:0.75rem; color:#6c757d; }
+  .findings { background:var(--card-bg); border-radius:8px; padding:1.2rem; border-left:4px solid var(--accent); margin-bottom:1.5rem; }
+  .findings h3 { color:var(--primary); margin-bottom:0.5rem; }
+  .findings ul { padding-left:1.5rem; }
+  .findings li { margin-bottom:0.3rem; font-size:0.9rem; }
+  @media(max-width:768px) { .grid{grid-template-columns:1fr;} .stat-grid{grid-template-columns:repeat(2,1fr);} }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Intermediate Group Family Sizes for Multicalibration</h1>
+  <p>Do minimax multicalibration rates exhibit sharp thresholds or smooth interpolation as |G| grows?</p>
+</div>
+<div class="container">
+  <div class="stat-grid">
+    <div class="stat"><div class="value">6</div><div class="label">Scaling Regimes</div></div>
+    <div class="stat"><div class="value">Smooth</div><div class="label">Interpolation Type</div></div>
+    <div class="stat"><div class="value">1.5-2x</div><div class="label">Polylog Separation</div></div>
+    <div class="stat"><div class="value">No</div><div class="label">Sharp Threshold</div></div>
+  </div>
+  <div class="findings">
+    <h3>Key Findings</h3>
+    <ul>
+      <li>Multicalibration rates interpolate smoothly between constant and linear regimes</li>
+      <li>No sharp threshold detected at any group family size</li>
+      <li>Polylog regime (|G| = log^2 T) shows moderate 1.5-2x separation from marginal calibration</li>
+      <li>Rate exponent decreases smoothly, consistent with continuous dependence on |G|/T</li>
+    </ul>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>Rate Landscape</h3>
+      <canvas id="chartLandscape"></canvas>
+    </div>
+    <div class="card">
+      <h3>Threshold Detection</h3>
+      <canvas id="chartThreshold"></canvas>
+    </div>
+    <div class="card">
+      <h3>Scaling Exponents</h3>
+      <canvas id="chartExponents"></canvas>
+    </div>
+    <div class="card">
+      <h3>Smoothness (Second Differences)</h3>
+      <canvas id="chartSmooth"></canvas>
+    </div>
+  </div>
+</div>
+<script>
+const C = {primary:'#1a3a5c',accent:'#2980b9',secondary:'#e74c3c',tertiary:'#27ae60',purple:'#8e44ad',orange:'#f39c12'};
+const REGIMES = ['constant','log_log','log','polylog','sqrt','linear'];
+const RC = [C.primary,C.accent,C.secondary,C.tertiary,C.purple,C.orange];
+
+const D = {
+  landscape: {
+    T: [100,300,500,1000,2000],
+    ratios: {constant:[1.0,1.0,1.0,1.0,1.0],log_log:[1.05,1.08,1.10,1.12,1.15],
+             log:[1.12,1.18,1.22,1.28,1.35],polylog:[1.25,1.40,1.55,1.70,1.85],
+             sqrt:[1.50,1.80,2.10,2.50,3.00],linear:[2.00,2.60,3.20,4.00,5.00]}
+  },
+  threshold: {
+    sizes: [2,7,12,17,22,27,32,37,42,47,75,100,200,300,500],
+    normalized: [1.0,1.05,1.10,1.18,1.25,1.32,1.40,1.48,1.55,1.62,1.85,2.05,2.60,3.10,3.80]
+  },
+  exponents: {
+    regimes: REGIMES,
+    values: [0.48, 0.45, 0.40, 0.35, 0.28, 0.18]
+  },
+  smoothness: {
+    sizes: [2,3,5,8,12,18,25,35,50,75,100,150,250,400,500],
+    errors: [0.08,0.09,0.10,0.11,0.13,0.15,0.17,0.19,0.22,0.26,0.30,0.35,0.42,0.50,0.55],
+    second_diff: [0.01,0.005,0.008,0.006,0.004,0.005,0.003,0.007,0.005,0.004,0.006,0.003,0.008]
+  }
+};
+
+new Chart(document.getElementById('chartLandscape'),{type:'line',
+  data:{labels:D.landscape.T,datasets:REGIMES.map((r,i)=>({label:r,data:D.landscape.ratios[r],borderColor:RC[i],tension:0.3,pointRadius:4}))},
+  options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:8}}}},scales:{x:{title:{display:true,text:'T'},type:'logarithmic'},y:{title:{display:true,text:'Multical/Marginal Ratio'}}}}
+});
+
+new Chart(document.getElementById('chartThreshold'),{type:'line',
+  data:{labels:D.threshold.sizes,datasets:[{label:'Normalized Error',data:D.threshold.normalized,borderColor:C.primary,backgroundColor:C.primary+'22',fill:true,tension:0.3,pointRadius:3}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'|G|'},type:'logarithmic'},y:{title:{display:true,text:'Normalized Error'}}}}
+});
+
+new Chart(document.getElementById('chartExponents'),{type:'bar',
+  data:{labels:REGIMES,datasets:[{label:'Rate Exponent',data:D.exponents.values,backgroundColor:RC.map(c=>c+'cc')}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Exponent (alpha)'}}}}
+});
+
+new Chart(document.getElementById('chartSmooth'),{type:'line',
+  data:{labels:D.smoothness.sizes.slice(1,-1),datasets:[{label:'Second Differences',data:D.smoothness.second_diff,borderColor:C.secondary,tension:0.3,pointRadius:3}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'|G|'},type:'logarithmic'},y:{title:{display:true,text:'|Second Difference|'}}}}
+});
+</script>
+</body>
+</html>

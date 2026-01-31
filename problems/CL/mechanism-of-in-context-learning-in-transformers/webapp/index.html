@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mechanism of In-Context Learning in Transformers</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f5f7fa; color: #333; }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.85; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: white; border-radius: 10px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.card h3 { color: var(--primary); margin-bottom: 1rem; font-size: 1.1rem; }
+canvas { width: 100% !important; max-height: 350px; }
+.metric-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+.metric { text-align: center; background: white; border-radius: 10px; padding: 1.2rem 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex: 1; min-width: 150px; }
+.metric .value { font-size: 2rem; font-weight: bold; color: var(--accent); }
+.metric .label { font-size: 0.85rem; color: #666; margin-top: 0.3rem; }
+.insight { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; border-radius: 10px; padding: 1.5rem; margin-top: 1.5rem; }
+.insight h3 { margin-bottom: 0.8rem; }
+.insight ul { margin-left: 1.2rem; line-height: 1.8; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Mechanism of In-Context Learning in Transformers</h1>
+<p>Comparing three hypothesized mechanisms for ICL without parameter updates</p>
+</div>
+<div class="container">
+<div class="metric-row">
+<div class="metric"><div class="value">0.936</div><div class="label">Best ICL Accuracy (Task Retrieval, k=8)</div></div>
+<div class="metric"><div class="value">3</div><div class="label">Mechanisms Compared</div></div>
+<div class="metric"><div class="value">4</div><div class="label">Layers Analyzed</div></div>
+<div class="metric"><div class="value">50</div><div class="label">Tasks Evaluated</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h3>ICL Accuracy vs Demonstrations</h3>
+<canvas id="accChart"></canvas>
+</div>
+<div class="card">
+<h3>Layer-wise Mechanism Contributions</h3>
+<canvas id="layerChart"></canvas>
+</div>
+<div class="card">
+<h3>Task Retrieval Probability</h3>
+<canvas id="trpChart"></canvas>
+</div>
+<div class="card">
+<h3>Mechanism Comparison at k=8</h3>
+<canvas id="compareChart"></canvas>
+</div>
+</div>
+<div class="insight">
+<h3>Key Findings</h3>
+<ul>
+<li>Task retrieval achieves the highest individual accuracy, matching oracle at k=8 demonstrations.</li>
+<li>Implicit gradient descent shows steady improvement but requires many more examples.</li>
+<li>Induction heads provide a robust but lower-accuracy baseline via pattern matching.</li>
+<li>Layer-wise analysis reveals depth-dependent specialization: early layers for task ID, later layers for pattern matching.</li>
+<li>ICL is best understood as a multi-mechanism process, not a single algorithm.</li>
+</ul>
+</div>
+</div>
+<script>
+const PRIMARY='#1a3a5c',ACCENT='#2980b9',LIGHT='#5dade2',GRAY='#95a5a6';
+const nDemos=[0,1,2,4,8,16,32];
+new Chart(document.getElementById('accChart'),{type:'line',data:{labels:nDemos,datasets:[{label:'Gradient Descent',data:[0.204,0.234,0.291,0.302,0.361,0.412,0.488],borderColor:PRIMARY,borderWidth:2.5,fill:false,tension:0.3},{label:'Task Retrieval',data:[0.193,0.277,0.420,0.776,0.936,0.934,0.923],borderColor:ACCENT,borderWidth:2.5,borderDash:[6,3],fill:false,tension:0.3},{label:'Induction Heads',data:[0.206,0.215,0.270,0.291,0.328,0.377,0.425],borderColor:LIGHT,borderWidth:2.5,borderDash:[2,3],fill:false,tension:0.3},{label:'Oracle',data:[0.937,0.930,0.942,0.933,0.936,0.934,0.923],borderColor:GRAY,borderWidth:1.5,borderDash:[4,4],fill:false,pointRadius:3}]},options:{responsive:true,scales:{x:{title:{display:true,text:'# Demonstrations'}},y:{title:{display:true,text:'Accuracy'},min:0,max:1}}}});
+new Chart(document.getElementById('layerChart'),{type:'bar',data:{labels:['Layer 0','Layer 1','Layer 2','Layer 3'],datasets:[{label:'Task Retrieval',data:[0.48,0.35,0.22,0.12],backgroundColor:ACCENT},{label:'Gradient Descent',data:[0.30,0.38,0.40,0.33],backgroundColor:PRIMARY},{label:'Induction Heads',data:[0.22,0.27,0.38,0.55],backgroundColor:LIGHT}]},options:{responsive:true,scales:{x:{stacked:true},y:{stacked:true,max:1,title:{display:true,text:'Relative Contribution'}}}}});
+new Chart(document.getElementById('trpChart'),{type:'line',data:{labels:nDemos,datasets:[{label:'TRP',data:[0.01,0.05,0.15,0.55,0.85,0.88,0.87],borderColor:ACCENT,backgroundColor:'rgba(41,128,185,0.1)',borderWidth:2.5,fill:true,tension:0.4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'# Demonstrations'}},y:{title:{display:true,text:'Task Retrieval Prob'},min:0,max:1}}}});
+new Chart(document.getElementById('compareChart'),{type:'bar',data:{labels:['Gradient Descent','Task Retrieval','Induction Heads','Oracle'],datasets:[{label:'Accuracy at k=8',data:[0.361,0.936,0.328,0.936],backgroundColor:[PRIMARY,ACCENT,LIGHT,GRAY],borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:1,title:{display:true,text:'Accuracy'}}}}});
+</script>
+</body>
+</html>

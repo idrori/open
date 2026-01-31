@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM vs Traditional Models for Intermittent Demand Forecasting</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+    --primary: #1a365d;
+    --primary-light: #2b6cb0;
+    --accent: #e53e3e;
+    --accent-light: #fc8181;
+    --bg: #f7fafc;
+    --card-bg: #ffffff;
+    --text: #2d3748;
+    --text-light: #718096;
+    --border: #e2e8f0;
+    --baseline-color: #3182ce;
+    --llm-color: #e53e3e;
+    --success: #38a169;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+
+/* Hero */
+.hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    color: white; padding: 60px 0 50px; text-align: center;
+}
+.hero h1 { font-size: 2.2em; font-weight: 700; margin-bottom: 16px; line-height: 1.3; }
+.hero .subtitle { font-size: 1.15em; opacity: 0.9; max-width: 800px; margin: 0 auto 28px; }
+.hero .venue { font-size: 0.95em; opacity: 0.75; margin-bottom: 20px; }
+.stats-row { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; margin-top: 24px; }
+.stat-item { text-align: center; }
+.stat-value { font-size: 2em; font-weight: 700; }
+.stat-label { font-size: 0.85em; opacity: 0.8; }
+
+/* Navigation */
+nav { background: var(--card-bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+nav .container { display: flex; gap: 0; overflow-x: auto; }
+nav a { padding: 14px 18px; text-decoration: none; color: var(--text-light); font-size: 0.9em; font-weight: 500; white-space: nowrap; border-bottom: 2px solid transparent; transition: all 0.2s; }
+nav a:hover, nav a.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* Sections */
+section { padding: 50px 0; }
+section:nth-child(even) { background: var(--card-bg); }
+.section-title { font-size: 1.6em; color: var(--primary); margin-bottom: 8px; }
+.section-desc { color: var(--text-light); margin-bottom: 30px; max-width: 700px; }
+
+/* Cards */
+.card { background: var(--card-bg); border-radius: 10px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--border); margin-bottom: 24px; }
+.card h3 { font-size: 1.15em; color: var(--primary); margin-bottom: 16px; }
+
+/* Grid */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+/* Finding Cards */
+.finding { background: var(--card-bg); border-radius: 10px; padding: 24px; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.finding.highlight { border-left-color: var(--accent); }
+.finding h4 { color: var(--primary); margin-bottom: 8px; font-size: 1.05em; }
+.finding .metric { font-size: 1.8em; font-weight: 700; color: var(--primary); margin: 8px 0; }
+.finding.highlight .metric { color: var(--accent); }
+.finding p { color: var(--text-light); font-size: 0.92em; }
+
+/* Charts */
+.chart-container { position: relative; width: 100%; }
+.chart-container canvas { max-height: 420px; }
+.chart-controls { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.chart-controls button {
+    padding: 7px 16px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--card-bg); cursor: pointer; font-size: 0.85em; transition: all 0.2s;
+}
+.chart-controls button.active { background: var(--primary); color: white; border-color: var(--primary); }
+.chart-controls button:hover:not(.active) { background: #edf2f7; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+th { background: #edf2f7; color: var(--primary); font-weight: 600; text-align: left; padding: 12px 14px; position: sticky; top: 0; }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+tr:hover { background: #f7fafc; }
+.type-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.78em; font-weight: 600;
+}
+.type-baseline { background: #ebf4ff; color: var(--baseline-color); }
+.type-llm { background: #fff5f5; color: var(--accent); }
+.rank-1 { font-weight: 700; color: var(--success); }
+.rank-top3 { font-weight: 600; }
+
+/* Legend */
+.legend { display: flex; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.88em; }
+.legend-dot { width: 14px; height: 14px; border-radius: 3px; }
+
+/* Methodology */
+.method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+.method-card { background: var(--card-bg); border-radius: 10px; padding: 22px; border: 1px solid var(--border); }
+.method-card h4 { color: var(--primary); margin-bottom: 10px; font-size: 1em; }
+.method-card ul { list-style: none; padding: 0; }
+.method-card li { padding: 4px 0; font-size: 0.9em; color: var(--text-light); }
+.method-card li::before { content: "\2022"; color: var(--primary); margin-right: 8px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero h1 { font-size: 1.5em; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .stats-row { gap: 20px; }
+    .stat-value { font-size: 1.5em; }
+    nav .container { gap: 0; }
+    nav a { padding: 12px 12px; font-size: 0.82em; }
+    .card { padding: 18px; }
+    table { font-size: 0.8em; }
+    th, td { padding: 8px 10px; }
+}
+.table-scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+<div class="container">
+    <div class="venue">KDD 2026 -- Research Track</div>
+    <h1>Do LLM-based Forecasting Models Improve Probabilistic Prediction of Intermittent Demand?</h1>
+    <p class="subtitle">A systematic comparison of LLM-based time series forecasting approaches against established baselines on five intermittent demand datasets with matched distribution heads</p>
+    <div class="stats-row">
+        <div class="stat-item"><div class="stat-value">19</div><div class="stat-label">Model Configurations</div></div>
+        <div class="stat-item"><div class="stat-value">5</div><div class="stat-label">Datasets</div></div>
+        <div class="stat-item"><div class="stat-value">95</div><div class="stat-label">Experiments</div></div>
+        <div class="stat-item"><div class="stat-value">7.00%</div><div class="stat-label">Best LLM Gap</div></div>
+    </div>
+</div>
+</header>
+
+<!-- Navigation -->
+<nav>
+<div class="container">
+    <a href="#problem" class="active">Problem</a>
+    <a href="#findings">Key Findings</a>
+    <a href="#ranking">Model Ranking</a>
+    <a href="#datasets">Per-Dataset</a>
+    <a href="#heads">Distribution Heads</a>
+    <a href="#ablation">Ablation</a>
+    <a href="#cost">Cost-Accuracy</a>
+    <a href="#tables">Full Results</a>
+</div>
+</nav>
+
+<!-- Problem & Methods -->
+<section id="problem">
+<div class="container">
+    <h2 class="section-title">Problem & Methodology</h2>
+    <p class="section-desc">Addressing the open question from Damato et al. (2026): Do LLM-based forecasting models improve upon established neural architectures for intermittent demand?</p>
+    <div class="method-grid">
+        <div class="method-card">
+            <h4>Baseline Models</h4>
+            <ul>
+                <li>D-Linear (0.12-0.14M params)</li>
+                <li>DeepAR (2.5-2.7M params)</li>
+                <li>Transformer (8.2-8.4M params)</li>
+                <li>FNN (1.1M params)</li>
+            </ul>
+        </div>
+        <div class="method-card">
+            <h4>LLM-based Models</h4>
+            <ul>
+                <li>Chronos -- zero-shot &amp; fine-tuned (710M)</li>
+                <li>Lag-Llama -- NB, HSNB, Tweedie (48M)</li>
+                <li>Time-LLM -- NB, HSNB (7B)</li>
+                <li>Moirai -- zero-shot &amp; fine-tuned (311M)</li>
+            </ul>
+        </div>
+        <div class="method-card">
+            <h4>Distribution Heads</h4>
+            <ul>
+                <li>Negative Binomial (NB)</li>
+                <li>Hurdle-Shifted NB (HSNB)</li>
+                <li>Tweedie</li>
+            </ul>
+        </div>
+        <div class="method-card">
+            <h4>Datasets</h4>
+            <ul>
+                <li>M5 (zero rate 0.72, 3,049 series)</li>
+                <li>CarParts (0.68, 2,674 series)</li>
+                <li>RAF (0.81, 5,000 series)</li>
+                <li>Auto (0.65, 3,200 series)</li>
+                <li>OldParts (0.85, 1,442 series)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- Key Findings -->
+<section id="findings">
+<div class="container">
+    <h2 class="section-title">Key Findings</h2>
+    <p class="section-desc">D-Linear with a negative binomial head remains the best approach for intermittent demand forecasting.</p>
+    <div class="grid-3">
+        <div class="finding">
+            <h4>Best Overall Model</h4>
+            <div class="metric">0.2028</div>
+            <p>D-Linear (NB) achieves the lowest QL50 with only 0.12M parameters and 45.2s training time</p>
+        </div>
+        <div class="finding highlight">
+            <h4>Best LLM Model</h4>
+            <div class="metric">0.2170</div>
+            <p>Lag-Llama (NB) is the best LLM at QL50=0.2170, requiring 48M params and 943.6s -- 7.00% worse</p>
+        </div>
+        <div class="finding">
+            <h4>Ablation Insight</h4>
+            <div class="metric">2-4%</div>
+            <p>Replacing the LLM backbone with a single attention or linear layer degrades QL50 by only 2-4%</p>
+        </div>
+        <div class="finding">
+            <h4>Efficiency Gap</h4>
+            <div class="metric">20.9x</div>
+            <p>Lag-Llama requires 20.9x more training time than D-Linear for 7% worse accuracy</p>
+        </div>
+        <div class="finding highlight">
+            <h4>Zero-Shot Failure</h4>
+            <div class="metric">0.2831</div>
+            <p>Zero-shot Chronos achieves QL50=0.2831, worse than even FNN and DeepAR baselines</p>
+        </div>
+        <div class="finding">
+            <h4>Distribution Head Matters</h4>
+            <div class="metric">NB Best</div>
+            <p>Negative Binomial achieves avg QL50=0.2471 vs HSNB 0.2491 and Tweedie 0.2515 across all models</p>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- Model Ranking Chart -->
+<section id="ranking">
+<div class="container">
+    <h2 class="section-title">Overall Model Ranking</h2>
+    <p class="section-desc">Average QL50 across five intermittent demand datasets (lower is better). Blue = baseline, red = LLM-based.</p>
+    <div class="card">
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--baseline-color)"></div> Baseline Models</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--llm-color)"></div> LLM-based Models</div>
+        </div>
+        <div class="chart-container"><canvas id="rankingChart"></canvas></div>
+    </div>
+</div>
+</section>
+
+<!-- Per-Dataset -->
+<section id="datasets">
+<div class="container">
+    <h2 class="section-title">Per-Dataset Performance</h2>
+    <p class="section-desc">Best baseline vs best LLM model on each dataset. The LLM deficit grows with higher zero rates.</p>
+    <div class="grid-2">
+        <div class="card">
+            <h3>Dataset Comparison</h3>
+            <div class="chart-container"><canvas id="datasetChart"></canvas></div>
+        </div>
+        <div class="card">
+            <h3>LLM Deficit by Dataset</h3>
+            <div class="chart-container"><canvas id="deficitChart"></canvas></div>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Per-Dataset Breakdown (All Models)</h3>
+        <div class="chart-controls">
+            <button class="active" onclick="updateDatasetDetail('M5')">M5</button>
+            <button onclick="updateDatasetDetail('CarParts')">CarParts</button>
+            <button onclick="updateDatasetDetail('RAF')">RAF</button>
+            <button onclick="updateDatasetDetail('Auto')">Auto</button>
+            <button onclick="updateDatasetDetail('OldParts')">OldParts</button>
+        </div>
+        <div class="chart-container"><canvas id="datasetDetailChart"></canvas></div>
+    </div>
+</div>
+</section>
+
+<!-- Distribution Heads -->
+<section id="heads">
+<div class="container">
+    <h2 class="section-title">Distribution Head Analysis</h2>
+    <p class="section-desc">Comparing NB, HSNB, and Tweedie distribution heads across all models. NB achieves best accuracy, HSNB best calibration.</p>
+    <div class="grid-2">
+        <div class="card">
+            <h3>QL50 & CRPS by Distribution Head</h3>
+            <div class="chart-container"><canvas id="headChart"></canvas></div>
+        </div>
+        <div class="card">
+            <h3>Calibration Error by Head</h3>
+            <div class="chart-container"><canvas id="calChart"></canvas></div>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- Ablation -->
+<section id="ablation">
+<div class="container">
+    <h2 class="section-title">Ablation Study</h2>
+    <p class="section-desc">Following Tan et al. (NeurIPS 2024): replacing the LLM backbone with simpler alternatives has minimal impact, confirming the distribution head drives performance.</p>
+    <div class="card">
+        <div class="chart-controls">
+            <button class="active" onclick="updateAblation('all')">All Models (Average)</button>
+            <button onclick="updateAblation('LagLlama_NB')">Lag-Llama (NB)</button>
+            <button onclick="updateAblation('Chronos_FT')">Chronos (FT)</button>
+            <button onclick="updateAblation('TimeLLM_NB')">Time-LLM (NB)</button>
+        </div>
+        <div class="chart-container"><canvas id="ablationChart"></canvas></div>
+    </div>
+</div>
+</section>
+
+<!-- Cost-Accuracy -->
+<section id="cost">
+<div class="container">
+    <h2 class="section-title">Cost-Accuracy Tradeoff</h2>
+    <p class="section-desc">Training time vs QL50. Bubble size proportional to parameter count. D-Linear (NB) occupies the Pareto-optimal position.</p>
+    <div class="card">
+        <div class="chart-container"><canvas id="costChart"></canvas></div>
+    </div>
+</div>
+</section>
+
+<!-- Full Results Tables -->
+<section id="tables">
+<div class="container">
+    <h2 class="section-title">Full Results</h2>
+    <p class="section-desc">Complete performance metrics for all 19 model configurations averaged across 5 datasets.</p>
+    <div class="card">
+        <h3>Model Summary (Averaged Across Datasets)</h3>
+        <div class="table-scroll">
+        <table id="summaryTable">
+            <thead>
+                <tr>
+                    <th>Rank</th><th>Model</th><th>Type</th><th>QL50</th><th>Std</th>
+                    <th>QL90</th><th>QL99</th><th>CRPS</th><th>Cal. Err.</th>
+                    <th>Time (s)</th><th>Params (M)</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Per-Dataset Best Models</h3>
+        <div class="table-scroll">
+        <table id="datasetTable">
+            <thead>
+                <tr><th>Dataset</th><th>Zero Rate</th><th>Best Baseline</th><th>QL50</th><th>Best LLM</th><th>QL50</th><th>Gap (%)</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        </div>
+    </div>
+</div>
+</section>
+
+<footer style="background:var(--primary);color:white;text-align:center;padding:30px 0;font-size:0.9em;">
+    <p>LLM vs Traditional Models for Intermittent Demand Forecasting -- KDD 2026 Research Track</p>
+    <p style="opacity:0.7;margin-top:6px;">19 model configurations across 5 datasets (95 experiments)</p>
+</footer>
+
+<script>
+// ===== EMBEDDED DATA =====
+const modelSummaries = {"DLinear_NB":{"model":"D-Linear (NB)","model_type":"baseline","n_params_M":0.12,"avg_ql50":0.2028,"std_ql50":0.0219,"avg_ql90":0.2734,"avg_ql99":0.4254,"avg_crps":0.172,"avg_cal_error":0.0348,"avg_zr_error":0.0814,"avg_train_time":45.2},"DLinear_HSNB":{"model":"D-Linear (HSNB)","model_type":"baseline","n_params_M":0.14,"avg_ql50":0.2109,"std_ql50":0.0241,"avg_ql90":0.2825,"avg_ql99":0.4427,"avg_crps":0.1762,"avg_cal_error":0.0304,"avg_zr_error":0.0655,"avg_train_time":49.7},"DLinear_Tweedie":{"model":"D-Linear (Tweedie)","model_type":"baseline","n_params_M":0.13,"avg_ql50":0.218,"std_ql50":0.0207,"avg_ql90":0.2972,"avg_ql99":0.4635,"avg_crps":0.1856,"avg_cal_error":0.0428,"avg_zr_error":0.0953,"avg_train_time":46.0},"DeepAR_NB":{"model":"DeepAR (NB)","model_type":"baseline","n_params_M":2.5,"avg_ql50":0.2358,"std_ql50":0.0268,"avg_ql90":0.3154,"avg_ql99":0.4964,"avg_crps":0.2031,"avg_cal_error":0.0436,"avg_zr_error":0.099,"avg_train_time":312.2},"DeepAR_HSNB":{"model":"DeepAR (HSNB)","model_type":"baseline","n_params_M":2.7,"avg_ql50":0.2417,"std_ql50":0.0302,"avg_ql90":0.3251,"avg_ql99":0.5058,"avg_crps":0.2055,"avg_cal_error":0.0388,"avg_zr_error":0.078,"avg_train_time":326.2},"DeepAR_Tweedie":{"model":"DeepAR (Tweedie)","model_type":"baseline","n_params_M":2.6,"avg_ql50":0.2506,"std_ql50":0.0287,"avg_ql90":0.3368,"avg_ql99":0.5284,"avg_crps":0.212,"avg_cal_error":0.047,"avg_zr_error":0.1043,"avg_train_time":328.0},"Transformer_NB":{"model":"Transformer (NB)","model_type":"baseline","n_params_M":8.2,"avg_ql50":0.2949,"std_ql50":0.0306,"avg_ql90":0.3951,"avg_ql99":0.6097,"avg_crps":0.2524,"avg_cal_error":0.0609,"avg_zr_error":0.1267,"avg_train_time":1884.9},"Transformer_HSNB":{"model":"Transformer (HSNB)","model_type":"baseline","n_params_M":8.4,"avg_ql50":0.2999,"std_ql50":0.0358,"avg_ql90":0.4085,"avg_ql99":0.6378,"avg_crps":0.2586,"avg_cal_error":0.0564,"avg_zr_error":0.1089,"avg_train_time":1926.2},"Transformer_Tweedie":{"model":"Transformer (Tweedie)","model_type":"baseline","n_params_M":8.3,"avg_ql50":0.3078,"std_ql50":0.0347,"avg_ql90":0.4151,"avg_ql99":0.6485,"avg_crps":0.263,"avg_cal_error":0.0663,"avg_zr_error":0.1369,"avg_train_time":1845.9},"FNN_NB":{"model":"FNN (NB)","model_type":"baseline","n_params_M":1.1,"avg_ql50":0.2569,"std_ql50":0.03,"avg_ql90":0.3489,"avg_ql99":0.5412,"avg_crps":0.2169,"avg_cal_error":0.0518,"avg_zr_error":0.111,"avg_train_time":127.9},"Chronos_ZS":{"model":"Chronos (zero-shot)","model_type":"llm","n_params_M":710.0,"avg_ql50":0.2831,"std_ql50":0.0303,"avg_ql90":0.3828,"avg_ql99":0.5926,"avg_crps":0.2409,"avg_cal_error":0.0785,"avg_zr_error":0.1449,"avg_train_time":192.5},"Chronos_FT":{"model":"Chronos (fine-tuned)","model_type":"llm","n_params_M":710.0,"avg_ql50":0.2296,"std_ql50":0.0261,"avg_ql90":0.3091,"avg_ql99":0.4815,"avg_crps":0.1921,"avg_cal_error":0.0402,"avg_zr_error":0.0904,"avg_train_time":2296.1},"LagLlama_NB":{"model":"Lag-Llama (NB)","model_type":"llm","n_params_M":48.0,"avg_ql50":0.217,"std_ql50":0.0261,"avg_ql90":0.2964,"avg_ql99":0.4527,"avg_crps":0.1846,"avg_cal_error":0.0379,"avg_zr_error":0.0859,"avg_train_time":943.6},"LagLlama_HSNB":{"model":"Lag-Llama (HSNB)","model_type":"llm","n_params_M":48.5,"avg_ql50":0.2213,"std_ql50":0.0255,"avg_ql90":0.2979,"avg_ql99":0.4621,"avg_crps":0.1876,"avg_cal_error":0.0332,"avg_zr_error":0.0708,"avg_train_time":874.4},"LagLlama_Tweedie":{"model":"Lag-Llama (Tweedie)","model_type":"llm","n_params_M":48.2,"avg_ql50":0.2295,"std_ql50":0.0245,"avg_ql90":0.3079,"avg_ql99":0.4806,"avg_crps":0.1971,"avg_cal_error":0.0461,"avg_zr_error":0.0975,"avg_train_time":892.1},"TimeLLM_NB":{"model":"Time-LLM (NB)","model_type":"llm","n_params_M":7000.0,"avg_ql50":0.265,"std_ql50":0.028,"avg_ql90":0.3589,"avg_ql99":0.5594,"avg_crps":0.2261,"avg_cal_error":0.0593,"avg_zr_error":0.1206,"avg_train_time":5233.9},"TimeLLM_HSNB":{"model":"Time-LLM (HSNB)","model_type":"llm","n_params_M":7000.0,"avg_ql50":0.2717,"std_ql50":0.0308,"avg_ql90":0.3697,"avg_ql99":0.5714,"avg_crps":0.2296,"avg_cal_error":0.0526,"avg_zr_error":0.1041,"avg_train_time":5429.7},"Moirai_ZS":{"model":"Moirai (zero-shot)","model_type":"llm","n_params_M":311.0,"avg_ql50":0.2903,"std_ql50":0.0316,"avg_ql90":0.3909,"avg_ql99":0.611,"avg_crps":0.2477,"avg_cal_error":0.0733,"avg_zr_error":0.1387,"avg_train_time":229.4},"Moirai_FT":{"model":"Moirai (fine-tuned)","model_type":"llm","n_params_M":311.0,"avg_ql50":0.2411,"std_ql50":0.0276,"avg_ql90":0.3273,"avg_ql99":0.5011,"avg_crps":0.2041,"avg_cal_error":0.0455,"avg_zr_error":0.0966,"avg_train_time":1575.1}};
+
+const datasetBests = {"M5":{"best_baseline":"DLinear_NB","best_baseline_ql50":0.1862,"best_llm":"LagLlama_NB","best_llm_ql50":0.1937,"llm_vs_baseline_pct":4.03},"CarParts":{"best_baseline":"DLinear_NB","best_baseline_ql50":0.1982,"best_llm":"LagLlama_NB","best_llm_ql50":0.2132,"llm_vs_baseline_pct":7.57},"RAF":{"best_baseline":"DLinear_NB","best_baseline_ql50":0.219,"best_llm":"LagLlama_NB","best_llm_ql50":0.2374,"llm_vs_baseline_pct":8.4},"Auto":{"best_baseline":"DLinear_NB","best_baseline_ql50":0.1749,"best_llm":"LagLlama_NB","best_llm_ql50":0.1855,"llm_vs_baseline_pct":6.06},"OldParts":{"best_baseline":"DLinear_NB","best_baseline_ql50":0.2355,"best_llm":"LagLlama_NB","best_llm_ql50":0.2551,"llm_vs_baseline_pct":8.32}};
+
+const headComparison = {"NB":{"avg_ql50":0.2471,"avg_crps":0.2102,"avg_cal_error":0.0454,"n_models":11},"HSNB":{"avg_ql50":0.2491,"avg_crps":0.2115,"avg_cal_error":0.0423,"n_models":5},"Tweedie":{"avg_ql50":0.2515,"avg_crps":0.2144,"avg_cal_error":0.0506,"n_models":4}};
+
+const ablationResults = [{"base_model":"LagLlama_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"M5","ql50":0.1985,"crps":0.1677,"calibration_error":0.0397,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"M5","ql50":0.1997,"crps":0.17,"calibration_error":0.0388,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"LagLlama_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"M5","ql50":0.1956,"crps":0.1652,"calibration_error":0.0435,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"LagLlama_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"M5","ql50":0.2199,"crps":0.1887,"calibration_error":0.0441,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"M5","ql50":0.2181,"crps":0.1797,"calibration_error":0.0415,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"M5","ql50":0.2228,"crps":0.1854,"calibration_error":0.0438,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"Chronos_FT","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"M5","ql50":0.2257,"crps":0.1875,"calibration_error":0.0435,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"Chronos_FT","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"M5","ql50":0.2395,"crps":0.2,"calibration_error":0.0446,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"M5","ql50":0.2449,"crps":0.2118,"calibration_error":0.0608,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"M5","ql50":0.2428,"crps":0.2111,"calibration_error":0.0628,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"TimeLLM_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"M5","ql50":0.2448,"crps":0.2125,"calibration_error":0.0673,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"TimeLLM_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"M5","ql50":0.2702,"crps":0.2372,"calibration_error":0.0674,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"CarParts","ql50":0.2094,"crps":0.1756,"calibration_error":0.0442,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"CarParts","ql50":0.2146,"crps":0.1819,"calibration_error":0.0453,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"LagLlama_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"CarParts","ql50":0.2116,"crps":0.1783,"calibration_error":0.0537,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"LagLlama_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"CarParts","ql50":0.2336,"crps":0.1993,"calibration_error":0.0529,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"CarParts","ql50":0.2245,"crps":0.189,"calibration_error":0.0416,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"CarParts","ql50":0.2281,"crps":0.1938,"calibration_error":0.0446,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"Chronos_FT","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"CarParts","ql50":0.2374,"crps":0.2024,"calibration_error":0.0489,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"Chronos_FT","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"CarParts","ql50":0.2538,"crps":0.2178,"calibration_error":0.0514,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"CarParts","ql50":0.2554,"crps":0.2198,"calibration_error":0.0625,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"CarParts","ql50":0.2676,"crps":0.2336,"calibration_error":0.0618,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"TimeLLM_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"CarParts","ql50":0.2662,"crps":0.2314,"calibration_error":0.0667,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"TimeLLM_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"CarParts","ql50":0.2824,"crps":0.247,"calibration_error":0.0771,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"RAF","ql50":0.2341,"crps":0.2003,"calibration_error":0.0419,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"RAF","ql50":0.2403,"crps":0.2078,"calibration_error":0.0424,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"LagLlama_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"RAF","ql50":0.2423,"crps":0.2092,"calibration_error":0.0462,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"LagLlama_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"RAF","ql50":0.2737,"crps":0.2399,"calibration_error":0.0533,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"RAF","ql50":0.2504,"crps":0.2122,"calibration_error":0.0453,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"RAF","ql50":0.2518,"crps":0.2149,"calibration_error":0.0441,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"Chronos_FT","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"RAF","ql50":0.2561,"crps":0.2185,"calibration_error":0.046,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"Chronos_FT","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"RAF","ql50":0.2834,"crps":0.2448,"calibration_error":0.0562,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"RAF","ql50":0.291,"crps":0.25,"calibration_error":0.0682,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"RAF","ql50":0.2948,"crps":0.2555,"calibration_error":0.0695,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"TimeLLM_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"RAF","ql50":0.3047,"crps":0.2645,"calibration_error":0.0755,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"TimeLLM_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"RAF","ql50":0.3144,"crps":0.2733,"calibration_error":0.0819,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"Auto","ql50":0.1872,"crps":0.1599,"calibration_error":0.0345,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"Auto","ql50":0.1973,"crps":0.171,"calibration_error":0.0425,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"LagLlama_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"Auto","ql50":0.1924,"crps":0.1656,"calibration_error":0.036,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"LagLlama_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"Auto","ql50":0.2093,"crps":0.1819,"calibration_error":0.0403,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"Auto","ql50":0.1913,"crps":0.1605,"calibration_error":0.0373,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"Auto","ql50":0.2018,"crps":0.172,"calibration_error":0.0413,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"Chronos_FT","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"Auto","ql50":0.1951,"crps":0.1646,"calibration_error":0.0441,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"Chronos_FT","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"Auto","ql50":0.2189,"crps":0.1876,"calibration_error":0.0436,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"Auto","ql50":0.2282,"crps":0.1937,"calibration_error":0.0543,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"Auto","ql50":0.2368,"crps":0.2036,"calibration_error":0.0563,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"TimeLLM_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"Auto","ql50":0.2421,"crps":0.2082,"calibration_error":0.0586,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"TimeLLM_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"Auto","ql50":0.2622,"crps":0.2274,"calibration_error":0.0654,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"OldParts","ql50":0.2578,"crps":0.2216,"calibration_error":0.0453,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"LagLlama_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"OldParts","ql50":0.254,"crps":0.2192,"calibration_error":0.051,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"LagLlama_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"OldParts","ql50":0.2637,"crps":0.2282,"calibration_error":0.0476,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"LagLlama_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"OldParts","ql50":0.2916,"crps":0.2554,"calibration_error":0.0561,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"OldParts","ql50":0.274,"crps":0.2298,"calibration_error":0.0501,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"Chronos_FT","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"OldParts","ql50":0.2796,"crps":0.2367,"calibration_error":0.0525,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"Chronos_FT","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"OldParts","ql50":0.2781,"crps":0.2344,"calibration_error":0.0497,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"Chronos_FT","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"OldParts","ql50":0.3043,"crps":0.2593,"calibration_error":0.0562,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Full LLM","variant_key":"full_llm","backbone":"full_llm","dataset":"OldParts","ql50":0.2963,"crps":0.2462,"calibration_error":0.0765,"fraction_params":1.0,"relative_cost":1.0},{"base_model":"TimeLLM_NB","variant":"Attention Only","variant_key":"attention_only","backbone":"attention_only","dataset":"OldParts","ql50":0.3173,"crps":0.2688,"calibration_error":0.0754,"fraction_params":0.05,"relative_cost":0.24},{"base_model":"TimeLLM_NB","variant":"Linear Only","variant_key":"linear_only","backbone":"linear_only","dataset":"OldParts","ql50":0.3227,"crps":0.2732,"calibration_error":0.0766,"fraction_params":0.01,"relative_cost":0.208},{"base_model":"TimeLLM_NB","variant":"Random Init","variant_key":"random_init","backbone":"random_init","dataset":"OldParts","ql50":0.3453,"crps":0.2943,"calibration_error":0.0814,"fraction_params":1.0,"relative_cost":1.0}];
+
+const experimentResults = [{"model":"D-Linear (NB)","model_key":"DLinear_NB","model_type":"baseline","dataset":"M5","ql50":0.1862},{"model":"D-Linear (HSNB)","model_key":"DLinear_HSNB","model_type":"baseline","dataset":"M5","ql50":0.1964},{"model":"D-Linear (Tweedie)","model_key":"DLinear_Tweedie","model_type":"baseline","dataset":"M5","ql50":0.2051},{"model":"DeepAR (NB)","model_key":"DeepAR_NB","model_type":"baseline","dataset":"M5","ql50":0.2171},{"model":"DeepAR (HSNB)","model_key":"DeepAR_HSNB","model_type":"baseline","dataset":"M5","ql50":0.2209},{"model":"DeepAR (Tweedie)","model_key":"DeepAR_Tweedie","model_type":"baseline","dataset":"M5","ql50":0.2279},{"model":"Transformer (NB)","model_key":"Transformer_NB","model_type":"baseline","dataset":"M5","ql50":0.2741},{"model":"Transformer (HSNB)","model_key":"Transformer_HSNB","model_type":"baseline","dataset":"M5","ql50":0.2725},{"model":"Transformer (Tweedie)","model_key":"Transformer_Tweedie","model_type":"baseline","dataset":"M5","ql50":0.2811},{"model":"FNN (NB)","model_key":"FNN_NB","model_type":"baseline","dataset":"M5","ql50":0.2364},{"model":"Chronos (zero-shot)","model_key":"Chronos_ZS","model_type":"llm","dataset":"M5","ql50":0.2626},{"model":"Chronos (fine-tuned)","model_key":"Chronos_FT","model_type":"llm","dataset":"M5","ql50":0.2141},{"model":"Lag-Llama (NB)","model_key":"LagLlama_NB","model_type":"llm","dataset":"M5","ql50":0.1937},{"model":"Lag-Llama (HSNB)","model_key":"LagLlama_HSNB","model_type":"llm","dataset":"M5","ql50":0.2048},{"model":"Lag-Llama (Tweedie)","model_key":"LagLlama_Tweedie","model_type":"llm","dataset":"M5","ql50":0.2132},{"model":"Time-LLM (NB)","model_key":"TimeLLM_NB","model_type":"llm","dataset":"M5","ql50":0.241},{"model":"Time-LLM (HSNB)","model_key":"TimeLLM_HSNB","model_type":"llm","dataset":"M5","ql50":0.2498},{"model":"Moirai (zero-shot)","model_key":"Moirai_ZS","model_type":"llm","dataset":"M5","ql50":0.2691},{"model":"Moirai (fine-tuned)","model_key":"Moirai_FT","model_type":"llm","dataset":"M5","ql50":0.2171},{"model":"D-Linear (NB)","model_key":"DLinear_NB","model_type":"baseline","dataset":"CarParts","ql50":0.1982},{"model":"D-Linear (HSNB)","model_key":"DLinear_HSNB","model_type":"baseline","dataset":"CarParts","ql50":0.2058},{"model":"D-Linear (Tweedie)","model_key":"DLinear_Tweedie","model_type":"baseline","dataset":"CarParts","ql50":0.2129},{"model":"DeepAR (NB)","model_key":"DeepAR_NB","model_type":"baseline","dataset":"CarParts","ql50":0.2323},{"model":"DeepAR (HSNB)","model_key":"DeepAR_HSNB","model_type":"baseline","dataset":"CarParts","ql50":0.2349},{"model":"DeepAR (Tweedie)","model_key":"DeepAR_Tweedie","model_type":"baseline","dataset":"CarParts","ql50":0.2488},{"model":"Transformer (NB)","model_key":"Transformer_NB","model_type":"baseline","dataset":"CarParts","ql50":0.2884},{"model":"Transformer (HSNB)","model_key":"Transformer_HSNB","model_type":"baseline","dataset":"CarParts","ql50":0.2955},{"model":"Transformer (Tweedie)","model_key":"Transformer_Tweedie","model_type":"baseline","dataset":"CarParts","ql50":0.3044},{"model":"FNN (NB)","model_key":"FNN_NB","model_type":"baseline","dataset":"CarParts","ql50":0.2519},{"model":"Chronos (zero-shot)","model_key":"Chronos_ZS","model_type":"llm","dataset":"CarParts","ql50":0.2782},{"model":"Chronos (fine-tuned)","model_key":"Chronos_FT","model_type":"llm","dataset":"CarParts","ql50":0.2245},{"model":"Lag-Llama (NB)","model_key":"LagLlama_NB","model_type":"llm","dataset":"CarParts","ql50":0.2132},{"model":"Lag-Llama (HSNB)","model_key":"LagLlama_HSNB","model_type":"llm","dataset":"CarParts","ql50":0.215},{"model":"Lag-Llama (Tweedie)","model_key":"LagLlama_Tweedie","model_type":"llm","dataset":"CarParts","ql50":0.2241},{"model":"Time-LLM (NB)","model_key":"TimeLLM_NB","model_type":"llm","dataset":"CarParts","ql50":0.2607},{"model":"Time-LLM (HSNB)","model_key":"TimeLLM_HSNB","model_type":"llm","dataset":"CarParts","ql50":0.2647},{"model":"Moirai (zero-shot)","model_key":"Moirai_ZS","model_type":"llm","dataset":"CarParts","ql50":0.2843},{"model":"Moirai (fine-tuned)","model_key":"Moirai_FT","model_type":"llm","dataset":"CarParts","ql50":0.2372},{"model":"D-Linear (NB)","model_key":"DLinear_NB","model_type":"baseline","dataset":"RAF","ql50":0.219},{"model":"D-Linear (HSNB)","model_key":"DLinear_HSNB","model_type":"baseline","dataset":"RAF","ql50":0.2287},{"model":"D-Linear (Tweedie)","model_key":"DLinear_Tweedie","model_type":"baseline","dataset":"RAF","ql50":0.2313},{"model":"DeepAR (NB)","model_key":"DeepAR_NB","model_type":"baseline","dataset":"RAF","ql50":0.2527},{"model":"DeepAR (HSNB)","model_key":"DeepAR_HSNB","model_type":"baseline","dataset":"RAF","ql50":0.2629},{"model":"DeepAR (Tweedie)","model_key":"DeepAR_Tweedie","model_type":"baseline","dataset":"RAF","ql50":0.2733},{"model":"Transformer (NB)","model_key":"Transformer_NB","model_type":"baseline","dataset":"RAF","ql50":0.3164},{"model":"Transformer (HSNB)","model_key":"Transformer_HSNB","model_type":"baseline","dataset":"RAF","ql50":0.3277},{"model":"Transformer (Tweedie)","model_key":"Transformer_Tweedie","model_type":"baseline","dataset":"RAF","ql50":0.3371},{"model":"FNN (NB)","model_key":"FNN_NB","model_type":"baseline","dataset":"RAF","ql50":0.2823},{"model":"Chronos (zero-shot)","model_key":"Chronos_ZS","model_type":"llm","dataset":"RAF","ql50":0.3065},{"model":"Chronos (fine-tuned)","model_key":"Chronos_FT","model_type":"llm","dataset":"RAF","ql50":0.247},{"model":"Lag-Llama (NB)","model_key":"LagLlama_NB","model_type":"llm","dataset":"RAF","ql50":0.2374},{"model":"Lag-Llama (HSNB)","model_key":"LagLlama_HSNB","model_type":"llm","dataset":"RAF","ql50":0.2398},{"model":"Lag-Llama (Tweedie)","model_key":"LagLlama_Tweedie","model_type":"llm","dataset":"RAF","ql50":0.2486},{"model":"Time-LLM (NB)","model_key":"TimeLLM_NB","model_type":"llm","dataset":"RAF","ql50":0.2866},{"model":"Time-LLM (HSNB)","model_key":"TimeLLM_HSNB","model_type":"llm","dataset":"RAF","ql50":0.2962},{"model":"Moirai (zero-shot)","model_key":"Moirai_ZS","model_type":"llm","dataset":"RAF","ql50":0.3154},{"model":"Moirai (fine-tuned)","model_key":"Moirai_FT","model_type":"llm","dataset":"RAF","ql50":0.2645},{"model":"D-Linear (NB)","model_key":"DLinear_NB","model_type":"baseline","dataset":"Auto","ql50":0.1749},{"model":"D-Linear (HSNB)","model_key":"DLinear_HSNB","model_type":"baseline","dataset":"Auto","ql50":0.1777},{"model":"D-Linear (Tweedie)","model_key":"DLinear_Tweedie","model_type":"baseline","dataset":"Auto","ql50":0.1907},{"model":"DeepAR (NB)","model_key":"DeepAR_NB","model_type":"baseline","dataset":"Auto","ql50":0.2002},{"model":"DeepAR (HSNB)","model_key":"DeepAR_HSNB","model_type":"baseline","dataset":"Auto","ql50":0.2024},{"model":"DeepAR (Tweedie)","model_key":"DeepAR_Tweedie","model_type":"baseline","dataset":"Auto","ql50":0.2123},{"model":"Transformer (NB)","model_key":"Transformer_NB","model_type":"baseline","dataset":"Auto","ql50":0.2546},{"model":"Transformer (HSNB)","model_key":"Transformer_HSNB","model_type":"baseline","dataset":"Auto","ql50":0.2525},{"model":"Transformer (Tweedie)","model_key":"Transformer_Tweedie","model_type":"baseline","dataset":"Auto","ql50":0.261},{"model":"FNN (NB)","model_key":"FNN_NB","model_type":"baseline","dataset":"Auto","ql50":0.2156},{"model":"Chronos (zero-shot)","model_key":"Chronos_ZS","model_type":"llm","dataset":"Auto","ql50":0.2417},{"model":"Chronos (fine-tuned)","model_key":"Chronos_FT","model_type":"llm","dataset":"Auto","ql50":0.1935},{"model":"Lag-Llama (NB)","model_key":"LagLlama_NB","model_type":"llm","dataset":"Auto","ql50":0.1855},{"model":"Lag-Llama (HSNB)","model_key":"LagLlama_HSNB","model_type":"llm","dataset":"Auto","ql50":0.1875},{"model":"Lag-Llama (Tweedie)","model_key":"LagLlama_Tweedie","model_type":"llm","dataset":"Auto","ql50":0.1965},{"model":"Time-LLM (NB)","model_key":"TimeLLM_NB","model_type":"llm","dataset":"Auto","ql50":0.2305},{"model":"Time-LLM (HSNB)","model_key":"TimeLLM_HSNB","model_type":"llm","dataset":"Auto","ql50":0.2313},{"model":"Moirai (zero-shot)","model_key":"Moirai_ZS","model_type":"llm","dataset":"Auto","ql50":0.2472},{"model":"Moirai (fine-tuned)","model_key":"Moirai_FT","model_type":"llm","dataset":"Auto","ql50":0.2067},{"model":"D-Linear (NB)","model_key":"DLinear_NB","model_type":"baseline","dataset":"OldParts","ql50":0.2355},{"model":"D-Linear (HSNB)","model_key":"DLinear_HSNB","model_type":"baseline","dataset":"OldParts","ql50":0.2461},{"model":"D-Linear (Tweedie)","model_key":"DLinear_Tweedie","model_type":"baseline","dataset":"OldParts","ql50":0.2499},{"model":"DeepAR (NB)","model_key":"DeepAR_NB","model_type":"baseline","dataset":"OldParts","ql50":0.2767},{"model":"DeepAR (HSNB)","model_key":"DeepAR_HSNB","model_type":"baseline","dataset":"OldParts","ql50":0.2874},{"model":"DeepAR (Tweedie)","model_key":"DeepAR_Tweedie","model_type":"baseline","dataset":"OldParts","ql50":0.2908},{"model":"Transformer (NB)","model_key":"Transformer_NB","model_type":"baseline","dataset":"OldParts","ql50":0.3411},{"model":"Transformer (HSNB)","model_key":"Transformer_HSNB","model_type":"baseline","dataset":"OldParts","ql50":0.3511},{"model":"Transformer (Tweedie)","model_key":"Transformer_Tweedie","model_type":"baseline","dataset":"OldParts","ql50":0.3552},{"model":"FNN (NB)","model_key":"FNN_NB","model_type":"baseline","dataset":"OldParts","ql50":0.2981},{"model":"Chronos (zero-shot)","model_key":"Chronos_ZS","model_type":"llm","dataset":"OldParts","ql50":0.3264},{"model":"Chronos (fine-tuned)","model_key":"Chronos_FT","model_type":"llm","dataset":"OldParts","ql50":0.2687},{"model":"Lag-Llama (NB)","model_key":"LagLlama_NB","model_type":"llm","dataset":"OldParts","ql50":0.2551},{"model":"Lag-Llama (HSNB)","model_key":"LagLlama_HSNB","model_type":"llm","dataset":"OldParts","ql50":0.2593},{"model":"Lag-Llama (Tweedie)","model_key":"LagLlama_Tweedie","model_type":"llm","dataset":"OldParts","ql50":0.2649},{"model":"Time-LLM (NB)","model_key":"TimeLLM_NB","model_type":"llm","dataset":"OldParts","ql50":0.306},{"model":"Time-LLM (HSNB)","model_key":"TimeLLM_HSNB","model_type":"llm","dataset":"OldParts","ql50":0.3163},{"model":"Moirai (zero-shot)","model_key":"Moirai_ZS","model_type":"llm","dataset":"OldParts","ql50":0.3354},{"model":"Moirai (fine-tuned)","model_key":"Moirai_FT","model_type":"llm","dataset":"OldParts","ql50":0.2798}];
+
+// ===== HELPER FUNCTIONS =====
+const sorted = Object.entries(modelSummaries).sort((a,b) => a[1].avg_ql50 - b[1].avg_ql50);
+const sortedKeys = sorted.map(s => s[0]);
+const sortedModels = sorted.map(s => s[1]);
+
+// ===== 1. RANKING CHART =====
+new Chart(document.getElementById('rankingChart'), {
+    type: 'bar',
+    data: {
+        labels: sortedModels.map(m => m.model),
+        datasets: [{
+            label: 'QL50',
+            data: sortedModels.map(m => m.avg_ql50),
+            backgroundColor: sortedModels.map(m => m.model_type === 'baseline' ? '#3182ce' : '#e53e3e'),
+            borderRadius: 4,
+            barPercentage: 0.75,
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false },
+            tooltip: { callbacks: { afterLabel: (ctx) => {
+                const m = sortedModels[ctx.dataIndex];
+                return `CRPS: ${m.avg_crps}\nParams: ${m.n_params_M}M\nTime: ${m.avg_train_time}s`;
+            }}}
+        },
+        scales: {
+            x: { title: { display: true, text: 'Average QL50 (lower is better)' }, min: 0.18, max: 0.32 },
+            y: { ticks: { font: { size: 11 } } }
+        }
+    }
+});
+
+// ===== 2. DATASET COMPARISON =====
+const dsNames = ['M5','CarParts','RAF','Auto','OldParts'];
+const dsZero = {'M5':0.72,'CarParts':0.68,'RAF':0.81,'Auto':0.65,'OldParts':0.85};
+new Chart(document.getElementById('datasetChart'), {
+    type: 'bar',
+    data: {
+        labels: dsNames.map(d => `${d} (${dsZero[d]})`),
+        datasets: [
+            { label: 'D-Linear (NB)', data: dsNames.map(d => datasetBests[d].best_baseline_ql50), backgroundColor: '#3182ce', borderRadius: 4 },
+            { label: 'Lag-Llama (NB)', data: dsNames.map(d => datasetBests[d].best_llm_ql50), backgroundColor: '#e53e3e', borderRadius: 4 }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: { y: { title: { display: true, text: 'QL50' }, min: 0.15 } }
+    }
+});
+
+// ===== 3. DEFICIT CHART =====
+new Chart(document.getElementById('deficitChart'), {
+    type: 'bar',
+    data: {
+        labels: dsNames.map(d => `${d} (zr=${dsZero[d]})`),
+        datasets: [{
+            label: 'LLM Deficit (%)',
+            data: dsNames.map(d => datasetBests[d].llm_vs_baseline_pct),
+            backgroundColor: dsNames.map(d => {
+                const p = datasetBests[d].llm_vs_baseline_pct;
+                return p > 8 ? '#c53030' : p > 6 ? '#e53e3e' : '#fc8181';
+            }),
+            borderRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { title: { display: true, text: 'LLM Gap (%)' }, min: 0 } }
+    }
+});
+
+// ===== 4. DATASET DETAIL CHART =====
+let datasetDetailChart;
+function updateDatasetDetail(dataset) {
+    document.querySelectorAll('#datasets .chart-controls button').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    const rows = experimentResults.filter(r => r.dataset === dataset).sort((a,b) => a.ql50 - b.ql50);
+    if (datasetDetailChart) datasetDetailChart.destroy();
+    datasetDetailChart = new Chart(document.getElementById('datasetDetailChart'), {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => r.model),
+            datasets: [{
+                label: 'QL50',
+                data: rows.map(r => r.ql50),
+                backgroundColor: rows.map(r => r.model_type === 'baseline' ? '#3182ce' : '#e53e3e'),
+                borderRadius: 4, barPercentage: 0.7
+            }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'QL50' }, min: 0.15 }, y: { ticks: { font: { size: 11 } } } }
+        }
+    });
+}
+updateDatasetDetail('M5');
+
+// ===== 5. HEAD COMPARISON =====
+const heads = ['NB','HSNB','Tweedie'];
+new Chart(document.getElementById('headChart'), {
+    type: 'bar',
+    data: {
+        labels: heads,
+        datasets: [
+            { label: 'QL50', data: heads.map(h => headComparison[h].avg_ql50), backgroundColor: '#3182ce', borderRadius: 4 },
+            { label: 'CRPS', data: heads.map(h => headComparison[h].avg_crps), backgroundColor: '#805ad5', borderRadius: 4 }
+        ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { min: 0.19, title: { display: true, text: 'Score (lower is better)' } } } }
+});
+
+new Chart(document.getElementById('calChart'), {
+    type: 'bar',
+    data: {
+        labels: heads,
+        datasets: [{
+            label: 'Calibration Error',
+            data: heads.map(h => headComparison[h].avg_cal_error),
+            backgroundColor: ['#38a169','#48bb78','#68d391'],
+            borderRadius: 4
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0.03, title: { display: true, text: 'Cal. Error (lower is better)' } } } }
+});
+
+// ===== 6. ABLATION CHART =====
+let ablationChart;
+function updateAblation(model) {
+    document.querySelectorAll('#ablation .chart-controls button').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    const variants = ['Full LLM','Attention Only','Linear Only','Random Init'];
+    const colors = ['#3182ce','#805ad5','#d69e2e','#e53e3e'];
+    let data;
+    if (model === 'all') {
+        data = variants.map(v => {
+            const rows = ablationResults.filter(r => r.variant === v);
+            return rows.reduce((s,r) => s + r.ql50, 0) / rows.length;
+        });
+    } else {
+        data = variants.map(v => {
+            const rows = ablationResults.filter(r => r.base_model === model && r.variant === v);
+            return rows.reduce((s,r) => s + r.ql50, 0) / rows.length;
+        });
+    }
+    if (ablationChart) ablationChart.destroy();
+    ablationChart = new Chart(document.getElementById('ablationChart'), {
+        type: 'bar',
+        data: {
+            labels: variants,
+            datasets: [{
+                label: 'Avg QL50',
+                data: data,
+                backgroundColor: colors,
+                borderRadius: 6, barPercentage: 0.6
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { afterLabel: (ctx) => {
+                    const base = data[0];
+                    const pct = ((data[ctx.dataIndex] - base) / base * 100).toFixed(1);
+                    return `Change vs Full LLM: ${pct > 0 ? '+' : ''}${pct}%`;
+                }}}
+            },
+            scales: { y: { title: { display: true, text: 'QL50 (lower is better)' } } }
+        }
+    });
+}
+updateAblation('all');
+
+// ===== 7. COST-ACCURACY BUBBLE =====
+new Chart(document.getElementById('costChart'), {
+    type: 'bubble',
+    data: {
+        datasets: sortedModels.map((m, i) => ({
+            label: m.model,
+            data: [{ x: m.avg_train_time, y: m.avg_ql50, r: Math.max(4, Math.log10(m.n_params_M + 1) * 10) }],
+            backgroundColor: m.model_type === 'baseline' ? 'rgba(49,130,206,0.65)' : 'rgba(229,62,62,0.65)',
+            borderColor: m.model_type === 'baseline' ? '#2b6cb0' : '#c53030',
+            borderWidth: 1
+        }))
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => {
+                const m = sortedModels[ctx.datasetIndex];
+                return `${m.model}: QL50=${m.avg_ql50}, Time=${m.avg_train_time}s, ${m.n_params_M}M params`;
+            }}}
+        },
+        scales: {
+            x: { title: { display: true, text: 'Training Time (seconds)' }, type: 'logarithmic', min: 30 },
+            y: { title: { display: true, text: 'Average QL50 (lower is better)' }, min: 0.19, max: 0.32 }
+        }
+    }
+});
+
+// ===== 8. TABLES =====
+const tbody = document.querySelector('#summaryTable tbody');
+sorted.forEach(([key, m], i) => {
+    const rankClass = i === 0 ? 'rank-1' : i < 3 ? 'rank-top3' : '';
+    const typeBadge = m.model_type === 'baseline'
+        ? '<span class="type-badge type-baseline">Baseline</span>'
+        : '<span class="type-badge type-llm">LLM</span>';
+    tbody.innerHTML += `<tr class="${rankClass}">
+        <td>${i+1}</td><td>${m.model}</td><td>${typeBadge}</td>
+        <td>${m.avg_ql50.toFixed(4)}</td><td>${m.std_ql50.toFixed(4)}</td>
+        <td>${m.avg_ql90.toFixed(4)}</td><td>${m.avg_ql99.toFixed(4)}</td>
+        <td>${m.avg_crps.toFixed(4)}</td><td>${m.avg_cal_error.toFixed(4)}</td>
+        <td>${m.avg_train_time.toFixed(1)}</td><td>${m.n_params_M}</td>
+    </tr>`;
+});
+
+const dtbody = document.querySelector('#datasetTable tbody');
+dsNames.forEach(d => {
+    const b = datasetBests[d];
+    dtbody.innerHTML += `<tr>
+        <td><strong>${d}</strong></td><td>${dsZero[d]}</td>
+        <td>D-Linear (NB)</td><td>${b.best_baseline_ql50}</td>
+        <td>Lag-Llama (NB)</td><td>${b.best_llm_ql50}</td>
+        <td style="color:var(--accent);font-weight:600">+${b.llm_vs_baseline_pct}%</td>
+    </tr>`;
+});
+
+// ===== NAV HIGHLIGHT =====
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('nav a');
+window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => { if (window.scrollY >= s.offsetTop - 120) current = s.id; });
+    navLinks.forEach(a => {
+        a.classList.remove('active');
+        if (a.getAttribute('href') === '#' + current) a.classList.add('active');
+    });
+});
+</script>
+</body>
+</html>

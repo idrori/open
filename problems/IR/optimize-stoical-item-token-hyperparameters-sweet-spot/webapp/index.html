@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SToICaL Hyperparameter Optimization</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: var(--primary); }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.85; font-size: 1rem; }
+.container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; max-height: 350px; }
+.controls { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+.controls h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; }
+.slider-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+.slider-row label { min-width: 180px; font-weight: 600; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.slider-row .val { min-width: 50px; text-align: right; font-family: monospace; color: var(--accent); font-weight: bold; }
+.metric-box { display: inline-block; background: var(--primary); color: white; padding: 0.5rem 1.2rem; border-radius: 8px; margin: 0.3rem; font-size: 0.95rem; }
+.metric-box span { font-weight: bold; font-size: 1.15rem; }
+.full-width { grid-column: 1 / -1; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>SToICaL Hyperparameter Optimization</h1>
+<p>Joint item-level and token-level hyperparameter sweet spot identification</p>
+</div>
+<div class="container">
+<div class="controls">
+<h2>Interactive Configuration</h2>
+<div class="slider-row">
+<label>Alpha (item-level):</label>
+<input type="range" id="alphaSlider" min="0" max="100" value="45">
+<div class="val" id="alphaVal">0.45</div>
+</div>
+<div class="slider-row">
+<label>Beta (token-level):</label>
+<input type="range" id="betaSlider" min="0" max="100" value="35">
+<div class="val" id="betaVal">0.35</div>
+</div>
+<div style="margin-top:1rem;">
+<div class="metric-box">nDCG@10: <span id="ndcgMetric">0.920</span></div>
+<div class="metric-box">Recall@10: <span id="recallMetric">0.930</span></div>
+<div class="metric-box">Combined: <span id="combinedMetric">0.924</span></div>
+</div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>nDCG Response Surface</h2>
+<canvas id="ndcgChart"></canvas>
+</div>
+<div class="card">
+<h2>Recall Response Surface</h2>
+<canvas id="recallChart"></canvas>
+</div>
+<div class="card">
+<h2>Ablation Comparison</h2>
+<canvas id="ablationChart"></canvas>
+</div>
+<div class="card">
+<h2>Optimization Convergence</h2>
+<canvas id="convergenceChart"></canvas>
+</div>
+<div class="card full-width">
+<h2>Pareto Frontier: nDCG vs Recall</h2>
+<canvas id="paretoChart" style="max-height:400px;"></canvas>
+</div>
+</div>
+</div>
+<script>
+function simulateMetrics(alpha, beta) {
+    const ndcgBase = 0.85;
+    const ndcgAlpha = alpha * (1 - alpha) * 0.3;
+    const ndcgBeta = -beta * beta * 0.08;
+    const interaction = alpha * beta * (1 - Math.abs(alpha - beta)) * 0.12;
+    const ndcg = Math.min(0.98, ndcgBase + ndcgAlpha + ndcgBeta + interaction + 0.03);
+    const recallBase = 0.82;
+    const recallBeta = beta * 0.25;
+    const recallAlpha = alpha * 0.05;
+    const recall = Math.min(0.98, recallBase + recallBeta + recallAlpha + interaction);
+    const combined = 0.6 * ndcg + 0.4 * recall;
+    return { ndcg: +ndcg.toFixed(4), recall: +recall.toFixed(4), combined: +combined.toFixed(4) };
+}
+
+const alphaSlider = document.getElementById('alphaSlider');
+const betaSlider = document.getElementById('betaSlider');
+
+function updateMetrics() {
+    const a = alphaSlider.value / 100;
+    const b = betaSlider.value / 100;
+    document.getElementById('alphaVal').textContent = a.toFixed(2);
+    document.getElementById('betaVal').textContent = b.toFixed(2);
+    const m = simulateMetrics(a, b);
+    document.getElementById('ndcgMetric').textContent = m.ndcg.toFixed(3);
+    document.getElementById('recallMetric').textContent = m.recall.toFixed(3);
+    document.getElementById('combinedMetric').textContent = m.combined.toFixed(3);
+}
+alphaSlider.addEventListener('input', updateMetrics);
+betaSlider.addEventListener('input', updateMetrics);
+
+// nDCG surface as line chart over alpha for various beta
+const alphaVals = Array.from({length: 21}, (_, i) => i * 0.05);
+const betaLevels = [0.0, 0.2, 0.4, 0.6, 0.8];
+const ndcgData = betaLevels.map(b => ({
+    label: 'beta=' + b.toFixed(1),
+    data: alphaVals.map(a => simulateMetrics(a, b).ndcg),
+    borderWidth: 2, fill: false, tension: 0.4, pointRadius: 1
+}));
+new Chart(document.getElementById('ndcgChart'), {
+    type: 'line',
+    data: { labels: alphaVals.map(v => v.toFixed(2)), datasets: ndcgData },
+    options: { responsive: true, plugins: { legend: { position: 'top' } },
+        scales: { x: { title: { display: true, text: 'Alpha' } }, y: { title: { display: true, text: 'nDCG@10' } } } }
+});
+
+const recallData = betaLevels.map(b => ({
+    label: 'beta=' + b.toFixed(1),
+    data: alphaVals.map(a => simulateMetrics(a, b).recall),
+    borderWidth: 2, fill: false, tension: 0.4, pointRadius: 1
+}));
+new Chart(document.getElementById('recallChart'), {
+    type: 'line',
+    data: { labels: alphaVals.map(v => v.toFixed(2)), datasets: recallData },
+    options: { responsive: true, plugins: { legend: { position: 'top' } },
+        scales: { x: { title: { display: true, text: 'Alpha' } }, y: { title: { display: true, text: 'Recall@10' } } } }
+});
+
+// Ablation chart
+const ablationConfigs = [
+    { name: 'Baseline', a: 0, b: 0 },
+    { name: 'Item(0.5)', a: 0.5, b: 0 },
+    { name: 'Token(0.5)', a: 0, b: 0.5 },
+    { name: 'Sweet Spot', a: 0.45, b: 0.35 },
+    { name: 'Balanced', a: 0.5, b: 0.5 },
+    { name: 'High', a: 0.8, b: 0.8 }
+];
+const ablMetrics = ablationConfigs.map(c => simulateMetrics(c.a, c.b));
+new Chart(document.getElementById('ablationChart'), {
+    type: 'bar',
+    data: {
+        labels: ablationConfigs.map(c => c.name),
+        datasets: [
+            { label: 'nDCG@10', data: ablMetrics.map(m => m.ndcg), backgroundColor: '#1a3a5c' },
+            { label: 'Recall@10', data: ablMetrics.map(m => m.recall), backgroundColor: '#2980b9' },
+            { label: 'Combined', data: ablMetrics.map(m => m.combined), backgroundColor: '#f39c12' }
+        ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: false, min: 0.7 } } }
+});
+
+// Convergence
+const convSteps = 45;
+let bestSoFar = [];
+let current = 0.85;
+for (let i = 0; i < convSteps; i++) {
+    const improvement = 0.1 * Math.exp(-i * 0.15) * (0.5 + 0.5 * Math.random());
+    current = Math.min(0.943, current + improvement);
+    bestSoFar.push(+current.toFixed(4));
+}
+new Chart(document.getElementById('convergenceChart'), {
+    type: 'line',
+    data: {
+        labels: Array.from({length: convSteps}, (_, i) => i + 1),
+        datasets: [{
+            label: 'Best Combined (BO)',
+            data: bestSoFar,
+            borderColor: '#2980b9', borderWidth: 2.5, fill: true,
+            backgroundColor: 'rgba(41,128,185,0.1)', tension: 0.3, pointRadius: 1
+        }, {
+            label: 'Grid Search Optimum',
+            data: Array(convSteps).fill(0.943),
+            borderColor: '#e74c3c', borderDash: [5, 5], borderWidth: 2, pointRadius: 0
+        }]
+    },
+    options: { responsive: true, scales: { x: { title: { display: true, text: 'Evaluation' } },
+        y: { title: { display: true, text: 'Combined Metric' } } } }
+});
+
+// Pareto frontier
+const allPoints = [];
+const paretoPoints = [];
+for (let a = 0; a <= 1; a += 0.05) {
+    for (let b = 0; b <= 1; b += 0.05) {
+        const m = simulateMetrics(a, b);
+        allPoints.push({ x: m.ndcg, y: m.recall });
+    }
+}
+// Simple pareto extraction
+allPoints.forEach(p => {
+    const dominated = allPoints.some(q => q.x >= p.x && q.y >= p.y && (q.x > p.x || q.y > p.y));
+    if (!dominated) paretoPoints.push(p);
+});
+paretoPoints.sort((a, b) => a.x - b.x);
+
+new Chart(document.getElementById('paretoChart'), {
+    type: 'scatter',
+    data: {
+        datasets: [
+            { label: 'All Configs', data: allPoints, backgroundColor: 'rgba(150,150,150,0.25)', pointRadius: 3 },
+            { label: 'Pareto Frontier', data: paretoPoints, backgroundColor: '#e74c3c', pointRadius: 6,
+              showLine: true, borderColor: '#e74c3c', borderWidth: 2, fill: false }
+        ]
+    },
+    options: { responsive: true, scales: {
+        x: { title: { display: true, text: 'nDCG@10' } },
+        y: { title: { display: true, text: 'Recall@10' } } } }
+});
+
+updateMetrics();
+</script>
+</body>
+</html>

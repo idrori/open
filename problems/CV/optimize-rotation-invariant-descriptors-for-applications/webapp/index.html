@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rotation-Invariant Descriptor Optimization</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f7fa; color: #1a1a2e; line-height: 1.6; }
+.header { background: linear-gradient(135deg, var(--primary) 0%, #16213e 50%, var(--accent) 100%); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.85; font-size: 0.95rem; max-width: 800px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+.card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; display: inline-block; }
+.chart-container { position: relative; height: 320px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { background: white; border-radius: 10px; padding: 1rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid var(--accent); }
+.stat-card .value { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+.stat-card .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #f8f9fa; font-weight: 600; color: var(--primary); }
+.footer { text-align: center; padding: 2rem; color: #888; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Rotation-Invariant Descriptor Optimization</h1>
+<p>Benchmarking moment invariants, Zernike descriptors, and PtG representations for 3D shape analysis.</p>
+</div>
+<div class="container">
+<div class="stats-grid" id="statsGrid"></div>
+<div class="grid">
+<div class="card"><h2>Invariance Error (log scale)</h2><div class="chart-container"><canvas id="invChart"></canvas></div></div>
+<div class="card"><h2>Retrieval Accuracy</h2><div class="chart-container"><canvas id="retChart"></canvas></div></div>
+<div class="card"><h2>Noise Robustness</h2><div class="chart-container"><canvas id="noiseChart"></canvas></div></div>
+<div class="card"><h2>Computation Time</h2><div class="chart-container"><canvas id="timeChart"></canvas></div></div>
+</div>
+<div class="card" style="margin-bottom:1.5rem;">
+<h2>Summary Table</h2>
+<table><thead><tr><th>Method</th><th>Best Retrieval</th><th>Best Invariance</th><th>Optimal Order</th><th>Time (ms)</th></tr></thead>
+<tbody id="tableBody"></tbody></table>
+</div>
+</div>
+<div class="footer">Rotation-Invariant Descriptors | KDD 2026</div>
+<script>
+var COLORS = {moments:'#e74c3c', zernike:'#3498db', ptg:'#2ecc71'};
+var LABELS = {moments:'Moment Invariants', zernike:'Zernike', ptg:'PtG (Ours)'};
+var orders = [2,3,4,5,6];
+var invData = {moments:[0.082,0.052,0.035,0.024,0.018], zernike:[0.025,0.012,0.006,0.003,0.0018], ptg:[0.015,0.007,0.003,0.0012,0.0006]};
+var retData = {moments:[0.61,0.69,0.77,0.85,0.93], zernike:[0.68,0.77,0.86,0.92,0.95], ptg:[0.72,0.81,0.89,0.95,0.97]};
+var noiseLevels = [0,0.01,0.02,0.05,0.1];
+var noiseData = {moments:[0.010,0.018,0.030,0.062,0.098], zernike:[0.005,0.008,0.012,0.020,0.032], ptg:[0.003,0.007,0.013,0.028,0.045]};
+var timeData = {moments:[0.9,1.1,1.2,1.4,1.5], zernike:[4.0,5.2,6.0,7.0,7.8], ptg:[2.0,2.5,2.8,3.2,3.5]};
+
+var sg = document.getElementById('statsGrid');
+[{v:'3',l:'Methods'},{v:'5',l:'Orders Tested'},{v:'0.97',l:'Best Accuracy (PtG)'},{v:'6e-4',l:'Best Invariance'}].forEach(function(s){
+  var d=document.createElement('div'); d.className='stat-card';
+  var v=document.createElement('div'); v.className='value'; v.textContent=s.v;
+  var l=document.createElement('div'); l.className='label'; l.textContent=s.l;
+  d.appendChild(v); d.appendChild(l); sg.appendChild(d);
+});
+
+function makeChart(id,type,labels,datasets,opts){
+  return new Chart(document.getElementById(id).getContext('2d'),{type:type,data:{labels:labels,datasets:datasets},options:Object.assign({responsive:true,maintainAspectRatio:false},opts)});
+}
+
+var methods = ['moments','zernike','ptg'];
+makeChart('invChart','line',orders,methods.map(function(m){return{label:LABELS[m],data:invData[m],borderColor:COLORS[m],pointRadius:4,borderWidth:2};}),{scales:{y:{type:'logarithmic',title:{display:true,text:'Error'}}}});
+makeChart('retChart','line',orders,methods.map(function(m){return{label:LABELS[m],data:retData[m],borderColor:COLORS[m],pointRadius:4,borderWidth:2};}),{scales:{y:{min:0.5,max:1.0,title:{display:true,text:'Accuracy'}}}});
+makeChart('noiseChart','line',noiseLevels,methods.map(function(m){return{label:LABELS[m],data:noiseData[m],borderColor:COLORS[m],pointRadius:4,borderWidth:2};}),{scales:{x:{title:{display:true,text:'Noise sigma'}}}});
+makeChart('timeChart','bar',orders,[{label:'Moments',data:timeData.moments,backgroundColor:'#e74c3c99'},{label:'Zernike',data:timeData.zernike,backgroundColor:'#3498db99'},{label:'PtG',data:timeData.ptg,backgroundColor:'#2ecc7199'}],{scales:{y:{title:{display:true,text:'Time (ms)'}}}});
+
+var tb = document.getElementById('tableBody');
+[['Moment Invariants','0.93','0.018','5','1.5'],['Zernike','0.95','0.0018','5','7.8'],['PtG (Ours)','0.97','0.0006','5','3.5']].forEach(function(row){
+  var tr = document.createElement('tr');
+  row.forEach(function(c){ var td=document.createElement('td'); td.textContent=c; tr.appendChild(td); });
+  tb.appendChild(tr);
+});
+</script>
+</body>
+</html>

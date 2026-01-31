@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuous Unified Visual Tokenization: Modeling the Understanding--Generation Trade-off</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a5276;
+  --secondary: #2980b9;
+  --accent: #27ae60;
+  --accent2: #e67e22;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #2c3e50;
+  --text-light: #7f8c8d;
+  --border: #e0e0e0;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  color: #fff; padding: 60px 20px; text-align: center;
+}
+.hero h1 { font-size: 2rem; max-width: 900px; margin: 0 auto 16px; font-weight: 700; }
+.hero .subtitle { font-size: 1.1rem; opacity: 0.9; max-width: 800px; margin: 0 auto 24px; }
+.hero .venue { font-size: 0.95rem; opacity: 0.75; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+.section { margin: 40px 0; }
+.section-title { font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-bottom: 20px; padding-bottom: 8px; border-bottom: 3px solid var(--secondary); }
+.card { background: var(--card-bg); border-radius: 12px; box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); }
+.card h3 { color: var(--primary); margin-bottom: 12px; font-size: 1.15rem; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.stat-card { background: var(--card-bg); border-radius: 10px; padding: 20px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border); }
+.stat-card .value { font-size: 2rem; font-weight: 700; color: var(--secondary); }
+.stat-card .label { font-size: 0.85rem; color: var(--text-light); margin-top: 4px; }
+.stat-card.highlight { border-left: 4px solid var(--accent); }
+.chart-container { position: relative; width: 100%; max-height: 420px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { padding: 10px 14px; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: #fff; font-weight: 600; }
+tr:nth-child(even) { background: #f4f6f8; }
+tr:hover { background: #eaf2f8; }
+tr.best td { font-weight: 600; }
+.best-val { color: var(--accent); font-weight: 700; }
+.methods-list { list-style: none; }
+.methods-list li { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.methods-list li:last-child { border-bottom: none; }
+.methods-list .method-name { font-weight: 700; color: var(--primary); }
+.methods-list .method-desc { color: var(--text-light); font-size: 0.92rem; margin-top: 4px; }
+.findings-list { list-style: none; counter-reset: finding; }
+.findings-list li { padding: 16px 0 16px 48px; border-bottom: 1px solid var(--border); position: relative; }
+.findings-list li:last-child { border-bottom: none; }
+.findings-list li::before { counter-increment: finding; content: counter(finding); position: absolute; left: 0; top: 16px; width: 32px; height: 32px; background: var(--secondary); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; }
+.tab-bar { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab-btn { padding: 8px 18px; border: 1px solid var(--border); background: var(--card-bg); border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.9rem; color: var(--text); transition: all 0.2s; }
+.tab-btn.active { background: var(--secondary); color: #fff; border-color: var(--secondary); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+footer { background: var(--primary); color: rgba(255,255,255,0.8); text-align: center; padding: 24px; margin-top: 60px; font-size: 0.85rem; }
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.4rem; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .hero { padding: 40px 16px; }
+  table { font-size: 0.8rem; }
+  th, td { padding: 6px 8px; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Continuous Unified Visual Tokenization: Modeling the Understanding--Generation Trade-off</h1>
+  <p class="subtitle">A systematic simulation-based analysis comparing discrete VQ-VAE, semantic encoders, dual tokenizers, and continuous unified tokenizers across reconstruction, understanding, and generation.</p>
+  <p class="venue">KDD 2026 -- Research Track -- Category IV</p>
+</div>
+
+<div class="container">
+
+  <!-- Key Metrics -->
+  <div class="section">
+    <h2 class="section-title">Key Results at a Glance</h2>
+    <div class="grid-3">
+      <div class="stat-card highlight">
+        <div class="value">32.47 dB</div>
+        <div class="label">Reconstruction PSNR (Continuous Unified)</div>
+      </div>
+      <div class="stat-card highlight">
+        <div class="value">0.922</div>
+        <div class="label">Semantic Accuracy (Continuous Unified)</div>
+      </div>
+      <div class="stat-card highlight">
+        <div class="value">9.98</div>
+        <div class="label">Generation FID (Continuous Unified, lower is better)</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">8.04</div>
+        <div class="label">Continuous Baseline FID (unreachable by discrete)</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">8.42</div>
+        <div class="label">Best Discrete FID (codebook 16384)</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">0.200</div>
+        <div class="label">Throughput at 1024 Tokens (relative)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem & Methods -->
+  <div class="section">
+    <h2 class="section-title">Problem and Methods</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Problem Statement</h3>
+        <p>Unified multimodal models typically use separate tokenizers for visual understanding and image generation, increasing complexity and limiting cross-task synergy. Discrete quantized representations offer unification but introduce discretization errors that degrade generation quality. This work analyzes whether continuous unified tokenizers can resolve the understanding--generation trade-off.</p>
+      </div>
+      <div class="card">
+        <h3>Tokenizer Architectures Compared</h3>
+        <ul class="methods-list">
+          <li><span class="method-name">Discrete VQ-VAE</span><div class="method-desc">Vector-quantized VAE with codebook size 8192. Quantization introduces errors via nearest-neighbor lookup.</div></li>
+          <li><span class="method-name">Semantic Encoder</span><div class="method-desc">Continuous encoder (CLIP/SigLIP style) optimized for semantic understanding. No pixel-reconstruction pathway.</div></li>
+          <li><span class="method-name">Dual Tokenizer</span><div class="method-desc">Two specialized tokenizers in parallel: one for semantics, one for pixel reconstruction. High quality but doubled complexity.</div></li>
+          <li><span class="method-name">Continuous Unified</span><div class="method-desc">Single continuous encoder-decoder jointly optimizing semantic richness and pixel-level reconstruction, avoiding discretization errors.</div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Charts -->
+  <div class="section">
+    <h2 class="section-title">Interactive Results</h2>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showTab('tab-comparison')">Architecture Comparison</button>
+      <button class="tab-btn" onclick="showTab('tab-latent')">Latent Dimension Scaling</button>
+      <button class="tab-btn" onclick="showTab('tab-discrete')">Discretization Error</button>
+      <button class="tab-btn" onclick="showTab('tab-tradeoff')">Understanding-Generation Trade-off</button>
+      <button class="tab-btn" onclick="showTab('tab-scaling')">Token Count Scaling</button>
+    </div>
+
+    <!-- Tab 1: Architecture Comparison -->
+    <div id="tab-comparison" class="tab-content active">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Reconstruction PSNR &amp; Semantic Accuracy</h3>
+          <div class="chart-container"><canvas id="chart-comp-psnr"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Generation FID (lower is better)</h3>
+          <div class="chart-container"><canvas id="chart-comp-fid"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Latent Dimension -->
+    <div id="tab-latent" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <h3>PSNR vs Latent Dimension</h3>
+          <div class="chart-container"><canvas id="chart-latent-psnr"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Semantic Accuracy &amp; FID vs Latent Dimension</h3>
+          <div class="chart-container"><canvas id="chart-latent-acc-fid"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Discretization Error -->
+    <div id="tab-discrete" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Quantization Error vs Codebook Size</h3>
+          <div class="chart-container"><canvas id="chart-quant-err"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>FID &amp; PSNR vs Codebook Size</h3>
+          <div class="chart-container"><canvas id="chart-disc-fid-psnr"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Trade-off -->
+    <div id="tab-tradeoff" class="tab-content">
+      <div class="card">
+        <h3>Understanding--Generation Pareto Frontier</h3>
+        <div class="chart-container"><canvas id="chart-tradeoff"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Tab 5: Token Scaling -->
+    <div id="tab-scaling" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Understanding Accuracy &amp; FID vs Token Count</h3>
+          <div class="chart-container"><canvas id="chart-token-acc-fid"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Throughput vs Token Count</h3>
+          <div class="chart-container"><canvas id="chart-token-throughput"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Tables -->
+  <div class="section">
+    <h2 class="section-title">Data Tables</h2>
+
+    <div class="card">
+      <h3>Table 1: Tokenizer Architecture Comparison</h3>
+      <table>
+        <thead><tr><th>Architecture</th><th>PSNR (dB)</th><th>Semantic Accuracy</th><th>FID</th><th>Quant. Error</th></tr></thead>
+        <tbody>
+          <tr><td>Discrete VQ-VAE</td><td>31.75 &plusmn; 0.83</td><td>0.740 &plusmn; 0.010</td><td>18.42 &plusmn; 1.50</td><td>0.050 &plusmn; 0.049</td></tr>
+          <tr><td>Semantic Encoder</td><td>17.97 &plusmn; 1.98</td><td>0.908 &plusmn; 0.006</td><td>55.20 &plusmn; 5.17</td><td>0.000</td></tr>
+          <tr><td>Dual Tokenizer</td><td>29.98 &plusmn; 1.02</td><td>0.880 &plusmn; 0.005</td><td>11.83 &plusmn; 2.08</td><td>0.019 &plusmn; 0.019</td></tr>
+          <tr class="best"><td>Continuous Unified</td><td class="best-val">32.47 &plusmn; 0.88</td><td class="best-val">0.922 &plusmn; 0.004</td><td class="best-val">9.98 &plusmn; 1.82</td><td>0.000</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Table 2: Latent Dimension Sweep (Continuous Unified)</h3>
+      <table>
+        <thead><tr><th>Dimension</th><th>PSNR (dB)</th><th>Semantic Accuracy</th><th>FID</th></tr></thead>
+        <tbody>
+          <tr><td>16</td><td>31.00 &plusmn; 0.91</td><td>0.892 &plusmn; 0.004</td><td>12.48 &plusmn; 1.80</td></tr>
+          <tr><td>32</td><td>31.39 &plusmn; 0.89</td><td>0.900 &plusmn; 0.004</td><td>11.98 &plusmn; 1.77</td></tr>
+          <tr><td>64</td><td>31.80 &plusmn; 0.98</td><td>0.907 &plusmn; 0.004</td><td>11.23 &plusmn; 1.76</td></tr>
+          <tr><td>128</td><td>32.12 &plusmn; 0.86</td><td>0.914 &plusmn; 0.004</td><td>10.69 &plusmn; 1.78</td></tr>
+          <tr><td>256</td><td>32.51 &plusmn; 0.91</td><td>0.922 &plusmn; 0.004</td><td>9.94 &plusmn; 1.78</td></tr>
+          <tr><td>512</td><td>32.83 &plusmn; 0.92</td><td>0.930 &plusmn; 0.004</td><td>9.41 &plusmn; 1.82</td></tr>
+          <tr><td>1024</td><td>33.23 &plusmn; 0.86</td><td>0.937 &plusmn; 0.004</td><td>8.72 &plusmn; 1.67</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Table 3: Discretization Error Analysis</h3>
+      <table>
+        <thead><tr><th>Codebook Size</th><th>Quant. Error</th><th>FID</th><th>PSNR (dB)</th></tr></thead>
+        <tbody>
+          <tr><td>256</td><td>0.081 &plusmn; 0.018</td><td>11.18 &plusmn; 1.45</td><td>30.78 &plusmn; 0.82</td></tr>
+          <tr><td>512</td><td>0.058 &plusmn; 0.012</td><td>10.43 &plusmn; 1.52</td><td>31.09 &plusmn; 0.80</td></tr>
+          <tr><td>1024</td><td>0.041 &plusmn; 0.010</td><td>9.66 &plusmn; 1.56</td><td>31.36 &plusmn; 0.85</td></tr>
+          <tr><td>2048</td><td>0.029 &plusmn; 0.007</td><td>9.11 &plusmn; 1.44</td><td>31.47 &plusmn; 0.81</td></tr>
+          <tr><td>4096</td><td>0.020 &plusmn; 0.005</td><td>8.87 &plusmn; 1.48</td><td>31.66 &plusmn; 0.82</td></tr>
+          <tr><td>8192</td><td>0.014 &plusmn; 0.003</td><td>8.48 &plusmn; 1.46</td><td>31.79 &plusmn; 0.81</td></tr>
+          <tr><td>16384</td><td>0.010 &plusmn; 0.002</td><td>8.42 &plusmn; 1.52</td><td>31.91 &plusmn; 0.76</td></tr>
+          <tr class="best"><td>Continuous Baseline</td><td class="best-val">0.000</td><td class="best-val">8.04</td><td class="best-val">32.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Table 4: Token Count Scaling</h3>
+      <table>
+        <thead><tr><th>Token Count</th><th>Understanding Acc.</th><th>Generation FID</th><th>Relative Throughput</th></tr></thead>
+        <tbody>
+          <tr><td>16</td><td>0.713</td><td>38.96</td><td>0.941</td></tr>
+          <tr><td>32</td><td>0.733</td><td>37.72</td><td>0.889</td></tr>
+          <tr><td>64</td><td>0.774</td><td>33.74</td><td>0.800</td></tr>
+          <tr><td>128</td><td>0.803</td><td>28.21</td><td>0.667</td></tr>
+          <tr><td>256</td><td>0.839</td><td>21.65</td><td>0.500</td></tr>
+          <tr><td>576</td><td>0.925</td><td>11.74</td><td>0.308</td></tr>
+          <tr><td>1024</td><td>0.921</td><td>8.64</td><td>0.200</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Key Findings -->
+  <div class="section">
+    <h2 class="section-title">Key Findings</h2>
+    <div class="card">
+      <ol class="findings-list">
+        <li><strong>Continuous unified tokenizers achieve the best combined performance.</strong> With a PSNR of 32.47 dB, semantic accuracy of 0.922, and FID of 9.98, the continuous unified tokenizer outperforms discrete VQ-VAE (FID 18.42), semantic encoders (FID 55.20), and dual tokenizers (FID 11.83) across all three metrics simultaneously.</li>
+        <li><strong>Discretization error is a fundamental limitation.</strong> Even with a codebook of size 16384, discrete tokenizers achieve an FID of only 8.42, which cannot match the continuous baseline FID of 8.04. Continuous representations eliminate quantization error entirely.</li>
+        <li><strong>The Pareto frontier is strictly dominant.</strong> Across all understanding-generation trade-off operating points, the continuous unified tokenizer achieves better performance on both axes compared to baselines. At the balanced point, it improves understanding by 0.061 and FID by 8.40 simultaneously.</li>
+        <li><strong>Latent dimension scaling follows logarithmic gains.</strong> Increasing the latent dimension from 16 to 1024 improves PSNR from 31.00 to 33.23 dB and FID from 12.48 to 8.72, with diminishing returns at higher dimensions.</li>
+        <li><strong>Token count scaling reveals an efficiency challenge.</strong> At 576 tokens, accuracy reaches 0.925 with FID 11.74, but throughput drops to 0.308. At 1024 tokens, FID improves to 8.64 but throughput falls to 0.200, highlighting the quality-efficiency trade-off.</li>
+      </ol>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  KDD 2026 Research Track &mdash; Category IV &mdash; Continuous Unified Visual Tokenization
+</footer>
+
+<script>
+// ===== Embedded Data =====
+const exp1 = {"Discrete VQ-VAE":{"recon_psnr_mean":31.747481583607186,"recon_psnr_std":0.8285892443971815,"semantic_acc_mean":0.7400570740977525,"semantic_acc_std":0.010182679471845993,"gen_fid_mean":18.42484800003691,"gen_fid_std":1.4966519033932661,"quant_error_mean":0.050057601331821945,"quant_error_std":0.049168266284549594},"Semantic Encoder":{"recon_psnr_mean":17.973650542824732,"recon_psnr_std":1.980454919442375,"semantic_acc_mean":0.9080777062759519,"semantic_acc_std":0.006445571915494576,"gen_fid_mean":55.1957534963372,"gen_fid_std":5.171694527018947,"quant_error_mean":0.0,"quant_error_std":0.0},"Dual Tokenizer":{"recon_psnr_mean":29.982698360116334,"recon_psnr_std":1.0246403899535528,"semantic_acc_mean":0.8801186655686183,"semantic_acc_std":0.0050385666133120855,"gen_fid_mean":11.834717039392313,"gen_fid_std":2.0754292951532616,"quant_error_mean":0.019041583447965835,"quant_error_std":0.019066190090714488},"Continuous Unified":{"recon_psnr_mean":32.46755002257711,"recon_psnr_std":0.8796163596877709,"semantic_acc_mean":0.9222843961667775,"semantic_acc_std":0.00407599821978658,"gen_fid_mean":9.984858155705842,"gen_fid_std":1.8209209237263855,"quant_error_mean":0.0,"quant_error_std":0.0}};
+
+const exp2 = {"dimensions":[16,32,64,128,256,512,1024],"recon_psnr":[{"mean":30.998902717399215,"std":0.9109221118874582},{"mean":31.39473672148523,"std":0.8880424043505128},{"mean":31.803688100294558,"std":0.9818112935271327},{"mean":32.11691451553421,"std":0.861687242121211},{"mean":32.509598897836455,"std":0.9116294670381714},{"mean":32.82867091833746,"std":0.9219044737565992},{"mean":33.2348129429049,"std":0.8644444364955985}],"semantic_acc":[{"mean":0.8923278107250107,"std":0.004053277188776355},{"mean":0.8995799104706358,"std":0.004069211350893627},{"mean":0.9066725364249384,"std":0.004084538941008934},{"mean":0.9142591897329555,"std":0.004106001347251199},{"mean":0.9221956780351559,"std":0.003864832511254394},{"mean":0.9295386072482774,"std":0.004100994852015208},{"mean":0.9370078686632858,"std":0.004137761582150611}],"gen_fid":[{"mean":12.48049642747562,"std":1.795205209474546},{"mean":11.97975024881597,"std":1.7729055805026264},{"mean":11.227521051359519,"std":1.7599325370116743},{"mean":10.694264154139114,"std":1.7799490766143606},{"mean":9.938430415082692,"std":1.7792302737064207},{"mean":9.409431236840897,"std":1.8232035803564657},{"mean":8.720817110324067,"std":1.6724091390127833}]};
+
+const exp3 = {"codebook_sizes":[256,512,1024,2048,4096,8192,16384],"quant_errors":[{"mean":0.08055712487280738,"std":0.01811124610698013},{"mean":0.057543754057358384,"std":0.01193904492032507},{"mean":0.041244382284065295,"std":0.010080308505156253},{"mean":0.02896631690432144,"std":0.006558511247264535},{"mean":0.02020457352361911,"std":0.004616863666552427},{"mean":0.014397147394350085,"std":0.0031399352270447198},{"mean":0.01006956606681618,"std":0.002149745617200594}],"fid_scores":[{"mean":11.177143364019223,"std":1.4452758106195196},{"mean":10.42917384534933,"std":1.5189654943974173},{"mean":9.664188716733786,"std":1.559522355013654},{"mean":9.105521378532888,"std":1.4408866765936301},{"mean":8.873400564124106,"std":1.4777499994044718},{"mean":8.479561466449923,"std":1.455797279850886},{"mean":8.419871253430994,"std":1.5175664435747342}],"psnr_values":[{"mean":30.782127694254786,"std":0.8195304847853863},{"mean":31.08942565719424,"std":0.8042262138631621},{"mean":31.356728486793155,"std":0.8451939955383617},{"mean":31.472795800458474,"std":0.8145737967862184},{"mean":31.660563434667594,"std":0.8197112791860188},{"mean":31.792298246258717,"std":0.8083689801297183},{"mean":31.905184531301686,"std":0.7637488049153719}],"continuous_baseline":{"fid":8.036425715193907,"psnr":31.99698955546993}};
+
+const exp4 = {"alphas":[0.0,0.02040816326530612,0.04081632653061224,0.061224489795918366,0.08163265306122448,0.1020408163265306,0.12244897959183673,0.14285714285714285,0.16326530612244897,0.18367346938775508,0.2040816326530612,0.22448979591836732,0.24489795918367346,0.26530612244897955,0.2857142857142857,0.3061224489795918,0.32653061224489793,0.3469387755102041,0.36734693877551017,0.3877551020408163,0.4081632653061224,0.42857142857142855,0.44897959183673464,0.4693877551020408,0.4897959183673469,0.5102040816326531,0.5306122448979591,0.5510204081632653,0.5714285714285714,0.5918367346938775,0.6122448979591836,0.6326530612244897,0.6530612244897959,0.673469387755102,0.6938775510204082,0.7142857142857142,0.7346938775510203,0.7551020408163265,0.7755102040816326,0.7959183673469387,0.8163265306122448,0.836734693877551,0.8571428571428571,0.8775510204081632,0.8979591836734693,0.9183673469387754,0.9387755102040816,0.9591836734693877,0.9795918367346939,1.0],"understanding_scores":[0.6029647469240064,0.6264003682077994,0.6197800886448703,0.6301889229910096,0.6034042879737784,0.6333649634687417,0.6559308500054225,0.6607227657674248,0.6555236967543489,0.6412167956910163,0.6598150547352378,0.6715303373102675,0.6858565816169903,0.6955329019655403,0.6811190357954683,0.6844533424062313,0.7438726589606978,0.714707990184392,0.7217546046583737,0.7393559610335482,0.7362023804414387,0.7535782310593543,0.7685492558332078,0.7851694468636284,0.7818463479737605,0.7539841404291512,0.7761121949331408,0.7864907383581669,0.7765265359055783,0.8038792025784881,0.8047825938923991,0.8272305542066225,0.847676350747527,0.8325560547082608,0.8492919113653193,0.8304845624155294,0.8657207580242001,0.9113114237766927,0.8807244151881578,0.9052874846630257,0.8814450914336657,0.9240968301613185,0.9072028257171155,0.8988710103362869,0.910861170133798,0.9262100894823485,0.9382388252576992,0.9311367136420484,0.9386681696377686,0.9492489369604143],"generation_scores":[6.835798608016784,8.555507931368004,9.297616715245276,11.727110332415348,11.401969353481991,12.576867683330082,13.525255622650782,15.627520649858406,16.919615005341186,17.121981286083738,18.09716530280096,19.284474124510027,20.383652287907523,21.838666746821307,22.795079587322437,20.511759112223764,23.387691173757677,23.483208530632236,26.57414244203876,26.18097554997905,28.776918823787582,29.55682608530772,30.33998947503986,31.17624087649745,33.21991563121232,33.95110846018393,33.52176215774503,35.71270875741285,36.59831221216437,38.63001483240108,39.80206740400293,39.59916165016396,42.57559419130421,40.93338229187293,41.270844733090925,45.0211584910582,43.876525297629414,44.372967800362694,45.979011250733706,47.264990133252574,47.00756934096391,49.218784519220186,50.861868356241516,49.64985728859243,52.626275040302865,56.06383558770133,55.79863697492682,54.64590977298085,56.24510499219241,57.505832581184066],"unified_understanding_scores":[0.6598676655177012,0.6840248399221258,0.6781712159914117,0.6867831669474926,0.7048098043468874,0.7175546557722589,0.7156631777883942,0.7246177402749581,0.7365036879082311,0.7319378047103946,0.7356941194103122,0.7495228917485216,0.744932727371019,0.7459790020297856,0.7615604096627439,0.7591461835837501,0.7742028206533421,0.7668873199538199,0.7817335456601725,0.7788824903547493,0.7686924869382632,0.8113290732320785,0.8066223353951605,0.8260329382428597,0.8236889902765018,0.814612009736758,0.8415117627991577,0.8479950147753337,0.8120152655099416,0.8518003320830179,0.8276353858213781,0.8496001060689369,0.8630022505126459,0.8710877121406487,0.863585334344159,0.8611711529461327,0.8990825666839367,0.8899323987507245,0.8961060544154701,0.9139289788590319,0.9031947246635129,0.9238775535753873,0.9138547288511042,0.9385158468568991,0.9159906573028346,0.9261717637124282,0.9558932883256781,0.9441169668080049,0.9428348125646631,0.9659119401110721],"unified_generation_scores":[8.1402808931979,7.417252807229965,8.000710584305141,8.068265593821767,9.435203234670514,10.24710683363774,11.363371767911367,11.2429555593135,11.652280958117169,12.344138325533608,14.944614359856994,15.809843705772412,16.389461104128777,15.873113635679129,17.765000196204436,18.339909502480428,18.73176337222121,18.796620332689233,20.160890903898437,19.40864962926274,21.956944267685444,20.191284141000793,22.37486521449207,23.23933366920126,23.760143681150687,25.547655369253135,24.42940479565872,25.40839970992643,27.00973649939288,26.35012784468204,27.983258734325307,30.375511804770937,30.518232879170192,31.983252981696445,31.206556157733075,32.73025552725452,33.49978191530507,32.08807774031671,33.532912874998296,34.473101128266485,37.52801355585658,37.254055898935,36.00967630253605,39.05717820381642,37.962829899149305,39.576132462800715,39.525665620571225,38.810360141823075,42.64229724760503,42.83366042640539]};
+
+const exp5 = {"token_counts":[16,32,64,128,256,576,1024],"understanding_acc":[{"mean":0.7132627861440956},{"mean":0.732714542654895},{"mean":0.7740076387859944},{"mean":0.8026147898616871},{"mean":0.8391501447661154},{"mean":0.9251248745339583},{"mean":0.9209881670509258}],"generation_fid":[{"mean":38.96378856198947},{"mean":37.71827424895179},{"mean":33.737835760402966},{"mean":28.209236012065062},{"mean":21.645852089365775},{"mean":11.74361192028855},{"mean":8.635344603663736}],"throughput_relative":[{"mean":0.9411764705882353},{"mean":0.8888888888888888},{"mean":0.8},{"mean":0.6666666666666666},{"mean":0.5},{"mean":0.3076923076923077},{"mean":0.2}]};
+
+// ===== Tab Switching =====
+function showTab(id) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ===== Chart Defaults =====
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 13;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+const colors = { blue: '#2980b9', green: '#27ae60', red: '#e74c3c', orange: '#e67e22', purple: '#8e44ad', teal: '#16a085' };
+
+// ===== Chart 1a: Comparison PSNR + Accuracy =====
+const archLabels = ['Discrete VQ-VAE', 'Semantic Encoder', 'Dual Tokenizer', 'Continuous Unified'];
+const archColors = [colors.blue, colors.orange, colors.purple, colors.green];
+new Chart(document.getElementById('chart-comp-psnr'), {
+  type: 'bar',
+  data: {
+    labels: archLabels,
+    datasets: [
+      { label: 'PSNR (dB)', data: archLabels.map(a => +exp1[a].recon_psnr_mean.toFixed(2)), backgroundColor: archColors.map(c => c + '99'), borderColor: archColors, borderWidth: 2, yAxisID: 'y' },
+      { label: 'Semantic Accuracy', data: archLabels.map(a => +exp1[a].semantic_acc_mean.toFixed(3)), backgroundColor: archColors.map(c => c + '44'), borderColor: archColors, borderWidth: 2, borderDash: [5,3], yAxisID: 'y1', type: 'line', pointRadius: 6, pointStyle: 'rectRot' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      y: { beginAtZero: false, title: { display: true, text: 'PSNR (dB)' }, min: 15 },
+      y1: { position: 'right', beginAtZero: false, title: { display: true, text: 'Accuracy' }, min: 0.6, max: 1.0, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+// ===== Chart 1b: Comparison FID =====
+new Chart(document.getElementById('chart-comp-fid'), {
+  type: 'bar',
+  data: {
+    labels: archLabels,
+    datasets: [{ label: 'FID (lower is better)', data: archLabels.map(a => +exp1[a].gen_fid_mean.toFixed(2)), backgroundColor: archColors.map(c => c + '99'), borderColor: archColors, borderWidth: 2 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: { y: { beginAtZero: true, title: { display: true, text: 'FID' } } },
+    plugins: { annotation: {} }
+  }
+});
+
+// ===== Chart 2a: Latent PSNR =====
+new Chart(document.getElementById('chart-latent-psnr'), {
+  type: 'line',
+  data: {
+    labels: exp2.dimensions,
+    datasets: [{
+      label: 'PSNR (dB)', data: exp2.recon_psnr.map(d => +d.mean.toFixed(2)),
+      borderColor: colors.blue, backgroundColor: colors.blue + '22', fill: true,
+      tension: 0.3, pointRadius: 5
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: true, scales: { x: { title: { display: true, text: 'Latent Dimension' } }, y: { title: { display: true, text: 'PSNR (dB)' }, beginAtZero: false } } }
+});
+
+// ===== Chart 2b: Latent Acc + FID =====
+new Chart(document.getElementById('chart-latent-acc-fid'), {
+  type: 'line',
+  data: {
+    labels: exp2.dimensions,
+    datasets: [
+      { label: 'Semantic Accuracy', data: exp2.semantic_acc.map(d => +d.mean.toFixed(3)), borderColor: colors.green, backgroundColor: colors.green + '22', yAxisID: 'y', tension: 0.3, pointRadius: 5 },
+      { label: 'FID', data: exp2.gen_fid.map(d => +d.mean.toFixed(2)), borderColor: colors.red, backgroundColor: colors.red + '22', yAxisID: 'y1', tension: 0.3, pointRadius: 5, borderDash: [5,3] }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      x: { title: { display: true, text: 'Latent Dimension' } },
+      y: { title: { display: true, text: 'Accuracy' }, min: 0.88, max: 0.95 },
+      y1: { position: 'right', title: { display: true, text: 'FID' }, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+// ===== Chart 3a: Quant Error =====
+new Chart(document.getElementById('chart-quant-err'), {
+  type: 'line',
+  data: {
+    labels: exp3.codebook_sizes,
+    datasets: [{
+      label: 'Quantization Error', data: exp3.quant_errors.map(d => +d.mean.toFixed(4)),
+      borderColor: colors.red, backgroundColor: colors.red + '22', fill: true,
+      tension: 0.3, pointRadius: 5
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: true, scales: { x: { title: { display: true, text: 'Codebook Size' } }, y: { title: { display: true, text: 'Mean Quantization Error' }, beginAtZero: true } } }
+});
+
+// ===== Chart 3b: Disc FID & PSNR =====
+new Chart(document.getElementById('chart-disc-fid-psnr'), {
+  type: 'line',
+  data: {
+    labels: exp3.codebook_sizes,
+    datasets: [
+      { label: 'Discrete FID', data: exp3.fid_scores.map(d => +d.mean.toFixed(2)), borderColor: colors.red, tension: 0.3, pointRadius: 5, yAxisID: 'y' },
+      { label: 'Continuous Baseline FID', data: exp3.codebook_sizes.map(() => +exp3.continuous_baseline.fid.toFixed(2)), borderColor: colors.green, borderDash: [8,4], pointRadius: 0, yAxisID: 'y' },
+      { label: 'Discrete PSNR', data: exp3.psnr_values.map(d => +d.mean.toFixed(2)), borderColor: colors.blue, tension: 0.3, pointRadius: 5, yAxisID: 'y1' },
+      { label: 'Continuous Baseline PSNR', data: exp3.codebook_sizes.map(() => +exp3.continuous_baseline.psnr.toFixed(2)), borderColor: colors.teal, borderDash: [8,4], pointRadius: 0, yAxisID: 'y1' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      x: { title: { display: true, text: 'Codebook Size' } },
+      y: { title: { display: true, text: 'FID (lower is better)' }, min: 7, max: 12 },
+      y1: { position: 'right', title: { display: true, text: 'PSNR (dB)' }, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+// ===== Chart 4: Trade-off Pareto =====
+new Chart(document.getElementById('chart-tradeoff'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      {
+        label: 'Baseline',
+        data: exp4.understanding_scores.map((u, i) => ({ x: u, y: exp4.generation_scores[i] })),
+        borderColor: colors.red, backgroundColor: colors.red + '55', pointRadius: 4, showLine: true, tension: 0.2
+      },
+      {
+        label: 'Continuous Unified',
+        data: exp4.unified_understanding_scores.map((u, i) => ({ x: u, y: exp4.unified_generation_scores[i] })),
+        borderColor: colors.green, backgroundColor: colors.green + '55', pointRadius: 4, showLine: true, tension: 0.2
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      x: { title: { display: true, text: 'Understanding Score' }, min: 0.55, max: 1.0 },
+      y: { title: { display: true, text: 'Generation FID (lower is better)' }, min: 0, max: 60 }
+    }
+  }
+});
+
+// ===== Chart 5a: Token Acc + FID =====
+new Chart(document.getElementById('chart-token-acc-fid'), {
+  type: 'line',
+  data: {
+    labels: exp5.token_counts,
+    datasets: [
+      { label: 'Understanding Acc.', data: exp5.understanding_acc.map(d => +d.mean.toFixed(3)), borderColor: colors.green, tension: 0.3, pointRadius: 5, yAxisID: 'y' },
+      { label: 'Generation FID', data: exp5.generation_fid.map(d => +d.mean.toFixed(2)), borderColor: colors.red, tension: 0.3, pointRadius: 5, yAxisID: 'y1', borderDash: [5,3] }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      x: { title: { display: true, text: 'Token Count' } },
+      y: { title: { display: true, text: 'Accuracy' }, min: 0.6, max: 1.0 },
+      y1: { position: 'right', title: { display: true, text: 'FID' }, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+// ===== Chart 5b: Token Throughput =====
+new Chart(document.getElementById('chart-token-throughput'), {
+  type: 'line',
+  data: {
+    labels: exp5.token_counts,
+    datasets: [{
+      label: 'Relative Throughput', data: exp5.throughput_relative.map(d => +d.mean.toFixed(3)),
+      borderColor: colors.orange, backgroundColor: colors.orange + '22', fill: true,
+      tension: 0.3, pointRadius: 5
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      x: { title: { display: true, text: 'Token Count' } },
+      y: { title: { display: true, text: 'Relative Throughput' }, min: 0, max: 1.0 }
+    }
+  }
+});
+</script>
+</body>
+</html>

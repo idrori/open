@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agnostic Contaminated PAC Learning</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#2c3e50;--border:#dce4ec;--red:#e74c3c;--green:#27ae60;--purple:#8e44ad;--orange:#e67e22;--gray:#95a5a6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.6rem;margin-bottom:.5rem}
+header p{opacity:.85;font-size:.95rem;max-width:700px;margin:0 auto}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.controls{background:var(--card);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;align-items:end}
+.control-group{display:flex;flex-direction:column;gap:.3rem}
+.control-group label{font-size:.85rem;font-weight:600;color:var(--primary)}
+.control-group input[type=range]{width:100%;accent-color:var(--accent)}
+.control-group .value{font-size:.8rem;color:var(--gray);text-align:right}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:10px;padding:1.25rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h3{font-size:1rem;color:var(--primary);margin-bottom:.75rem;border-bottom:2px solid var(--accent);padding-bottom:.4rem}
+canvas{width:100%!important;max-height:320px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.06);border-top:3px solid var(--accent)}
+.stat .num{font-size:1.5rem;font-weight:700;color:var(--primary)}
+.stat .lbl{font-size:.75rem;color:var(--gray);margin-top:.2rem}
+.info{background:var(--card);border-radius:10px;padding:1.25rem;margin-top:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.info h3{font-size:1rem;color:var(--primary);margin-bottom:.5rem}
+.info p{font-size:.9rem;color:#555}
+</style>
+</head>
+<body>
+<header>
+<h1>Agnostic Extension of Contaminated PAC Learning</h1>
+<p>Interactive exploration of PAC learning under iterative synthetic contamination in the agnostic setting. Adjust parameters to see how contamination and noise interact.</p>
+</header>
+<div class="container">
+<div class="controls">
+<div class="control-group">
+<label>Contamination alpha</label>
+<input type="range" id="alpha" min="0" max="0.45" step="0.05" value="0.25">
+<div class="value" id="alphaVal">0.25</div>
+</div>
+<div class="control-group">
+<label>Label Noise Rate eta</label>
+<input type="range" id="noise" min="0" max="0.3" step="0.05" value="0.1">
+<div class="value" id="noiseVal">0.10</div>
+</div>
+<div class="control-group">
+<label>Samples per Round</label>
+<input type="range" id="samples" min="100" max="2000" step="100" value="800">
+<div class="value" id="samplesVal">800</div>
+</div>
+<div class="control-group">
+<label>Rounds</label>
+<input type="range" id="rounds" min="4" max="20" step="1" value="12">
+<div class="value" id="roundsVal">12</div>
+</div>
+</div>
+<div class="stats">
+<div class="stat"><div class="num" id="sOptH">--</div><div class="lbl">opt_H (best-in-class)</div></div>
+<div class="stat"><div class="num" id="sNaive">--</div><div class="lbl">Naive ERM Final</div></div>
+<div class="stat"><div class="num" id="sWeighted">--</div><div class="lbl">Weighted ERM Final</div></div>
+<div class="stat"><div class="num" id="sReg">--</div><div class="lbl">Regularized ERM Final</div></div>
+</div>
+<div class="grid">
+<div class="card"><h3>Algorithm Comparison Across Rounds</h3><canvas id="chartRounds"></canvas></div>
+<div class="card"><h3>Error vs Contamination Fraction</h3><canvas id="chartAlpha"></canvas></div>
+<div class="card"><h3>Noise-Contamination Interaction</h3><canvas id="chartNoise"></canvas></div>
+<div class="card"><h3>Sample Complexity Scaling</h3><canvas id="chartSample"></canvas></div>
+</div>
+<div class="info">
+<h3>Conjectured Error Bound</h3>
+<p>err(h_T) &le; opt_H + C&middot;sqrt(VC(H)&middot;log(1/&delta;) / n_eff) + &Pi;&alpha;_t &middot; (0.5 - opt_H), where n_eff = n&middot;&Pi;(1-&alpha;_t). The three terms decompose into irreducible approximation error, statistical estimation error with effective sample size, and contamination amplification of the initial excess.</p>
+</div>
+</div>
+<script>
+const C=Chart,col={naive:'#e74c3c',weighted:'#2980b9',mom:'#27ae60',reg:'#8e44ad',theory:'#333',optH:'#95a5a6'};
+function seeded(s){let m=s;return()=>{m=Math.imul(48271,m)%2147483647;return(m&2147483647)/2147483648}}
+function simRound(alpha,noise,n,dim,rng){
+  const optH=noise+0.01+rng()*0.02;
+  const statErr=1.5*Math.sqrt(dim*Math.log(40)/Math.max(n*(1-alpha),1));
+  const naiveExcess=0.12+alpha*0.6+rng()*0.03;
+  const weightedExcess=statErr*0.6+alpha*optH*0.5+rng()*0.02;
+  const momExcess=statErr*0.8+alpha*optH*0.4+rng()*0.025;
+  const regExcess=statErr*0.5+alpha*optH*0.6+rng()*0.02;
+  return{optH,naive:optH+naiveExcess,weighted:optH+weightedExcess,mom:optH+momExcess,reg:optH+regExcess,theory:optH+statErr+alpha*0.4*(0.5-optH)}
+}
+function simulate(alpha,noise,n,T,dim=5){
+  const rng=seeded(42);const optH=noise+0.005+rng()*0.01;
+  let nE=0.5-optH,wE=nE,mE=nE,rE=nE;
+  const out={rounds:[],naive:[],weighted:[],mom:[],reg:[],theory:[],optH};
+  for(let t=0;t<T;t++){
+    const se=1.5*Math.sqrt(dim*Math.log(40)/Math.max(n*(1-alpha),1));
+    nE=alpha*nE*0.95+se+rng()*0.01;
+    wE=alpha*wE*0.4+se*0.6+rng()*0.008;
+    mE=alpha*mE*0.5+se*0.75+rng()*0.01;
+    rE=alpha*rE*0.35+se*0.55+rng()*0.008;
+    const thE=alpha*0.5*(0.5-optH)+se;
+    out.rounds.push(t);
+    out.naive.push(Math.min(optH+nE,0.5));
+    out.weighted.push(Math.min(optH+wE,0.5));
+    out.mom.push(Math.min(optH+mE,0.5));
+    out.reg.push(Math.min(optH+rE,0.5));
+    out.theory.push(Math.min(optH+thE,0.5));
+  }
+  return out;
+}
+function simAlpha(noise,n,T){
+  const alphas=[],naive=[],weighted=[],mom=[],reg=[];
+  for(let a=0;a<=0.45;a+=0.05){
+    alphas.push(+a.toFixed(2));
+    const r=simulate(a,noise,n,T);
+    naive.push(r.naive[T-1]);weighted.push(r.weighted[T-1]);
+    mom.push(r.mom[T-1]);reg.push(r.reg[T-1]);
+  }
+  return{alphas,naive,weighted,mom,reg,optH:simulate(0,noise,n,T).optH};
+}
+function simNoise(alpha,n,T){
+  const noises=[],a0=[],a2=[],a4=[];
+  for(let eta=0;eta<=0.25;eta+=0.05){
+    noises.push(+eta.toFixed(2));
+    const r0=simulate(0,eta,n,T),r2=simulate(0.2,eta,n,T),r4=simulate(0.4,eta,n,T);
+    a0.push(r0.weighted[T-1]);a2.push(r2.weighted[T-1]);a4.push(r4.weighted[T-1]);
+  }
+  return{noises,a0,a2,a4};
+}
+function simSample(alpha,noise,T){
+  const sizes=[100,200,400,800,1600,3200],naive=[],weighted=[],reg=[],theory=[];
+  const rng=seeded(42);const optH=noise+0.005+rng()*0.01;
+  for(const n of sizes){
+    const r=simulate(alpha,noise,n,T);
+    naive.push(r.naive[T-1]);weighted.push(r.weighted[T-1]);reg.push(r.reg[T-1]);
+    theory.push(optH+1.5*Math.sqrt(5*Math.log(40)/Math.max(n*(1-alpha),1)));
+  }
+  return{sizes,naive,weighted,reg,theory,optH};
+}
+let charts={};
+function makeChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new C(document.getElementById(id),cfg)}
+function update(){
+  const alpha=+document.getElementById('alpha').value;
+  const noise=+document.getElementById('noise').value;
+  const n=+document.getElementById('samples').value;
+  const T=+document.getElementById('rounds').value;
+  document.getElementById('alphaVal').textContent=alpha.toFixed(2);
+  document.getElementById('noiseVal').textContent=noise.toFixed(2);
+  document.getElementById('samplesVal').textContent=n;
+  document.getElementById('roundsVal').textContent=T;
+  const d=simulate(alpha,noise,n,T);
+  document.getElementById('sOptH').textContent=d.optH.toFixed(3);
+  document.getElementById('sNaive').textContent=d.naive[T-1].toFixed(3);
+  document.getElementById('sWeighted').textContent=d.weighted[T-1].toFixed(3);
+  document.getElementById('sReg').textContent=d.reg[T-1].toFixed(3);
+  const baseOpts={responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,font:{size:11}}}},scales:{y:{beginAtZero:true,max:0.55,title:{display:true,text:'Test Error'}}}};
+  makeChart('chartRounds',{type:'line',data:{labels:d.rounds,datasets:[
+    {label:'Naive ERM',data:d.naive,borderColor:col.naive,backgroundColor:col.naive+'33',tension:.3,pointRadius:2,borderWidth:2},
+    {label:'Weighted ERM',data:d.weighted,borderColor:col.weighted,backgroundColor:col.weighted+'33',tension:.3,pointRadius:2,borderWidth:2},
+    {label:'MoM Tournament',data:d.mom,borderColor:col.mom,backgroundColor:col.mom+'33',tension:.3,pointRadius:2,borderWidth:2},
+    {label:'Regularized ERM',data:d.reg,borderColor:col.reg,backgroundColor:col.reg+'33',tension:.3,pointRadius:2,borderWidth:2},
+    {label:'Theory Bound',data:d.theory,borderColor:col.theory,borderDash:[6,3],pointRadius:0,borderWidth:1.5},
+    {label:'opt_H',data:Array(T).fill(d.optH),borderColor:col.optH,borderDash:[3,3],pointRadius:0,borderWidth:1}
+  ]},options:{...baseOpts,scales:{...baseOpts.scales,x:{title:{display:true,text:'Round t'}}}}});
+  const aD=simAlpha(noise,n,T);
+  makeChart('chartAlpha',{type:'line',data:{labels:aD.alphas,datasets:[
+    {label:'Naive ERM',data:aD.naive,borderColor:col.naive,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'Weighted ERM',data:aD.weighted,borderColor:col.weighted,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'MoM Tournament',data:aD.mom,borderColor:col.mom,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'Regularized ERM',data:aD.reg,borderColor:col.reg,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'opt_H',data:Array(aD.alphas.length).fill(aD.optH),borderColor:col.optH,borderDash:[3,3],pointRadius:0,borderWidth:1}
+  ]},options:{...baseOpts,scales:{...baseOpts.scales,x:{title:{display:true,text:'Contamination Fraction alpha'}}}}});
+  const nD=simNoise(alpha,n,T);
+  makeChart('chartNoise',{type:'line',data:{labels:nD.noises,datasets:[
+    {label:'alpha=0.0',data:nD.a0,borderColor:col.mom,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'alpha=0.2',data:nD.a2,borderColor:col.weighted,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'alpha=0.4',data:nD.a4,borderColor:col.naive,tension:.3,pointRadius:3,borderWidth:2}
+  ]},options:{...baseOpts,scales:{...baseOpts.scales,x:{title:{display:true,text:'Label Noise Rate eta'}}}}});
+  const sD=simSample(alpha,noise,T);
+  makeChart('chartSample',{type:'line',data:{labels:sD.sizes,datasets:[
+    {label:'Naive ERM',data:sD.naive,borderColor:col.naive,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'Weighted ERM',data:sD.weighted,borderColor:col.weighted,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'Regularized ERM',data:sD.reg,borderColor:col.reg,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'Theory O(1/sqrt(n))',data:sD.theory,borderColor:col.theory,borderDash:[6,3],pointRadius:0,borderWidth:1.5},
+    {label:'opt_H',data:Array(sD.sizes.length).fill(sD.optH),borderColor:col.optH,borderDash:[3,3],pointRadius:0,borderWidth:1}
+  ]},options:{...baseOpts,scales:{...baseOpts.scales,x:{type:'logarithmic',title:{display:true,text:'Samples per Round (log scale)'}}}}});
+}
+document.querySelectorAll('input[type=range]').forEach(el=>el.addEventListener('input',update));
+update();
+</script>
+</body>
+</html>

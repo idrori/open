@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Communication Diversity Impact on Agent Performance</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #232733;
+  --border: #2d3140;
+  --text: #e4e7f0;
+  --text-dim: #8891a5;
+  --accent: #6c8cff;
+  --accent2: #50d9a0;
+  --danger: #f06e6e;
+  --warn: #f0c06e;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); line-height:1.6; }
+a { color: var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+.header {
+  background: linear-gradient(135deg, #1a1d27 0%, #252a3a 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 3rem 2rem 2rem;
+  text-align:center;
+}
+.header h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header p { color: var(--text-dim); font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+.header .venue {
+  display:inline-block; margin-top:1rem; padding:0.3rem 0.8rem;
+  background: rgba(108,140,255,0.15); border-radius:4px;
+  color: var(--accent); font-size:0.8rem; font-weight:600;
+}
+
+.container { max-width:1200px; margin:0 auto; padding:2rem 1.5rem; }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem;
+  text-align:center;
+}
+.stat-card .value {
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+.stat-card .label { font-size: 0.8rem; color: var(--text-dim); margin-top:0.3rem; }
+.stat-card.accent .value { color: var(--accent); }
+.stat-card.green .value { color: var(--accent2); }
+.stat-card.red .value { color: var(--danger); }
+.stat-card.yellow .value { color: var(--warn); }
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.section h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--accent);
+}
+.section h3 { font-size: 0.95rem; font-weight:600; margin: 1rem 0 0.5rem; }
+
+.tabs { display:flex; gap:0.5rem; margin-bottom:1.2rem; flex-wrap:wrap; }
+.tab-btn {
+  padding: 0.4rem 1rem;
+  background: var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  color: var(--text-dim);
+  cursor:pointer;
+  font-size:0.85rem;
+  font-family: var(--font);
+  transition: all 0.2s;
+}
+.tab-btn:hover { border-color: var(--accent); color:var(--text); }
+.tab-btn.active { background: rgba(108,140,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+.chart-container { position:relative; width:100%; }
+canvas { width:100% !important; background: var(--surface2); border-radius:8px; }
+
+table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+th { background: var(--surface2); padding:0.6rem; text-align:left; font-weight:600; color: var(--accent); border-bottom:2px solid var(--border); }
+td { padding:0.5rem 0.6rem; border-bottom:1px solid var(--border); }
+tr:hover td { background: rgba(108,140,255,0.05); }
+.num { font-family: var(--mono); text-align:right; }
+.low { color: var(--danger); }
+.high { color: var(--accent2); }
+
+.methodology {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.method-card {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 1rem;
+  border-left: 3px solid var(--accent);
+}
+.method-card h4 { font-size:0.9rem; margin-bottom:0.4rem; }
+.method-card p { font-size:0.82rem; color: var(--text-dim); }
+
+.eq-block {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin: 0.8rem 0;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+  color: var(--accent);
+}
+
+.slider-group { margin:1rem 0; }
+.slider-group label { display:block; font-size:0.85rem; color:var(--text-dim); margin-bottom:0.3rem; }
+.slider-group input[type="range"] { width:100%; accent-color: var(--accent); }
+.slider-val { font-family:var(--mono); color:var(--accent); font-size:0.85rem; }
+
+.badge {
+  display:inline-block; padding:0.15rem 0.5rem;
+  border-radius:3px; font-size:0.75rem; font-weight:600;
+}
+.badge.sig { background: rgba(80,217,160,0.15); color: var(--accent2); }
+
+.finding-box {
+  background: rgba(108,140,255,0.08);
+  border-left: 3px solid var(--accent);
+  padding: 0.8rem 1rem;
+  margin: 0.8rem 0;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+}
+
+.footer {
+  text-align:center; padding:2rem; color: var(--text-dim); font-size:0.8rem;
+  border-top:1px solid var(--border); margin-top:2rem;
+}
+
+@media(max-width:768px) {
+  .header h1 { font-size:1.3rem; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="header">
+  <h1>Impact of User Communication Diversity on Agent Performance</h1>
+  <p>A framework for quantifying how variation in user communication styles -- formality, verbosity, politeness, dialect, cultural context, and domain expertise -- affects LLM agent task success.</p>
+  <div class="venue">KDD 2026 Research Track</div>
+</div>
+
+<div class="container">
+
+<!-- Key metrics -->
+<div class="stats-row">
+  <div class="stat-card accent">
+    <div class="value">19,200</div>
+    <div class="label">Simulated Dialogues</div>
+  </div>
+  <div class="stat-card red">
+    <div class="value">0.608</div>
+    <div class="label">Max CDSI (Sensitivity)</div>
+  </div>
+  <div class="stat-card yellow">
+    <div class="value">7.5%</div>
+    <div class="label">Max Style Contribution</div>
+  </div>
+  <div class="stat-card green">
+    <div class="value" id="sig-stat"></div>
+    <div class="label">All Effects Significant</div>
+  </div>
+</div>
+
+<!-- Key Findings -->
+<div class="section">
+  <h2>Key Findings</h2>
+  <div class="finding-box">
+    <strong>1.</strong> Communication diversity has a <strong>measurable and significant</strong> impact on task success. CDSI scores range from 0.259 (robust) to 0.608 (highly sensitive).
+  </div>
+  <div class="finding-box">
+    <strong>2.</strong> <strong>Dialect distance</strong> and <strong>cultural context</strong> are the most impactful dimensions, with Spearman correlations reaching rho = -0.37.
+  </div>
+  <div class="finding-box">
+    <strong>3.</strong> Style accounts for <strong>1.5%--7.5%</strong> of task outcome uncertainty -- exceeding the contribution of task domain by 2--10x.
+  </div>
+  <div class="finding-box">
+    <strong>4.</strong> Agents show <strong>systematic overconfidence</strong> for non-standard communicators, with calibration gaps reaching <strong>0.80</strong>.
+  </div>
+  <div class="finding-box">
+    <strong>5.</strong> Performance degradation follows a smooth <strong>exponential decay</strong> model with style distance.
+  </div>
+</div>
+
+<!-- Interactive CDSI Explorer -->
+<div class="section">
+  <h2>Interactive: Communication Style Explorer</h2>
+  <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:1rem;">Adjust the style dimensions to see how they affect predicted task success. The model uses exponential decay: P(correct) = alpha * exp(-beta * weighted_distance).</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+    <div>
+      <div class="slider-group">
+        <label>Formality: <span class="slider-val" id="v-form">0.40</span></label>
+        <input type="range" id="s-form" min="0" max="100" value="40">
+      </div>
+      <div class="slider-group">
+        <label>Verbosity: <span class="slider-val" id="v-verb">0.40</span></label>
+        <input type="range" id="s-verb" min="0" max="100" value="40">
+      </div>
+      <div class="slider-group">
+        <label>Politeness: <span class="slider-val" id="v-polit">0.40</span></label>
+        <input type="range" id="s-polit" min="0" max="100" value="40">
+      </div>
+      <div class="slider-group">
+        <label>Dialect Distance: <span class="slider-val" id="v-dial">0.00</span></label>
+        <input type="range" id="s-dial" min="0" max="100" value="0">
+      </div>
+      <div class="slider-group">
+        <label>Cultural Context: <span class="slider-val" id="v-cult">0.20</span></label>
+        <input type="range" id="s-cult" min="0" max="100" value="20">
+      </div>
+      <div class="slider-group">
+        <label>Domain Expertise: <span class="slider-val" id="v-expert">0.30</span></label>
+        <input type="range" id="s-expert" min="0" max="100" value="30">
+      </div>
+    </div>
+    <div>
+      <div style="background:var(--surface2);border-radius:8px;padding:1.2rem;text-align:center;">
+        <div style="font-size:0.8rem;color:var(--text-dim);">Predicted Task Success</div>
+        <div id="pred-success" style="font-size:2.5rem;font-weight:700;font-family:var(--mono);color:var(--accent2);">0.920</div>
+        <div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.5rem;">Style Distance: <span id="pred-dist" style="font-family:var(--mono);">0.000</span></div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">Weighted Distance: <span id="pred-wdist" style="font-family:var(--mono);">0.000</span></div>
+      </div>
+      <div style="margin-top:1rem;">
+        <label style="font-size:0.85rem;color:var(--text-dim);">Agent Configuration:</label>
+        <select id="agent-select" style="width:100%;padding:0.4rem;margin-top:0.3rem;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--font);">
+          <option value="low">Low Sensitivity (alpha=0.90, beta=0.15)</option>
+          <option value="mod">Moderate Sensitivity (alpha=0.91, beta=0.35)</option>
+          <option value="high" selected>High Sensitivity (alpha=0.92, beta=0.50)</option>
+          <option value="dialect">Dialect Vulnerable (alpha=0.93, beta=0.35, weighted)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Success Rate Chart -->
+<div class="section">
+  <h2>Task Success Rate by User Profile</h2>
+  <div class="tabs" id="chart1-tabs">
+    <button class="tab-btn active" data-view="grouped">Grouped Bar</button>
+    <button class="tab-btn" data-view="heatmap">Table View</button>
+  </div>
+  <div id="chart1-grouped" class="chart-container">
+    <canvas id="successChart" height="300"></canvas>
+  </div>
+  <div id="chart1-heatmap" style="display:none;overflow-x:auto;">
+    <table id="success-table">
+      <thead id="success-table-head"></thead>
+      <tbody id="success-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CDSI Comparison -->
+<div class="section">
+  <h2>Communication Diversity Sensitivity Index (CDSI)</h2>
+  <div class="eq-block">CDSI(agent) = 1 - E[SR(s)] / SR(s_0) where s ranges over non-standard styles</div>
+  <div class="chart-container">
+    <canvas id="cdsiChart" height="220"></canvas>
+  </div>
+</div>
+
+<!-- Per-Axis Sensitivity -->
+<div class="section">
+  <h2>Per-Axis Sensitivity Analysis</h2>
+  <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:1rem;">Spearman correlation (rho) between each style dimension and task success. Negative values indicate that higher values on that axis degrade performance.</p>
+  <div class="chart-container">
+    <canvas id="axisChart" height="250"></canvas>
+  </div>
+</div>
+
+<!-- Info Decomposition -->
+<div class="section">
+  <h2>Information-Theoretic Decomposition</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+    <div>
+      <div class="chart-container">
+        <canvas id="infoChart" height="280"></canvas>
+      </div>
+    </div>
+    <div>
+      <h3>Interpretation</h3>
+      <p style="font-size:0.85rem;color:var(--text-dim);">We decompose the total entropy of task success H(S) into three components:</p>
+      <table style="margin-top:0.5rem;">
+        <tbody>
+        <tr><td style="color:var(--accent);">I(S; Content)</td><td class="num">0.006--0.009 bits</td></tr>
+        <tr><td style="color:var(--danger);">I(S; Style | Content)</td><td class="num">0.015--0.072 bits</td></tr>
+        <tr><td style="color:var(--text-dim);">H(S | Content, Style)</td><td class="num">0.845--0.971 bits</td></tr>
+        </tbody>
+      </table>
+      <div class="finding-box" style="margin-top:1rem;">
+        Communication style explains <strong>2--10x more variance</strong> than task domain alone. The style contribution ratio ranges from 1.55% to 7.54%.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Equity & Calibration -->
+<div class="section">
+  <h2>Equity Analysis: Calibration Gaps by Group</h2>
+  <div class="tabs" id="equity-tabs">
+    <button class="tab-btn active" data-agent="high_sensitivity">High Sens.</button>
+    <button class="tab-btn" data-agent="moderate_sensitivity">Mod. Sens.</button>
+    <button class="tab-btn" data-agent="low_sensitivity">Low Sens.</button>
+    <button class="tab-btn" data-agent="dialect_vulnerable">Dialect Vuln.</button>
+  </div>
+  <div class="chart-container">
+    <canvas id="equityChart" height="280"></canvas>
+  </div>
+  <div class="finding-box" style="margin-top:1rem;">
+    Agents maintain ~90% confidence regardless of user style, but actual success varies from 9.8% to 80.5%. The calibration gap reaches <strong>0.80</strong> for L2 speakers under the Dialect Vulnerable agent.
+  </div>
+</div>
+
+<!-- Significance Tests -->
+<div class="section">
+  <h2>Statistical Significance</h2>
+  <table>
+    <thead>
+      <tr><th>Agent</th><th>Chi-squared</th><th>p-value</th><th>Sig.</th><th>Kruskal-Wallis H</th><th>p-value</th><th>Sig.</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Low Sens.</td><td class="num">87.6</td><td class="num">7.08e-19</td><td><span class="badge sig">***</span></td><td class="num">140.0</td><td class="num">1.60e-24</td><td><span class="badge sig">***</span></td></tr>
+      <tr><td>Mod. Sens.</td><td class="num">271.7</td><td class="num">1.36e-58</td><td><span class="badge sig">***</span></td><td class="num">374.8</td><td class="num">1.37e-73</td><td><span class="badge sig">***</span></td></tr>
+      <tr><td>High Sens.</td><td class="num">462.6</td><td class="num">6.15e-100</td><td><span class="badge sig">***</span></td><td class="num">566.4</td><td class="num">2.18e-114</td><td><span class="badge sig">***</span></td></tr>
+      <tr><td>Dialect Vuln.</td><td class="num">457.3</td><td class="num">8.48e-99</td><td><span class="badge sig">***</span></td><td class="num">931.2</td><td class="num">1.21e-192</td><td><span class="badge sig">***</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Methodology -->
+<div class="section">
+  <h2>Methodology Overview</h2>
+  <div class="methodology">
+    <div class="method-card">
+      <h4>1. Style Space</h4>
+      <p>6-dimensional parameterization grounded in sociolinguistic theory: formality, verbosity, politeness, dialect distance, cultural context, domain expertise.</p>
+    </div>
+    <div class="method-card">
+      <h4>2. User Profiles</h4>
+      <p>12 canonical profiles spanning the style space, from baseline to AAVE, L2, high-context, elderly, teen, expert, and corporate communicators.</p>
+    </div>
+    <div class="method-card">
+      <h4>3. Agent Model</h4>
+      <p>Exponential decay: P(correct|s) = alpha * exp(-beta * d_w(s)). Four agent configurations varying in sensitivity and axis weighting.</p>
+    </div>
+    <div class="method-card">
+      <h4>4. CDSI Metric</h4>
+      <p>CDSI = 1 - mean(SR_non-standard) / SR_baseline. Scalar summary of agent robustness with per-axis and equity decomposition.</p>
+    </div>
+    <div class="method-card">
+      <h4>5. Info Decomposition</h4>
+      <p>Mutual information analysis separating content (what) from style (how) contributions to task outcome uncertainty.</p>
+    </div>
+    <div class="method-card">
+      <h4>6. Statistical Tests</h4>
+      <p>Chi-squared test (style vs. success) and Kruskal-Wallis H test (demographic group differences). All significant at p less than 10^-18.</p>
+    </div>
+  </div>
+</div>
+
+<!-- References -->
+<div class="section">
+  <h2>References</h2>
+  <ol style="font-size:0.85rem;color:var(--text-dim);padding-left:1.5rem;">
+    <li>Seshadri et al. (2026). Lost in Simulation: LLM-Simulated Users are Unreliable Proxies for Human Users in Agentic Evaluations. arXiv:2601.17087.</li>
+    <li>Truong et al. (2025). Persona-Driven Interaction: Evaluating LLM User Simulation. EMNLP.</li>
+    <li>Blodgett et al. (2020). Language (Technology) is Power: A Critical Survey of Bias in NLP. ACL.</li>
+    <li>Brown and Levinson (1987). Politeness: Some Universals in Language Usage. Cambridge University Press.</li>
+    <li>Biber (1995). Dimensions of Register Variation. Cambridge University Press.</li>
+    <li>Hall (1976). Beyond Culture. Anchor Books.</li>
+  </ol>
+</div>
+
+</div>
+
+<div class="footer">
+  Communication Diversity Impact on Agent Performance | KDD 2026 Research Track
+</div>
+
+<script>
+// ===== DATA =====
+var DATA = {
+  profiles: ["Standard\nbaseline","Formal\nverbose","Casual\nterse","High\npoliteness","AAVE\nspeaker","Indian\nEnglish","L2\nbeginner","Domain\nexpert","High\ncontext","Elderly\nformal","Teen\ncasual","Corporate\nprof."],
+  profilesFull: ["Standard baseline","Formal verbose","Casual terse","High politeness","AAVE speaker","Indian English","L2 beginner","Domain expert","High context","Elderly formal","Teen casual","Corporate prof."],
+  agents: ["low_sensitivity","moderate_sensitivity","high_sensitivity","dialect_vulnerable"],
+  agentLabels: ["Low Sens.","Mod. Sens.","High Sens.","Dialect Vuln."],
+  rates: {
+    low_sensitivity: [0.705,0.540,0.610,0.510,0.458,0.495,0.372,0.562,0.445,0.570,0.568,0.618],
+    moderate_sensitivity: [0.728,0.425,0.525,0.367,0.258,0.318,0.190,0.415,0.265,0.435,0.407,0.500],
+    high_sensitivity: [0.762,0.362,0.475,0.273,0.193,0.240,0.115,0.338,0.180,0.340,0.347,0.422],
+    dialect_vulnerable: [0.805,0.585,0.590,0.330,0.155,0.215,0.098,0.562,0.172,0.425,0.375,0.650]
+  },
+  cdsi: { low_sensitivity:0.2589, moderate_sensitivity:0.4870, high_sensitivity:0.6083, dialect_vulnerable:0.5305 },
+  axisSens: {
+    low_sensitivity: [0.023,0.015,-0.032,-0.122,-0.120,0.049],
+    moderate_sensitivity: [0.031,0.018,-0.044,-0.200,-0.186,0.075],
+    high_sensitivity: [0.010,-0.002,-0.076,-0.224,-0.223,0.081],
+    dialect_vulnerable: [0.137,0.078,-0.048,-0.370,-0.362,0.204]
+  },
+  axes: ["Formality","Verbosity","Politeness","Dialect\nDist.","Cultural\nContext","Domain\nExpert."],
+  info: {
+    low_sensitivity: {mi_content:0.0094, mi_style:0.0154, h_remain:0.9711},
+    moderate_sensitivity: {mi_content:0.0073, mi_style:0.0434, h_remain:0.9218},
+    high_sensitivity: {mi_content:0.0074, mi_style:0.0695, h_remain:0.8453},
+    dialect_vulnerable: {mi_content:0.0063, mi_style:0.0724, h_remain:0.8997}
+  },
+  equity: {
+    high_sensitivity: {
+      groups:["baseline","style_formal","style_casual","style_polite","dialect_aave","dialect_indian","l2_speaker","style_expert","cultural_high_ctx","age_elderly","age_teen","style_corporate"],
+      rates:[0.762,0.362,0.475,0.273,0.193,0.240,0.115,0.338,0.180,0.340,0.347,0.422],
+      gaps:[0.137,0.537,0.424,0.629,0.708,0.660,0.782,0.563,0.721,0.564,0.552,0.478]
+    },
+    moderate_sensitivity: {
+      groups:["baseline","style_formal","style_casual","style_polite","dialect_aave","dialect_indian","l2_speaker","style_expert","cultural_high_ctx","age_elderly","age_teen","style_corporate"],
+      rates:[0.728,0.425,0.525,0.367,0.258,0.318,0.190,0.415,0.265,0.435,0.407,0.500],
+      gaps:[0.172,0.475,0.374,0.534,0.643,0.583,0.707,0.485,0.636,0.469,0.492,0.401]
+    },
+    low_sensitivity: {
+      groups:["baseline","style_formal","style_casual","style_polite","dialect_aave","dialect_indian","l2_speaker","style_expert","cultural_high_ctx","age_elderly","age_teen","style_corporate"],
+      rates:[0.705,0.540,0.610,0.510,0.458,0.495,0.372,0.562,0.445,0.570,0.568,0.618],
+      gaps:[0.195,0.360,0.289,0.391,0.443,0.405,0.524,0.338,0.456,0.334,0.332,0.283]
+    },
+    dialect_vulnerable: {
+      groups:["baseline","style_formal","style_casual","style_polite","dialect_aave","dialect_indian","l2_speaker","style_expert","cultural_high_ctx","age_elderly","age_teen","style_corporate"],
+      rates:[0.805,0.585,0.590,0.330,0.155,0.215,0.098,0.562,0.172,0.425,0.375,0.650],
+      gaps:[0.095,0.315,0.309,0.571,0.746,0.685,0.799,0.338,0.729,0.479,0.524,0.251]
+    }
+  }
+};
+
+var COLORS = { blue:'rgba(108,140,255,0.8)', green:'rgba(80,217,160,0.8)', red:'rgba(240,110,110,0.8)', purple:'rgba(160,120,220,0.8)', gray:'rgba(150,160,180,0.4)' };
+var chartOpts = { responsive:true, plugins:{ legend:{ labels:{ color:'#8891a5',font:{size:11} } } }, scales:{ x:{ ticks:{color:'#8891a5',font:{size:9}}, grid:{color:'rgba(45,49,64,0.5)'} }, y:{ ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'} } } };
+
+// Set significance stat
+document.getElementById('sig-stat').textContent = 'p < 1e-18';
+
+// ===== SUCCESS CHART =====
+var successCtx = document.getElementById('successChart').getContext('2d');
+var successChart = new Chart(successCtx, {
+  type:'bar',
+  data:{
+    labels: DATA.profiles,
+    datasets: DATA.agents.map(function(a,i) {
+      return {
+        label: DATA.agentLabels[i],
+        data: DATA.rates[a],
+        backgroundColor: [COLORS.blue,COLORS.green,COLORS.red,COLORS.purple][i],
+        borderWidth:0, borderRadius:2
+      };
+    })
+  },
+  options: { responsive:true, plugins:{ legend:{ labels:{ color:'#8891a5',font:{size:11} } } }, scales:{ x:{ ticks:{color:'#8891a5',font:{size:9}}, grid:{color:'rgba(45,49,64,0.5)'} }, y:{ ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'}, min:0, max:1, title:{display:true,text:'Task Success Rate',color:'#8891a5'} } } }
+});
+
+// Success table - built with DOM methods
+(function() {
+  var thead = document.getElementById('success-table-head');
+  var tbody = document.getElementById('success-table-body');
+  var headerRow = document.createElement('tr');
+  var th0 = document.createElement('th');
+  th0.textContent = 'Profile';
+  headerRow.appendChild(th0);
+  DATA.agentLabels.forEach(function(a) {
+    var th = document.createElement('th');
+    th.textContent = a;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+
+  DATA.profilesFull.forEach(function(p, i) {
+    var tr = document.createElement('tr');
+    var td0 = document.createElement('td');
+    td0.textContent = p;
+    tr.appendChild(td0);
+    DATA.agents.forEach(function(a) {
+      var td = document.createElement('td');
+      var v = DATA.rates[a][i];
+      td.textContent = v.toFixed(3);
+      td.className = 'num';
+      if (v < 0.3) td.classList.add('low');
+      else if (v > 0.6) td.classList.add('high');
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+})();
+
+// Chart1 tabs
+document.querySelectorAll('#chart1-tabs .tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('#chart1-tabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    var v = btn.dataset.view;
+    document.getElementById('chart1-grouped').style.display = v==='grouped'?'block':'none';
+    document.getElementById('chart1-heatmap').style.display = v==='heatmap'?'block':'none';
+  });
+});
+
+// ===== CDSI CHART =====
+var cdsiCtx = document.getElementById('cdsiChart').getContext('2d');
+new Chart(cdsiCtx, {
+  type:'bar',
+  data:{
+    labels: DATA.agentLabels,
+    datasets:[{
+      data: DATA.agents.map(function(a) { return DATA.cdsi[a]; }),
+      backgroundColor: [COLORS.blue,COLORS.green,COLORS.red,COLORS.purple],
+      borderWidth:0, borderRadius:4
+    }]
+  },
+  options: {
+    responsive:true,
+    plugins:{ legend:{display:false} },
+    scales:{ x:{ ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'} }, y:{ ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'}, min:0, max:0.75, title:{display:true,text:'CDSI Score',color:'#8891a5'} } }
+  }
+});
+
+// ===== AXIS SENSITIVITY CHART =====
+var axisCtx = document.getElementById('axisChart').getContext('2d');
+new Chart(axisCtx, {
+  type:'bar',
+  data:{
+    labels: DATA.axes,
+    datasets: DATA.agents.map(function(a,i) {
+      return {
+        label: DATA.agentLabels[i],
+        data: DATA.axisSens[a],
+        backgroundColor: [COLORS.blue,COLORS.green,COLORS.red,COLORS.purple][i],
+        borderWidth:0, borderRadius:2
+      };
+    })
+  },
+  options: {
+    responsive:true,
+    plugins:{ legend:{ labels:{ color:'#8891a5',font:{size:11} } } },
+    scales:{
+      x:{ ticks:{color:'#8891a5',font:{size:9}}, grid:{color:'rgba(45,49,64,0.5)'} },
+      y:{ ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'}, title:{display:true,text:'Spearman rho',color:'#8891a5'} }
+    }
+  }
+});
+
+// ===== INFO DECOMPOSITION CHART =====
+var infoCtx = document.getElementById('infoChart').getContext('2d');
+new Chart(infoCtx, {
+  type:'bar',
+  data:{
+    labels: DATA.agentLabels,
+    datasets:[
+      { label:'I(S; Content)', data: DATA.agents.map(function(a){return DATA.info[a].mi_content;}), backgroundColor:COLORS.blue, borderWidth:0 },
+      { label:'I(S; Style|Content)', data: DATA.agents.map(function(a){return DATA.info[a].mi_style;}), backgroundColor:COLORS.red, borderWidth:0 },
+      { label:'H(S|Content,Style)', data: DATA.agents.map(function(a){return DATA.info[a].h_remain;}), backgroundColor:COLORS.gray, borderWidth:0 }
+    ]
+  },
+  options: {
+    responsive:true,
+    plugins:{ legend:{ labels:{ color:'#8891a5',font:{size:11} } } },
+    scales:{
+      x:{ stacked:true, ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'} },
+      y:{ stacked:true, ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'}, title:{display:true,text:'Bits',color:'#8891a5'} }
+    }
+  }
+});
+
+// ===== EQUITY CHART =====
+var equityCtx = document.getElementById('equityChart').getContext('2d');
+var equityChart = null;
+function renderEquity(agentId) {
+  var d = DATA.equity[agentId];
+  if (equityChart) equityChart.destroy();
+  equityChart = new Chart(equityCtx, {
+    type:'bar',
+    data:{
+      labels: d.groups.map(function(g) { return g.replace(/_/g,' '); }),
+      datasets:[
+        { label:'Success Rate', data:d.rates, backgroundColor:COLORS.blue, borderWidth:0, borderRadius:2 },
+        { label:'Calibration Gap', data:d.gaps, backgroundColor:COLORS.red, borderWidth:0, borderRadius:2 }
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins:{ legend:{ labels:{ color:'#8891a5',font:{size:11} } } },
+      scales:{
+        x:{ ticks:{color:'#8891a5',font:{size:8},maxRotation:45}, grid:{color:'rgba(45,49,64,0.5)'} },
+        y:{ ticks:{color:'#8891a5'}, grid:{color:'rgba(45,49,64,0.5)'}, min:0, max:1 }
+      }
+    }
+  });
+}
+renderEquity('high_sensitivity');
+document.querySelectorAll('#equity-tabs .tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('#equity-tabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    renderEquity(btn.dataset.agent);
+  });
+});
+
+// ===== INTERACTIVE EXPLORER =====
+var agentConfigs = {
+  low:   {alpha:0.90, beta:0.15, w:[0.6,0.3,0.4,1.2,1.0,0.7]},
+  mod:   {alpha:0.91, beta:0.35, w:[0.6,0.3,0.4,1.2,1.0,0.7]},
+  high:  {alpha:0.92, beta:0.50, w:[0.6,0.3,0.4,1.2,1.0,0.7]},
+  dialect:{alpha:0.93, beta:0.35, w:[0.3,0.2,0.2,2.0,1.5,0.4]}
+};
+var standard = [0.4,0.4,0.4,0.0,0.2,0.3];
+var sliderNames = ['form','verb','polit','dial','cult','expert'];
+var sliders = sliderNames.map(function(n) { return document.getElementById('s-'+n); });
+var valSpans = sliderNames.map(function(n) { return document.getElementById('v-'+n); });
+
+function updatePrediction() {
+  var cfg = agentConfigs[document.getElementById('agent-select').value];
+  var style = sliders.map(function(s) { return s.value/100; });
+  sliders.forEach(function(s,i) { valSpans[i].textContent = (s.value/100).toFixed(2); });
+  var delta = style.map(function(v,i) { return v - standard[i]; });
+  var wdelta = delta.map(function(d,i) { return d * cfg.w[i]; });
+  var dist = Math.sqrt(delta.reduce(function(s,d){return s+d*d;},0));
+  var wdist = Math.sqrt(wdelta.reduce(function(s,d){return s+d*d;},0));
+  var p = Math.min(1, Math.max(0, cfg.alpha * Math.exp(-cfg.beta * wdist)));
+  var predEl = document.getElementById('pred-success');
+  predEl.textContent = p.toFixed(3);
+  predEl.style.color = p > 0.6 ? 'var(--accent2)' : p > 0.3 ? 'var(--warn)' : 'var(--danger)';
+  document.getElementById('pred-dist').textContent = dist.toFixed(3);
+  document.getElementById('pred-wdist').textContent = wdist.toFixed(3);
+}
+
+sliders.forEach(function(s) { s.addEventListener('input', updatePrediction); });
+document.getElementById('agent-select').addEventListener('change', updatePrediction);
+updatePrediction();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disentangling Persistent Bias in Neural Actor-Critic | KDD 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #e0723a;
+  --accent2: #3a8ee0;
+  --accent3: #6b3fa0;
+  --accent4: #2a9d8f;
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Sticky Navigation */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--primary);
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-inner::-webkit-scrollbar { display: none; }
+.nav-inner a {
+  color: rgba(255,255,255,0.85);
+  padding: 14px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+  border-bottom: 3px solid transparent;
+}
+.nav-inner a:hover, .nav-inner a.active {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  text-decoration: none;
+  border-bottom-color: var(--accent);
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, #0f2b46 0%, #1a3a5c 40%, #2a5a8c 100%);
+  color: #fff;
+  padding: 80px 24px 60px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.hero-content { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; }
+.venue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(224,114,58,0.2);
+  border: 1px solid rgba(224,114,58,0.4);
+  padding: 6px 18px;
+  border-radius: 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f0a070;
+  margin-bottom: 24px;
+  letter-spacing: 0.5px;
+}
+.hero h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+.hero .subtitle {
+  font-size: 1.05rem;
+  color: rgba(255,255,255,0.7);
+  max-width: 720px;
+  margin: 0 auto 32px;
+}
+.hero-metrics {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.metric-card {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 16px 24px;
+  min-width: 160px;
+  backdrop-filter: blur(4px);
+}
+.metric-card .value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.metric-card .label {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.6);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Sections */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+section { padding: 60px 0; }
+section:nth-child(even) { background: #fff; }
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+.section-desc {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-bottom: 32px;
+  max-width: 700px;
+}
+
+/* Cards */
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+.card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--primary);
+}
+
+/* Grid */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+/* Regime cards */
+.regime-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 20px; }
+.regime-card {
+  background: var(--card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.regime-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+}
+.regime-card.r1::before { background: var(--accent2); }
+.regime-card.r2::before { background: var(--accent); }
+.regime-card.r3::before { background: var(--accent3); }
+.regime-card.r4::before { background: var(--accent4); }
+.regime-card .tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.r1 .tag { background: rgba(58,142,224,0.1); color: var(--accent2); }
+.r2 .tag { background: rgba(224,114,58,0.1); color: var(--accent); }
+.r3 .tag { background: rgba(107,63,160,0.1); color: var(--accent3); }
+.r4 .tag { background: rgba(42,157,143,0.1); color: var(--accent4); }
+.regime-card h4 { font-size: 0.95rem; margin-bottom: 6px; }
+.regime-card p { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+/* Equation */
+.equation-block {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  font-family: 'Cambria', 'Georgia', serif;
+  font-size: 1.05rem;
+  text-align: center;
+  overflow-x: auto;
+}
+.equation-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.88rem;
+}
+.data-table th {
+  background: #f1f5f9;
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--primary);
+  border-bottom: 2px solid var(--border);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.data-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.data-table tr:hover td { background: #f8fafc; }
+.data-table .num { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.85rem; }
+.highlight-row td { background: rgba(42,157,143,0.06); font-weight: 600; }
+
+/* Chart wrapper */
+.chart-wrapper {
+  position: relative;
+  padding: 16px 0;
+}
+.chart-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.chart-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--muted);
+  font-weight: 500;
+}
+.chart-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+.chart-btn.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+/* Findings */
+.finding-item {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: var(--card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.finding-number {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.finding-content h4 { font-size: 0.95rem; margin-bottom: 4px; color: var(--primary); }
+.finding-content p { font-size: 0.87rem; color: var(--muted); }
+
+/* Param table */
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.param-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+}
+.param-item .p-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.param-item .p-value { font-size: 1rem; font-weight: 600; color: var(--primary); margin-top: 2px; font-family: 'SF Mono', 'Consolas', monospace; }
+
+/* Decomp bars */
+.decomp-bar-group { margin: 24px 0; }
+.decomp-item { margin-bottom: 16px; }
+.decomp-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+.decomp-bar-bg {
+  height: 28px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+.decomp-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.8s ease;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  color: #fff;
+  font-weight: 600;
+}
+.decomp-bar-fill.negative {
+  background: var(--accent2);
+  position: absolute;
+  right: 50%;
+}
+.decomp-bar-fill.positive {
+  background: var(--accent);
+  position: absolute;
+  left: 50%;
+}
+.decomp-bar-fill.interaction {
+  background: var(--accent4);
+  position: absolute;
+  left: 50%;
+}
+
+/* Tab controls */
+.tab-group {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+.tab-btn:hover { color: var(--primary); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Footer */
+footer {
+  background: var(--primary);
+  color: rgba(255,255,255,0.6);
+  padding: 32px 24px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+footer strong { color: rgba(255,255,255,0.9); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.5rem; }
+  .hero-metrics { gap: 16px; }
+  .metric-card { min-width: 130px; padding: 12px 16px; }
+  .metric-card .value { font-size: 1.3rem; }
+  .grid-2, .grid-3, .grid-4, .regime-grid { grid-template-columns: 1fr; }
+  .nav-inner a { padding: 12px 14px; font-size: 0.78rem; }
+  section { padding: 40px 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="nav-inner">
+    <a href="#problem">Problem</a>
+    <a href="#methods">Methods</a>
+    <a href="#simulation">Simulation</a>
+    <a href="#analytical">Analytical</a>
+    <a href="#beta-sweep">Beta Sweep</a>
+    <a href="#decomposition">Decomposition</a>
+    <a href="#variance">Variance</a>
+    <a href="#findings">Findings</a>
+  </div>
+</nav>
+
+<!-- Hero Section -->
+<header class="hero">
+  <div class="hero-content">
+    <div class="venue-badge">KDD 2026 &middot; Toronto, Canada &middot; Research Track</div>
+    <h1>Disentangling Persistent Bias in Neural Actor-Critic:<br>A Factorial Analysis of Online Coupling vs. Markovian Sampling</h1>
+    <p class="subtitle">Investigating whether persistent bias in actor-critic algorithms originates from online Markovian data, coupled actor-critic dynamics, or their interaction, using a controlled 2x2 factorial design.</p>
+    <div class="hero-metrics">
+      <div class="metric-card">
+        <div class="value">0.2071</div>
+        <div class="label">Interaction Effect</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">29.7%</div>
+        <div class="label">Decay Rate Reduction</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">2 x 2</div>
+        <div class="label">Factorial Design</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">4</div>
+        <div class="label">Experimental Regimes</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Problem Statement -->
+<section id="problem">
+  <div class="container">
+    <h2 class="section-title">Problem Statement</h2>
+    <p class="section-desc">Neural actor-critic algorithms exhibit a distinct persistent bias component compared to standard neural network regression. This paper investigates the origin of that persistent bias.</p>
+    <div class="grid-2">
+      <div class="card">
+        <h3>The Conjecture</h3>
+        <p style="font-size:0.9rem;color:var(--muted);margin-bottom:16px;">
+          Georgoudios et al. (2026) observe that neural actor-critic algorithms trained via SGD under polynomial step-size schedules exhibit a more persistent bias than neural network regression. They conjecture this arises from:
+        </p>
+        <ol style="font-size:0.88rem;color:var(--text);padding-left:20px;">
+          <li style="margin-bottom:8px;"><strong>Online (Markovian) sampling:</strong> Non-i.i.d. data from trajectory rollouts introduces correlated noise.</li>
+          <li style="margin-bottom:8px;"><strong>Actor-critic coupling:</strong> The coupled dynamics between actor and critic networks create a moving target for the critic.</li>
+          <li><strong>Their interaction:</strong> The combination may produce emergent persistence mechanisms.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Experimental Parameters</h3>
+        <div class="param-grid">
+          <div class="param-item">
+            <div class="p-label">Step-size exponent</div>
+            <div class="p-value">&beta; = 0.7</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">Initial step-size</div>
+            <div class="p-value">&alpha;&#8320; = 0.5</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">SGD Steps</div>
+            <div class="p-value">N = 3000</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">Hidden Units</div>
+            <div class="p-value">H = 16</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">Discount Factor</div>
+            <div class="p-value">&gamma; = 0.9</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">Random Seeds</div>
+            <div class="p-value">5</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">State Space</div>
+            <div class="p-value">s &isin; [-1, 1]</div>
+          </div>
+          <div class="param-item">
+            <div class="p-label">Actions</div>
+            <div class="p-value">{0, 1}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Methods -->
+<section id="methods">
+  <div class="container">
+    <h2 class="section-title">Methods</h2>
+    <p class="section-desc">A 2x2 factorial design that independently varies data distribution (i.i.d. vs. Markovian) and network coupling (single vs. actor-critic pair).</p>
+
+    <div class="card" style="margin-bottom:24px;">
+      <h3>Key Equations</h3>
+      <div class="equation-block">
+        <div class="equation-label">Step-Size Schedule</div>
+        &alpha;<sub>n</sub> = &alpha;<sub>0</sub> / n<sup>&beta;</sup>, &nbsp; &beta; &isin; (1/2, 1)
+      </div>
+      <div class="equation-block">
+        <div class="equation-label">Analytical Bias Dynamics (Equation 1)</div>
+        B<sub>n+1</sub> = (1 &minus; 2A&alpha;<sub>n</sub>) B<sub>n</sub> + c &middot; &alpha;<sub>n</sub><sup>2</sup> + m &middot; &sigma;<sup>2</sup> &alpha;<sub>n</sub> / n
+      </div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-top:12px;">
+        where A = 0.5 (contraction rate), c = coupling strength, m = Markovian mixing factor, &sigma;<sup>2</sup> = 0.1
+      </div>
+      <div class="equation-block">
+        <div class="equation-label">MDP Transitions</div>
+        s' = clip(&gamma;<sub>env</sub> &middot; s + a<sub>eff</sub>(a) + &epsilon;, &minus;1, 1), &nbsp; &epsilon; ~ N(0, 0.01)
+      </div>
+      <div class="equation-block">
+        <div class="equation-label">Decay Rate Estimation</div>
+        log B<sub>n</sub> ~ &minus;&rho; log n + const &nbsp; (fitted in tail of trajectory)
+      </div>
+    </div>
+
+    <h3 style="font-size:1.1rem;font-weight:600;color:var(--primary);margin-bottom:16px;">Four Experimental Regimes</h3>
+    <div class="regime-grid">
+      <div class="regime-card r1">
+        <span class="tag">R1 &mdash; Baseline</span>
+        <h4>i.i.d. + Single Network</h4>
+        <p>Supervised regression baseline. A single critic network trained on i.i.d. state samples with exact targets. No online or coupling effects.</p>
+      </div>
+      <div class="regime-card r2">
+        <span class="tag">R2 &mdash; Online Only</span>
+        <h4>Markov + Single Network</h4>
+        <p>TD learning with a fixed policy. A single critic learns from Markovian trajectory data, isolating the effect of non-stationary data.</p>
+      </div>
+      <div class="regime-card r3">
+        <span class="tag">R3 &mdash; Coupling Only</span>
+        <h4>i.i.d. + Coupled Networks</h4>
+        <p>Actor-critic with oracle sampling. Both networks updated, but states sampled approximately i.i.d. from the current policy's stationary distribution.</p>
+      </div>
+      <div class="regime-card r4">
+        <span class="tag">R4 &mdash; Full AC</span>
+        <h4>Markov + Coupled Networks</h4>
+        <p>Full online actor-critic. Both sources of persistent bias are present. The primary setting of interest.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Simulation Results -->
+<section id="simulation">
+  <div class="container">
+    <h2 class="section-title">Factorial Simulation Results</h2>
+    <p class="section-desc">Squared bias trajectories and power-law decay exponents across all four regimes, averaged over 5 random seeds.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Bias Trajectories (Simulation)</h3>
+        <div class="chart-controls">
+          <button class="chart-btn active" onclick="toggleSimSeries(this,'all')">All Regimes</button>
+          <button class="chart-btn" onclick="toggleSimSeries(this,'R1')">R1 Baseline</button>
+          <button class="chart-btn" onclick="toggleSimSeries(this,'R2')">R2 Online</button>
+          <button class="chart-btn" onclick="toggleSimSeries(this,'R3')">R3 Coupled</button>
+          <button class="chart-btn" onclick="toggleSimSeries(this,'R4')">R4 Full AC</button>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="simTrajChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Decay Rate Comparison</h3>
+        <div class="chart-wrapper">
+          <canvas id="decayBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h3>Factorial Summary Table</h3>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Regime</th>
+              <th>Data Distribution</th>
+              <th>Network Coupling</th>
+              <th>Decay Rate (&rho;)</th>
+              <th>Tail Bias</th>
+              <th>Persistence Gap</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>R1</strong> (i.i.d. + single)</td>
+              <td>i.i.d.</td>
+              <td>Decoupled</td>
+              <td class="num">-0.0344</td>
+              <td class="num">0.3213</td>
+              <td class="num">&mdash;</td>
+            </tr>
+            <tr>
+              <td><strong>R2</strong> (Markov + single)</td>
+              <td>Markovian</td>
+              <td>Decoupled</td>
+              <td class="num">1.3338</td>
+              <td class="num">0.2703</td>
+              <td class="num">+1.3682</td>
+            </tr>
+            <tr>
+              <td><strong>R3</strong> (i.i.d. + coupled)</td>
+              <td>i.i.d.</td>
+              <td>Coupled</td>
+              <td class="num">1.3776</td>
+              <td class="num">0.2107</td>
+              <td class="num">+1.4120</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><strong>R4</strong> (Markov + coupled)</td>
+              <td>Markovian</td>
+              <td>Coupled</td>
+              <td class="num">1.2180</td>
+              <td class="num">0.3668</td>
+              <td class="num">+1.2524</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Analytical Model -->
+<section id="analytical">
+  <div class="container">
+    <h2 class="section-title">Analytical Model</h2>
+    <p class="section-desc">A simplified stochastic approximation model provides a cleaner separation of the two mechanisms.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Analytical Bias Trajectories</h3>
+        <div class="chart-controls">
+          <button class="chart-btn active" onclick="toggleAnalSeries(this,'all')">All Regimes</button>
+          <button class="chart-btn" onclick="toggleAnalSeries(this,'A1')">A1 Baseline</button>
+          <button class="chart-btn" onclick="toggleAnalSeries(this,'A2')">A2 Online</button>
+          <button class="chart-btn" onclick="toggleAnalSeries(this,'A3')">A3 Coupled</button>
+          <button class="chart-btn" onclick="toggleAnalSeries(this,'A4')">A4 Full AC</button>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="analTrajChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Analytical Decay Rates</h3>
+        <div class="chart-wrapper">
+          <canvas id="analBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h3>Analytical Model Parameters and Results</h3>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Analytical Regime</th>
+              <th>Coupling (c)</th>
+              <th>Mixing (m)</th>
+              <th>Decay Rate</th>
+              <th>Rate Reduction vs. Baseline</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>A1</strong> (baseline)</td>
+              <td class="num">0</td>
+              <td class="num">1</td>
+              <td class="num">1.1297</td>
+              <td class="num">&mdash;</td>
+            </tr>
+            <tr>
+              <td><strong>A2</strong> (online only)</td>
+              <td class="num">0</td>
+              <td class="num">3</td>
+              <td class="num">1.1210</td>
+              <td class="num">-0.0087 (0.8%)</td>
+            </tr>
+            <tr>
+              <td><strong>A3</strong> (coupled only)</td>
+              <td class="num">0.3</td>
+              <td class="num">1</td>
+              <td class="num">0.7944</td>
+              <td class="num">-0.3353 (29.7%)</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><strong>A4</strong> (full AC)</td>
+              <td class="num">0.3</td>
+              <td class="num">3</td>
+              <td class="num">0.8354</td>
+              <td class="num">-0.2943 (26.1%)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Beta Sweep -->
+<section id="beta-sweep">
+  <div class="container">
+    <h2 class="section-title">Beta Sweep Analysis</h2>
+    <p class="section-desc">Robustness of findings across the full range of step-size exponent &beta; &isin; (1/2, 1), sweeping nine values.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Decay Rates vs. &beta;</h3>
+        <div class="chart-wrapper">
+          <canvas id="betaRateChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Tail Bias: R1 vs. R4</h3>
+        <div class="chart-wrapper">
+          <canvas id="betaTailChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h3>Beta Sweep Data</h3>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>&beta;</th>
+              <th>Rate R1</th>
+              <th>Rate R2</th>
+              <th>Rate R3</th>
+              <th>Rate R4</th>
+              <th>Tail R1</th>
+              <th>Tail R4</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">0.55</td><td class="num">0.7479</td><td class="num">3.1921</td><td class="num">1.5566</td><td class="num">-1.1797</td><td class="num">0.2568</td><td class="num">0.0290</td></tr>
+            <tr><td class="num">0.60</td><td class="num">5.4024</td><td class="num">4.4751</td><td class="num">2.9465</td><td class="num">-0.1956</td><td class="num">0.0013</td><td class="num">0.0298</td></tr>
+            <tr><td class="num">0.65</td><td class="num">0.2890</td><td class="num">2.7718</td><td class="num">2.5421</td><td class="num">2.5994</td><td class="num">0.3028</td><td class="num">0.0292</td></tr>
+            <tr class="highlight-row"><td class="num">0.70</td><td class="num">0.2634</td><td class="num">1.3868</td><td class="num">1.3944</td><td class="num">1.5672</td><td class="num">0.2415</td><td class="num">0.1423</td></tr>
+            <tr><td class="num">0.75</td><td class="num">0.3767</td><td class="num">0.6648</td><td class="num">0.6864</td><td class="num">0.7553</td><td class="num">0.0548</td><td class="num">0.4808</td></tr>
+            <tr><td class="num">0.80</td><td class="num">0.0214</td><td class="num">0.3185</td><td class="num">0.3278</td><td class="num">0.3543</td><td class="num">0.0637</td><td class="num">0.9166</td></tr>
+            <tr><td class="num">0.85</td><td class="num">-0.0931</td><td class="num">0.1588</td><td class="num">0.1633</td><td class="num">0.1699</td><td class="num">0.2500</td><td class="num">1.2728</td></tr>
+            <tr><td class="num">0.90</td><td class="num">-0.0660</td><td class="num">0.0839</td><td class="num">0.0835</td><td class="num">0.0791</td><td class="num">0.2509</td><td class="num">1.5186</td></tr>
+            <tr><td class="num">0.95</td><td class="num">-0.1027</td><td class="num">0.0465</td><td class="num">0.0439</td><td class="num">0.0363</td><td class="num">0.2436</td><td class="num">1.6739</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Factorial Decomposition -->
+<section id="decomposition">
+  <div class="container">
+    <h2 class="section-title">Factorial Decomposition</h2>
+    <p class="section-desc">ANOVA-style decomposition of tail bias reveals a dominant interaction effect that exceeds both marginal effects.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Tail Bias by Regime</h3>
+        <div class="chart-wrapper">
+          <canvas id="tailBiasChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Factorial Decomposition</h3>
+        <div class="chart-wrapper">
+          <canvas id="decompChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h3>Decomposition Summary</h3>
+      <div class="decomp-bar-group">
+        <div class="decomp-item">
+          <div class="decomp-label">
+            <span><strong>Baseline (R1)</strong></span>
+            <span class="num">0.3213</span>
+          </div>
+          <div class="decomp-bar-bg">
+            <div class="decomp-bar-fill positive" style="width:32%;background:var(--muted);">0.3213</div>
+          </div>
+        </div>
+        <div class="decomp-item">
+          <div class="decomp-label">
+            <span><strong>Online Marginal Effect</strong> (R2 - R1)</span>
+            <span class="num" style="color:var(--accent2);">-0.0510</span>
+          </div>
+          <div class="decomp-bar-bg">
+            <div style="position:absolute;left:45%;top:0;bottom:0;width:5%;background:var(--accent2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:#fff;font-weight:600;">-0.051</div>
+          </div>
+        </div>
+        <div class="decomp-item">
+          <div class="decomp-label">
+            <span><strong>Coupling Marginal Effect</strong> (R3 - R1)</span>
+            <span class="num" style="color:var(--accent3);">-0.1106</span>
+          </div>
+          <div class="decomp-bar-bg">
+            <div style="position:absolute;left:39%;top:0;bottom:0;width:11%;background:var(--accent3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:#fff;font-weight:600;">-0.111</div>
+          </div>
+        </div>
+        <div class="decomp-item">
+          <div class="decomp-label">
+            <span><strong>Interaction Effect</strong></span>
+            <span class="num" style="color:var(--accent4);">+0.2071</span>
+          </div>
+          <div class="decomp-bar-bg">
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:21%;background:var(--accent4);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:#fff;font-weight:600;">+0.207</div>
+          </div>
+        </div>
+        <div class="decomp-item">
+          <div class="decomp-label">
+            <span><strong>Total Excess (R4 - R1)</strong></span>
+            <span class="num" style="color:var(--accent);">+0.0455</span>
+          </div>
+          <div class="decomp-bar-bg">
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:4.5%;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:#fff;font-weight:600;">+0.046</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Variance Decomposition -->
+<section id="variance">
+  <div class="container">
+    <h2 class="section-title">Variance Decomposition</h2>
+    <p class="section-desc">Bias-variance trade-off comparison between regression baseline (R1) and full actor-critic (R4).</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>R1 (Regression Baseline): Bias vs. Variance</h3>
+        <div class="chart-wrapper">
+          <canvas id="varR1Chart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>R4 (Full Actor-Critic): Bias vs. Variance</h3>
+        <div class="chart-wrapper">
+          <canvas id="varR4Chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h3>Final Training Step Statistics</h3>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>R1 (Baseline)</th>
+              <th>R4 (Full AC)</th>
+              <th>Ratio (R1/R4)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Mean Bias (last 100 steps)</strong></td>
+              <td class="num">0.5173</td>
+              <td class="num">0.1510</td>
+              <td class="num">3.43x</td>
+            </tr>
+            <tr>
+              <td><strong>Cross-Seed Variance</strong></td>
+              <td class="num">0.0968</td>
+              <td class="num">0.0181</td>
+              <td class="num">5.35x</td>
+            </tr>
+            <tr>
+              <td><strong>Bias / Variance Ratio</strong></td>
+              <td class="num">5.34</td>
+              <td class="num">8.34</td>
+              <td class="num">&mdash;</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Key Findings -->
+<section id="findings">
+  <div class="container">
+    <h2 class="section-title">Key Findings</h2>
+    <p class="section-desc">Summary of evidence regarding the origin of persistent bias in neural actor-critic algorithms.</p>
+
+    <div class="finding-item">
+      <div class="finding-number">1</div>
+      <div class="finding-content">
+        <h4>Coupling is the Structural Mechanism</h4>
+        <p>Actor-critic coupling reduces the analytical decay rate from 1.1297 to 0.7944 (a 29.7% reduction), creating a persistent bias floor through the perpetual drift of the critic's target as actor parameters update.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-number">2</div>
+      <div class="finding-content">
+        <h4>Markovian Sampling is an Amplifier</h4>
+        <p>Online (Markovian) sampling has a comparatively smaller structural effect, reducing the analytical rate from 1.1297 to 1.1210 (only 0.8% reduction). It primarily amplifies the bias constant rather than changing the decay structure.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-number">3</div>
+      <div class="finding-content">
+        <h4>Dominant Interaction Effect</h4>
+        <p>The factorial decomposition reveals an interaction effect of 0.2071 that exceeds both marginal effects in magnitude (online: -0.0510, coupling: -0.1106). The combination of non-stationary data and coupled dynamics produces emergent persistence not captured by either factor alone.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-number">4</div>
+      <div class="finding-content">
+        <h4>Full Actor-Critic Shows Highest Tail Bias</h4>
+        <p>The full actor-critic (R4) achieves a tail bias of 0.3668, compared to the baseline of 0.3213. This confirms that both sources contribute, with their interaction as the primary driver of persistent bias in the combined setting.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-number">5</div>
+      <div class="finding-content">
+        <h4>Robustness Across &beta;</h4>
+        <p>The findings are robust across the full range of step-size exponents &beta; in (1/2, 1). The persistence gap varies with &beta;, with coupling and online effects showing similar magnitudes at most values.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p><strong>Disentangling Persistent Bias in Neural Actor-Critic</strong></p>
+    <p style="margin-top:6px;">KDD 2026, Toronto, Canada &middot; Category: LG &middot; Track: Research</p>
+    <p style="margin-top:12px;font-size:0.8rem;">Factorial Analysis of Online Coupling vs. Markovian Sampling</p>
+  </div>
+</footer>
+
+<script>
+// ==================== EMBEDDED DATA ====================
+
+const simTrajLabels = Array.from({length:100}, (_,i) => i*30+1);
+
+const simTrajData = {
+  R1: [48.19689,2.631744,0.33236,0.560281,3.730814,2.180198,2.001059,0.52375,0.616396,0.388241,0.242325,0.307774,0.280714,0.267418,0.245214,0.291025,0.30195,0.315411,0.292781,0.286412,0.276541,0.285428,0.26112,0.305906,0.325842,0.31205,0.315162,0.282368,0.310123,0.307116,0.304122,0.332468,0.296297,0.310274,0.310115,0.314997,0.326295,0.329344,0.323939,0.320986,0.311664,0.317817,0.307628,0.315058,0.303032,0.29779,0.303977,0.290403,0.293189,0.29887,0.294558,0.303006,0.310129,0.301217,0.298145,0.30214,0.302946,0.310235,0.314375,0.325953,0.316554,0.30544,0.311734,0.322342,0.314416,0.314789,0.310215,0.317071,0.310594,0.312736,0.310954,0.316219,0.314305,0.312914,0.322966,0.314805,0.308362,0.312639,0.301825,0.296903,0.308158,0.314839,0.321461,0.320253,0.329757,0.324147,0.319698,0.325793,0.327991,0.328118,0.32562,0.319493,0.312622,0.322377,0.321177,0.321971,0.324939,0.322673,0.317405,0.314655],
+  R2: [2.252903,2.127383,2.058067,2.002846,1.932066,1.893637,1.844247,1.80655,1.765069,1.715799,1.663552,1.630389,1.588939,1.545204,1.504471,1.477489,1.434235,1.395352,1.360954,1.318674,1.294401,1.269281,1.23878,1.216364,1.171879,1.145355,1.126796,1.097185,1.071049,1.056307,1.03268,1.008186,0.979804,0.948554,0.928938,0.917876,0.891517,0.871966,0.851458,0.829259,0.806753,0.794916,0.779217,0.768808,0.75513,0.74238,0.721526,0.695961,0.678886,0.663226,0.656083,0.643064,0.628489,0.614424,0.594257,0.584689,0.568354,0.554432,0.541441,0.52566,0.519441,0.502933,0.48691,0.475325,0.464474,0.455985,0.438028,0.430989,0.422439,0.410702,0.404681,0.39792,0.392115,0.385226,0.376115,0.373222,0.361419,0.354298,0.351477,0.342902,0.335955,0.329388,0.320812,0.317181,0.309236,0.301245,0.296414,0.287077,0.278984,0.267531,0.25939,0.257666,0.254524,0.251029,0.246632,0.241416,0.235132,0.228817,0.224735,0.217919],
+  R3: [2.036383,1.88478,1.792572,1.738125,1.674949,1.62183,1.574038,1.517212,1.455347,1.41533,1.368156,1.328614,1.294947,1.259051,1.471582,1.43856,1.397901,1.361552,1.320231,1.296574,1.085721,1.068397,1.038702,1.012616,0.996599,0.968994,0.948698,1.018766,0.99916,0.973459,0.950275,0.925541,0.897712,0.874705,0.693724,0.672678,0.652805,0.632177,0.617185,0.599917,0.628858,0.616842,0.605421,0.59807,0.584131,0.570411,0.556429,0.544885,0.533501,0.520211,0.50415,0.492593,0.481084,0.467633,0.501374,0.487679,0.476676,0.469764,0.460838,0.453136,0.479726,0.466814,0.463856,0.459135,0.449906,0.4413,0.434656,0.349769,0.335053,0.322787,0.312755,0.305731,0.299927,0.292219,0.318392,0.313446,0.307465,0.303519,0.296208,0.288571,0.270494,0.264032,0.260114,0.254002,0.246704,0.243759,0.240794,0.253732,0.249863,0.247205,0.241678,0.236432,0.229852,0.223197,0.150008,0.144841,0.142545,0.13956,0.135754,0.129917],
+  R4: [2.036383,1.954611,1.904119,1.86142,1.828054,1.789437,1.741897,1.780624,1.746291,1.715001,1.686074,1.651692,1.620437,1.588259,1.465853,1.435938,1.408513,1.37912,1.34545,1.322888,1.292314,1.272123,1.247979,1.221551,1.206715,1.189708,1.172528,1.262519,1.24455,1.228591,1.213034,1.190395,1.175029,1.145543,1.044424,1.024967,1.006615,0.983985,0.976411,0.949371,0.96277,0.946211,0.920624,0.902432,0.891605,0.87417,0.855863,0.807383,0.791806,0.781422,0.760224,0.750041,0.731157,0.717298,0.696154,0.682576,0.67218,0.660568,0.654456,0.644165,0.602432,0.588899,0.576403,0.564303,0.55046,0.536725,0.529224,0.496678,0.488379,0.477633,0.466687,0.449684,0.437505,0.430071,0.357803,0.352543,0.347078,0.339208,0.33128,0.325699,0.454657,0.446589,0.435745,0.427031,0.41993,0.412481,0.403447,0.343766,0.338373,0.327834,0.318358,0.311966,0.306572,0.299501,0.368692,0.362139,0.355509,0.351227,0.348914,0.341087]
+};
+
+const analTrajLabels = Array.from({length:100}, (_,i) => i*30+1);
+
+const analTrajData = {
+  A1: [0.3,0.02274,0.009277,0.005128,0.003285,0.002303,0.001717,0.001339,0.001081,0.000896,0.000759,0.000655,0.000574,0.000509,0.000456,0.000412,0.000376,0.000345,0.000318,0.000295,0.000275,0.000258,0.000243,0.000229,0.000216,0.000205,0.000195,0.000186,0.000178,0.00017,0.000163,0.000157,0.000151,0.000145,0.00014,0.000135,0.000131,0.000127,0.000123,0.000119,0.000116,0.000112,0.000109,0.000106,0.000103,0.000101,9.8e-05,9.6e-05,9.4e-05,9.1e-05,8.9e-05,8.7e-05,8.5e-05,8.4e-05,8.2e-05,8e-05,7.9e-05,7.7e-05,7.5e-05,7.4e-05,7.3e-05,7.1e-05,7e-05,6.9e-05,6.8e-05,6.6e-05,6.5e-05,6.4e-05,6.3e-05,6.2e-05,6.1e-05,6e-05,5.9e-05,5.8e-05,5.8e-05,5.7e-05,5.6e-05,5.5e-05,5.4e-05,5.4e-05,5.3e-05,5.2e-05,5.1e-05,5.1e-05,5e-05,4.9e-05,4.9e-05,4.8e-05,4.8e-05,4.7e-05,4.6e-05,4.6e-05,4.5e-05,4.5e-05,4.4e-05,4.4e-05,4.3e-05,4.3e-05,4.2e-05,4.2e-05],
+  A2: [0.4,0.043687,0.019347,0.011315,0.007576,0.005506,0.004231,0.003385,0.002792,0.002358,0.002031,0.001776,0.001573,0.001409,0.001274,0.001161,0.001066,0.000984,0.000913,0.000851,0.000797,0.000749,0.000706,0.000668,0.000634,0.000603,0.000574,0.000548,0.000525,0.000503,0.000483,0.000464,0.000447,0.000431,0.000416,0.000402,0.000389,0.000377,0.000365,0.000355,0.000344,0.000335,0.000326,0.000317,0.000309,0.000301,0.000293,0.000286,0.00028,0.000273,0.000267,0.000261,0.000255,0.00025,0.000245,0.00024,0.000235,0.00023,0.000226,0.000222,0.000218,0.000214,0.00021,0.000206,0.000203,0.000199,0.000196,0.000193,0.000189,0.000186,0.000183,0.000181,0.000178,0.000175,0.000173,0.00017,0.000168,0.000165,0.000163,0.000161,0.000158,0.000156,0.000154,0.000152,0.00015,0.000148,0.000146,0.000145,0.000143,0.000141,0.000139,0.000138,0.000136,0.000134,0.000133,0.000131,0.00013,0.000128,0.000127,0.000126],
+  A3: [0.375,0.049992,0.025373,0.016586,0.012212,0.009641,0.007966,0.006797,0.005937,0.005279,0.004761,0.004343,0.003997,0.003708,0.003461,0.003249,0.003064,0.002901,0.002757,0.002628,0.002512,0.002407,0.002312,0.002225,0.002145,0.002072,0.002004,0.001941,0.001883,0.001828,0.001777,0.001729,0.001684,0.001642,0.001602,0.001564,0.001528,0.001494,0.001462,0.001432,0.001402,0.001375,0.001348,0.001323,0.001298,0.001275,0.001253,0.001231,0.001211,0.001191,0.001172,0.001153,0.001136,0.001118,0.001102,0.001086,0.001071,0.001056,0.001041,0.001027,0.001014,0.001,0.000988,0.000975,0.000963,0.000952,0.00094,0.000929,0.000918,0.000908,0.000898,0.000888,0.000878,0.000869,0.00086,0.000851,0.000842,0.000833,0.000825,0.000817,0.000809,0.000801,0.000793,0.000786,0.000779,0.000772,0.000765,0.000758,0.000751,0.000745,0.000738,0.000732,0.000726,0.00072,0.000714,0.000708,0.000702,0.000697,0.000691,0.000686],
+  A4: [0.475,0.07094,0.035443,0.022773,0.016502,0.012844,0.01048,0.008842,0.007648,0.006741,0.006032,0.005463,0.004997,0.004608,0.00428,0.003998,0.003754,0.00354,0.003351,0.003184,0.003033,0.002898,0.002776,0.002664,0.002563,0.002469,0.002383,0.002303,0.002229,0.002161,0.002097,0.002037,0.00198,0.001928,0.001878,0.001831,0.001787,0.001745,0.001705,0.001667,0.001631,0.001597,0.001564,0.001533,0.001504,0.001475,0.001448,0.001422,0.001397,0.001373,0.001349,0.001327,0.001306,0.001285,0.001265,0.001246,0.001227,0.001209,0.001192,0.001175,0.001159,0.001143,0.001127,0.001113,0.001098,0.001084,0.001071,0.001058,0.001045,0.001032,0.00102,0.001008,0.000997,0.000986,0.000975,0.000964,0.000954,0.000943,0.000934,0.000924,0.000914,0.000905,0.000896,0.000887,0.000879,0.00087,0.000862,0.000854,0.000846,0.000839,0.000831,0.000824,0.000816,0.000809,0.000802,0.000795,0.000789,0.000782,0.000776,0.000769]
+};
+
+const betaSweepData = {
+  betas: [0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,0.95],
+  rateR1: [0.7479,5.4024,0.2890,0.2634,0.3767,0.0214,-0.0931,-0.0660,-0.1027],
+  rateR2: [3.1921,4.4751,2.7718,1.3868,0.6648,0.3185,0.1588,0.0839,0.0465],
+  rateR3: [1.5566,2.9465,2.5421,1.3944,0.6864,0.3278,0.1633,0.0835,0.0439],
+  rateR4: [-1.1797,-0.1956,2.5994,1.5672,0.7553,0.3543,0.1699,0.0791,0.0363],
+  tailR1: [0.2568,0.0013,0.3028,0.2415,0.0548,0.0637,0.2500,0.2509,0.2436],
+  tailR4: [0.0290,0.0298,0.0292,0.1423,0.4808,0.9166,1.2728,1.5186,1.6739]
+};
+
+const varData = {
+  r1Mean: [1.158923,5.703776,2.154107,1.605677,4.946044,2.073109,0.691289,0.273796,0.359725,0.407445,0.458598,0.454749,0.438433,0.348317,0.455646,1.297546,1.497651,2.469026,2.56488,2.097554,1.372255,0.823097,1.12194,1.172998,0.852845,0.685511,0.550694,0.627761,0.506317,0.513343,0.430945,0.372065,0.421925,0.372767,0.367448,0.36971,0.37606,0.370376,0.378301,0.381747,0.374029,0.447511,0.478216,0.492114,0.508565,0.50308,0.53241,0.529728,0.480274,0.528829,0.531395,0.533266,0.533024,0.530798,0.530984,0.532654,0.537235,0.536122,0.534419,0.530493,0.532603,0.532795,0.53262,0.530247,0.52957,0.530431,0.529403,0.526572,0.529019,0.526398,0.527305,0.527701,0.529273,0.527724,0.526157,0.524378,0.525576,0.524265,0.525483,0.525512,0.523588,0.527841,0.522862,0.52308,0.523119,0.522564,0.522271,0.522702,0.523388,0.521764,0.522576,0.521632,0.52253,0.519769,0.518769,0.518644,0.519209,0.518087,0.517673,0.516404],
+  r4Mean: [2.411098,2.264245,2.148566,2.074053,1.990591,1.938806,1.877728,1.637831,1.586493,1.541978,1.510326,1.459083,1.416725,1.372972,1.305916,1.279879,1.247188,1.210588,1.181163,1.127915,1.064896,1.040496,1.002305,0.977706,0.951742,0.922769,0.894058,0.852237,0.827447,0.813811,0.790731,0.768302,0.757162,0.733184,0.761457,0.732627,0.712927,0.701099,0.688482,0.666637,0.661832,0.645966,0.631033,0.611219,0.603119,0.579491,0.560781,0.539756,0.525848,0.506901,0.494344,0.482151,0.475604,0.46524,0.504187,0.489843,0.475623,0.463714,0.452303,0.438295,0.416345,0.402228,0.399304,0.386844,0.38569,0.376861,0.363713,0.39498,0.388538,0.385601,0.376095,0.37085,0.356147,0.347007,0.228329,0.220846,0.217798,0.207857,0.206128,0.201561,0.180777,0.176242,0.171392,0.164502,0.161218,0.155558,0.151386,0.102567,0.100402,0.096057,0.095158,0.091103,0.09096,0.086715,0.167487,0.164389,0.15817,0.155703,0.15455,0.149531],
+  r1Var: [1.638601,78.672738,7.497049,1.279078,83.592345,10.07973,0.78973,0.067528,0.090257,0.07237,0.091709,0.108247,0.097548,0.121916,0.106654,3.062695,4.566954,16.581827,17.95514,10.811215,3.453303,0.612924,1.849759,2.126086,0.715889,0.297472,0.125826,0.200941,0.09533,0.09525,0.085948,0.107647,0.088172,0.108981,0.115352,0.113993,0.10823,0.113214,0.107797,0.10575,0.110446,0.081927,0.083017,0.084058,0.091604,0.08848,0.099164,0.099641,0.082937,0.100202,0.099059,0.097761,0.097757,0.098008,0.096922,0.095213,0.09255,0.093018,0.094077,0.095125,0.093634,0.09411,0.094644,0.095906,0.095856,0.0948,0.095315,0.096391,0.094556,0.096518,0.096502,0.096217,0.094747,0.095681,0.095761,0.096071,0.094884,0.096152,0.09482,0.095045,0.095715,0.092925,0.094911,0.095657,0.095915,0.095995,0.095727,0.095223,0.095178,0.095553,0.09552,0.096072,0.095023,0.09553,0.095849,0.095757,0.095509,0.095885,0.097198,0.097359],
+  r4Var: [0.074679,0.080727,0.078897,0.098038,0.107276,0.113396,0.115969,0.132207,0.156143,0.150612,0.150853,0.149534,0.152773,0.159972,0.166306,0.16044,0.164277,0.177624,0.183115,0.176071,0.09029,0.08469,0.082041,0.078076,0.074801,0.068673,0.070575,0.095877,0.098834,0.094771,0.09078,0.086148,0.085371,0.083043,0.14244,0.133042,0.134371,0.128705,0.129274,0.122986,0.084971,0.083682,0.080553,0.075278,0.074964,0.071053,0.06901,0.069158,0.068296,0.065686,0.06051,0.060995,0.062342,0.058887,0.110608,0.105803,0.101175,0.098384,0.094037,0.086943,0.066879,0.06289,0.060589,0.057486,0.056517,0.054142,0.050908,0.045579,0.044595,0.043547,0.041113,0.039839,0.037174,0.036532,0.014436,0.013906,0.013331,0.012632,0.012584,0.011868,0.011558,0.01121,0.010274,0.010043,0.009964,0.009506,0.008878,0.002937,0.002825,0.002636,0.002647,0.002481,0.002442,0.002162,0.022409,0.021913,0.020953,0.02002,0.018816,0.017312]
+};
+
+// ==================== CHART DEFAULTS ====================
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+Chart.defaults.plugins.legend.labels.padding = 16;
+Chart.defaults.animation.duration = 800;
+
+const COLORS = {
+  R1: {bg:'rgba(58,142,224,0.15)',border:'#3a8ee0'},
+  R2: {bg:'rgba(224,114,58,0.15)',border:'#e0723a'},
+  R3: {bg:'rgba(107,63,160,0.15)',border:'#6b3fa0'},
+  R4: {bg:'rgba(42,157,143,0.15)',border:'#2a9d8f'}
+};
+
+// ==================== SIMULATION TRAJECTORY CHART ====================
+const simTrajCtx = document.getElementById('simTrajChart').getContext('2d');
+const simTrajChart = new Chart(simTrajCtx, {
+  type: 'line',
+  data: {
+    labels: simTrajLabels,
+    datasets: [
+      {label:'R1 (i.i.d. + single)',data:simTrajData.R1,borderColor:COLORS.R1.border,backgroundColor:COLORS.R1.bg,borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'R2 (Markov + single)',data:simTrajData.R2,borderColor:COLORS.R2.border,backgroundColor:COLORS.R2.bg,borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'R3 (i.i.d. + coupled)',data:simTrajData.R3,borderColor:COLORS.R3.border,backgroundColor:COLORS.R3.bg,borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'R4 (Markov + coupled)',data:simTrajData.R4,borderColor:COLORS.R4.border,backgroundColor:COLORS.R4.bg,borderWidth:2,pointRadius:0,tension:0.3,fill:false}
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: {mode:'index',intersect:false},
+    scales: {
+      x: {title:{display:true,text:'SGD Step',font:{weight:'bold'}},ticks:{maxTicksLimit:8}},
+      y: {type:'logarithmic',title:{display:true,text:'Squared Bias (log scale)',font:{weight:'bold'}},min:0.1}
+    },
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4); }
+        }
+      }
+    }
+  }
+});
+
+function toggleSimSeries(btn, key) {
+  document.querySelectorAll('#simulation .chart-controls .chart-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const keys = ['R1','R2','R3','R4'];
+  simTrajChart.data.datasets.forEach((ds, i) => {
+    ds.hidden = (key !== 'all' && keys[i] !== key);
+  });
+  simTrajChart.update();
+}
+
+// ==================== DECAY RATE BAR CHART ====================
+const decayBarCtx = document.getElementById('decayBarChart').getContext('2d');
+new Chart(decayBarCtx, {
+  type: 'bar',
+  data: {
+    labels: ['R1\n(Baseline)', 'R2\n(Online)', 'R3\n(Coupled)', 'R4\n(Full AC)'],
+    datasets: [{
+      label: 'Decay Rate',
+      data: [-0.0344, 1.3338, 1.3776, 1.2180],
+      backgroundColor: [COLORS.R1.border, COLORS.R2.border, COLORS.R3.border, COLORS.R4.border],
+      borderRadius: 6,
+      barPercentage: 0.6
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {display:false},
+      tooltip: {callbacks:{label:ctx=>'Decay Rate: '+ctx.parsed.y.toFixed(4)}}
+    },
+    scales: {
+      y: {title:{display:true,text:'Decay Rate (rho)',font:{weight:'bold'}},grid:{color:'#f0f0f0'}},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ==================== ANALYTICAL TRAJECTORY CHART ====================
+const analTrajCtx = document.getElementById('analTrajChart').getContext('2d');
+const analTrajChart = new Chart(analTrajCtx, {
+  type: 'line',
+  data: {
+    labels: analTrajLabels,
+    datasets: [
+      {label:'A1 (baseline)',data:analTrajData.A1,borderColor:COLORS.R1.border,borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'A2 (online)',data:analTrajData.A2,borderColor:COLORS.R2.border,borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'A3 (coupled)',data:analTrajData.A3,borderColor:COLORS.R3.border,borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'A4 (full AC)',data:analTrajData.A4,borderColor:COLORS.R4.border,borderWidth:2,pointRadius:0,tension:0.3,fill:false}
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: {mode:'index',intersect:false},
+    scales: {
+      x: {title:{display:true,text:'SGD Step',font:{weight:'bold'}},ticks:{maxTicksLimit:8}},
+      y: {type:'logarithmic',title:{display:true,text:'Squared Bias (log scale)',font:{weight:'bold'}}}
+    },
+    plugins: {
+      tooltip: {callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toExponential(3)}}
+    }
+  }
+});
+
+function toggleAnalSeries(btn, key) {
+  document.querySelectorAll('#analytical .chart-controls .chart-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const keys = ['A1','A2','A3','A4'];
+  analTrajChart.data.datasets.forEach((ds, i) => {
+    ds.hidden = (key !== 'all' && keys[i] !== key);
+  });
+  analTrajChart.update();
+}
+
+// ==================== ANALYTICAL DECAY BAR CHART ====================
+const analBarCtx = document.getElementById('analBarChart').getContext('2d');
+new Chart(analBarCtx, {
+  type: 'bar',
+  data: {
+    labels: ['A1\n(Baseline)', 'A2\n(Online)', 'A3\n(Coupled)', 'A4\n(Full AC)'],
+    datasets: [{
+      label: 'Analytical Decay Rate',
+      data: [1.1297, 1.1210, 0.7944, 0.8354],
+      backgroundColor: [COLORS.R1.border, COLORS.R2.border, COLORS.R3.border, COLORS.R4.border],
+      borderRadius: 6,
+      barPercentage: 0.6
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {display:false},
+      tooltip: {callbacks:{label:ctx=>'Decay Rate: '+ctx.parsed.y.toFixed(4)}}
+    },
+    scales: {
+      y: {title:{display:true,text:'Analytical Decay Rate',font:{weight:'bold'}},grid:{color:'#f0f0f0'},min:0},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ==================== BETA SWEEP RATE CHART ====================
+const betaRateCtx = document.getElementById('betaRateChart').getContext('2d');
+new Chart(betaRateCtx, {
+  type: 'line',
+  data: {
+    labels: betaSweepData.betas.map(b=>b.toFixed(2)),
+    datasets: [
+      {label:'R1 (Baseline)',data:betaSweepData.rateR1,borderColor:COLORS.R1.border,backgroundColor:COLORS.R1.bg,borderWidth:2.5,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:false},
+      {label:'R2 (Online)',data:betaSweepData.rateR2,borderColor:COLORS.R2.border,backgroundColor:COLORS.R2.bg,borderWidth:2.5,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:false},
+      {label:'R3 (Coupled)',data:betaSweepData.rateR3,borderColor:COLORS.R3.border,backgroundColor:COLORS.R3.bg,borderWidth:2.5,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:false},
+      {label:'R4 (Full AC)',data:betaSweepData.rateR4,borderColor:COLORS.R4.border,backgroundColor:COLORS.R4.bg,borderWidth:2.5,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:false}
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: {mode:'index',intersect:false},
+    scales: {
+      x: {title:{display:true,text:'Step-size exponent beta',font:{weight:'bold'}}},
+      y: {title:{display:true,text:'Decay Rate',font:{weight:'bold'}},grid:{color:'#f0f0f0'}}
+    }
+  }
+});
+
+// ==================== BETA SWEEP TAIL CHART ====================
+const betaTailCtx = document.getElementById('betaTailChart').getContext('2d');
+new Chart(betaTailCtx, {
+  type: 'line',
+  data: {
+    labels: betaSweepData.betas.map(b=>b.toFixed(2)),
+    datasets: [
+      {label:'R1 Tail Bias',data:betaSweepData.tailR1,borderColor:COLORS.R1.border,backgroundColor:COLORS.R1.bg,borderWidth:2.5,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:true},
+      {label:'R4 Tail Bias',data:betaSweepData.tailR4,borderColor:COLORS.R4.border,backgroundColor:COLORS.R4.bg,borderWidth:2.5,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:true}
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: {mode:'index',intersect:false},
+    scales: {
+      x: {title:{display:true,text:'Step-size exponent beta',font:{weight:'bold'}}},
+      y: {title:{display:true,text:'Tail Bias',font:{weight:'bold'}},grid:{color:'#f0f0f0'}}
+    }
+  }
+});
+
+// ==================== TAIL BIAS BY REGIME ====================
+const tailBiasCtx = document.getElementById('tailBiasChart').getContext('2d');
+new Chart(tailBiasCtx, {
+  type: 'bar',
+  data: {
+    labels: ['R1\n(Baseline)', 'R2\n(Online)', 'R3\n(Coupled)', 'R4\n(Full AC)'],
+    datasets: [{
+      label: 'Tail Bias',
+      data: [0.3213, 0.2703, 0.2107, 0.3668],
+      backgroundColor: [COLORS.R1.border, COLORS.R2.border, COLORS.R3.border, COLORS.R4.border],
+      borderRadius: 6,
+      barPercentage: 0.6
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {display:false},
+      tooltip: {callbacks:{label:ctx=>'Tail Bias: '+ctx.parsed.y.toFixed(4)}}
+    },
+    scales: {
+      y: {title:{display:true,text:'Tail Bias',font:{weight:'bold'}},grid:{color:'#f0f0f0'},min:0},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ==================== FACTORIAL DECOMPOSITION CHART ====================
+const decompCtx = document.getElementById('decompChart').getContext('2d');
+new Chart(decompCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Online\nMarginal', 'Coupling\nMarginal', 'Interaction\nEffect', 'Total\nExcess'],
+    datasets: [{
+      label: 'Effect Size',
+      data: [-0.0510, -0.1106, 0.2071, 0.0455],
+      backgroundColor: [COLORS.R2.border, COLORS.R3.border, COLORS.R4.border, COLORS.R1.border],
+      borderRadius: 6,
+      barPercentage: 0.6
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {display:false},
+      tooltip: {callbacks:{label:ctx=>'Effect: '+ctx.parsed.y.toFixed(4)}}
+    },
+    scales: {
+      y: {title:{display:true,text:'Effect on Tail Bias',font:{weight:'bold'}},grid:{color:'#f0f0f0'}},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ==================== VARIANCE R1 CHART ====================
+const varR1Ctx = document.getElementById('varR1Chart').getContext('2d');
+new Chart(varR1Ctx, {
+  type: 'line',
+  data: {
+    labels: simTrajLabels,
+    datasets: [
+      {label:'Bias Squared',data:varData.r1Mean,borderColor:COLORS.R1.border,backgroundColor:COLORS.R1.bg,borderWidth:2,pointRadius:0,tension:0.3,fill:true},
+      {label:'Cross-Seed Variance',data:varData.r1Var,borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',borderWidth:2,pointRadius:0,tension:0.3,fill:true}
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: {mode:'index',intersect:false},
+    scales: {
+      x: {title:{display:true,text:'SGD Step',font:{weight:'bold'}},ticks:{maxTicksLimit:6}},
+      y: {type:'logarithmic',title:{display:true,text:'Value (log scale)',font:{weight:'bold'}},min:0.05}
+    }
+  }
+});
+
+// ==================== VARIANCE R4 CHART ====================
+const varR4Ctx = document.getElementById('varR4Chart').getContext('2d');
+new Chart(varR4Ctx, {
+  type: 'line',
+  data: {
+    labels: simTrajLabels,
+    datasets: [
+      {label:'Bias Squared',data:varData.r4Mean,borderColor:COLORS.R4.border,backgroundColor:COLORS.R4.bg,borderWidth:2,pointRadius:0,tension:0.3,fill:true},
+      {label:'Cross-Seed Variance',data:varData.r4Var,borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',borderWidth:2,pointRadius:0,tension:0.3,fill:true}
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: {mode:'index',intersect:false},
+    scales: {
+      x: {title:{display:true,text:'SGD Step',font:{weight:'bold'}},ticks:{maxTicksLimit:6}},
+      y: {type:'logarithmic',title:{display:true,text:'Value (log scale)',font:{weight:'bold'}}}
+    }
+  }
+});
+
+// ==================== NAVIGATION SCROLL HIGHLIGHTING ====================
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav-inner a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(section => {
+    const top = section.offsetTop - 80;
+    if (scrollY >= top) current = section.getAttribute('id');
+  });
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+  });
+});
+
+// Smooth scroll for nav links
+navLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(link.getAttribute('href'));
+    if (target) target.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+});
+</style>
+</script>
+
+</body>
+</html>

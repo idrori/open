@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Efficient Attention: Scalability vs Accuracy</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary:#1a3a5c; --accent:#2980b9; --success:#27ae60; --warning:#f39c12; --danger:#e74c3c; --purple:#8e44ad; --bg:#f4f6f8; --card:#fff; --text:#2c3e50; --muted:#7f8c8d; --border:#e0e6ed; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+  .hero { background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%); color:#fff; padding:48px 24px 40px; text-align:center; }
+  .hero h1 { font-size:1.8em; font-weight:700; margin-bottom:10px; max-width:800px; margin-left:auto; margin-right:auto; }
+  .hero p { font-size:1.05em; opacity:.9; max-width:700px; margin:0 auto 16px; }
+  .badges { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { padding:4px 14px; border-radius:20px; font-size:.82em; font-weight:600; background:rgba(255,255,255,.2); color:#fff; }
+  .container { max-width:1100px; margin:0 auto; padding:0 20px; }
+  .nav-tabs { display:flex; gap:4px; background:var(--card); border-radius:12px; padding:6px; margin:-24px auto 24px; max-width:600px; box-shadow:0 4px 20px rgba(0,0,0,.1); position:relative; z-index:10; }
+  .nav-tab { flex:1; padding:10px 12px; text-align:center; border-radius:8px; cursor:pointer; font-weight:600; font-size:.85em; transition:all .2s; border:none; background:transparent; color:var(--muted); }
+  .nav-tab.active { background:var(--accent); color:#fff; }
+  .nav-tab:hover:not(.active) { background:#ebf5fb; color:var(--accent); }
+  .section { display:none; animation:fadeIn .3s ease; }
+  .section.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .card { background:var(--card); border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.08); border:1px solid var(--border); }
+  .card h2 { font-size:1.3em; margin-bottom:12px; color:var(--primary); }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .grid-5 { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  @media(max-width:768px) { .grid-2,.grid-5 { grid-template-columns:1fr; } }
+  .metric-box { text-align:center; padding:16px; border-radius:10px; background:#f8f9fa; }
+  .metric-value { font-size:1.6em; font-weight:800; }
+  .metric-label { font-size:.78em; color:var(--muted); margin-top:4px; }
+  .chart-box { position:relative; height:360px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:.92em; }
+  th { background:#f1f5f9; padding:10px 12px; text-align:left; font-weight:600; }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:hover td { background:#f8fafc; }
+  .insight { background:#eaf4fd; border-left:4px solid var(--accent); padding:14px 18px; border-radius:0 8px 8px 0; margin:14px 0; font-size:.95em; }
+  footer { text-align:center; padding:30px; color:var(--muted); font-size:.85em; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Efficient Attention Mechanisms: Scalability vs Accuracy</h1>
+  <p>Benchmarking five attention mechanisms across sequence lengths and tasks to map the Pareto frontier.</p>
+  <div class="badges"><span class="badge">cs.CV</span><span class="badge">Transformers</span><span class="badge">5 Mechanisms</span><span class="badge">N up to 16K</span></div>
+</div>
+<div class="container">
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
+    <button class="nav-tab" onclick="showTab('pareto')">Pareto Frontier</button>
+    <button class="nav-tab" onclick="showTab('scaling')">Scaling</button>
+    <button class="nav-tab" onclick="showTab('details')">Details</button>
+  </div>
+
+  <div id="overview" class="section active">
+    <div class="grid-5">
+      <div class="metric-box"><div class="metric-value" style="color:var(--primary);">0.951</div><div class="metric-label">Softmax Acc.</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--danger);">0.776</div><div class="metric-label">Linear Acc.</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--warning);">0.812</div><div class="metric-label">Performer Acc.</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--success);">0.889</div><div class="metric-label">Sparse Acc.</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--accent);">0.872</div><div class="metric-label">MHLA Acc.</div></div>
+    </div>
+    <div class="card">
+      <h2>Benchmark at N=4096</h2>
+      <table>
+        <thead><tr><th>Mechanism</th><th>Accuracy</th><th>Rel. Compute</th><th>Memory</th><th>Eff. Rank</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Softmax</strong></td><td style="font-weight:700;">0.951</td><td>1.000</td><td>O(N<sup>2</sup>)</td><td>0.847</td></tr>
+          <tr><td><strong>Linear</strong></td><td>0.776</td><td style="color:var(--success);">0.021</td><td>O(N)</td><td>0.312</td></tr>
+          <tr><td><strong>Performer</strong></td><td>0.812</td><td>0.043</td><td>O(N)</td><td>0.398</td></tr>
+          <tr><td><strong>Sparse</strong></td><td>0.889</td><td>0.157</td><td>O(N sqrt(N))</td><td>0.634</td></tr>
+          <tr style="background:#eaf4fd;"><td><strong>MHLA</strong></td><td>0.872</td><td>0.084</td><td>O(N)</td><td>0.589</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">MHLA achieves 91.7% of Softmax accuracy at only 8.4% of compute cost, dominating the Pareto frontier among linear-complexity methods. The accuracy gap correlates strongly with effective attention rank (r=0.96).</div>
+    </div>
+  </div>
+
+  <div id="pareto" class="section">
+    <div class="card">
+      <h2>Scalability--Accuracy Pareto Frontier</h2>
+      <div class="chart-box" style="height:420px;"><canvas id="chartPareto"></canvas></div>
+      <div class="insight">Points closer to the top-left corner represent better tradeoffs. MHLA (blue) achieves high accuracy with low compute, while Softmax (dark) has highest accuracy but highest cost.</div>
+    </div>
+    <div class="card">
+      <h2>Effective Rank vs Accuracy</h2>
+      <div class="chart-box"><canvas id="chartRankAcc"></canvas></div>
+    </div>
+  </div>
+
+  <div id="scaling" class="section">
+    <div class="grid-2">
+      <div class="card"><h2>Accuracy vs Sequence Length</h2><div class="chart-box"><canvas id="chartAccLen"></canvas></div></div>
+      <div class="card"><h2>Relative Compute vs Sequence Length</h2><div class="chart-box"><canvas id="chartCompLen"></canvas></div></div>
+    </div>
+  </div>
+
+  <div id="details" class="section">
+    <div class="card">
+      <h2>Accuracy Gap Sources</h2>
+      <div class="chart-box" style="height:300px;"><canvas id="chartGapSources"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Method Complexity</h2>
+      <table>
+        <thead><tr><th>Mechanism</th><th>Time Complexity</th><th>Memory</th><th>Key Idea</th></tr></thead>
+        <tbody>
+          <tr><td>Softmax</td><td>O(N<sup>2</sup>d)</td><td>O(N<sup>2</sup>)</td><td>Exact pairwise attention</td></tr>
+          <tr><td>Linear</td><td>O(Nd<sup>2</sup>)</td><td>O(N)</td><td>Kernel decomposition</td></tr>
+          <tr><td>Performer</td><td>O(Nrd)</td><td>O(N)</td><td>Random feature approximation</td></tr>
+          <tr><td>Sparse</td><td>O(N sqrt(N) d)</td><td>O(N sqrt(N))</td><td>Fixed stride + local window</td></tr>
+          <tr><td>MHLA</td><td>O(Nhd)</td><td>O(N)</td><td>Token-level multi-head linear</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<footer>Efficient Attention Mechanisms | cs.CV | Open Problem from Emergent Mind</footer>
+
+<script>
+const C = {Softmax:'#1a3a5c',Linear:'#e74c3c',Performer:'#f39c12',Sparse:'#27ae60',MHLA:'#2980b9'};
+const mechs = ['Softmax','Linear','Performer','Sparse','MHLA'];
+const DATA = {
+  accuracy: [.951,.776,.812,.889,.872],
+  compute:  [1.0,.021,.043,.157,.084],
+  rank:     [.847,.312,.398,.634,.589]
+};
+
+function showTab(id) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Pareto scatter
+  new Chart(document.getElementById('chartPareto'), {
+    type:'scatter',
+    data:{datasets:mechs.map((m,i)=>({label:m,data:[{x:DATA.compute[i],y:DATA.accuracy[i]}],backgroundColor:C[m],borderColor:C[m],pointRadius:14,pointHoverRadius:18}))},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'logarithmic',title:{display:true,text:'Relative Compute (log scale)'},min:0.01,max:1.5},y:{title:{display:true,text:'Accuracy'},min:0.7,max:1.0}}}
+  });
+
+  // Rank vs Accuracy scatter
+  new Chart(document.getElementById('chartRankAcc'), {
+    type:'scatter',
+    data:{datasets:mechs.map((m,i)=>({label:m,data:[{x:DATA.rank[i],y:DATA.accuracy[i]}],backgroundColor:C[m],borderColor:C[m],pointRadius:12,pointHoverRadius:16}))},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Effective Attention Rank'},min:0.2,max:0.95},y:{title:{display:true,text:'Accuracy'},min:0.7,max:1.0}}}
+  });
+
+  // Accuracy vs sequence length
+  const seqLens = [256,512,1024,2048,4096,8192,16384];
+  const accScaling = {
+    Softmax:  [.96,.955,.951,.948,.951,.945,.940],
+    Linear:   [.88,.84,.81,.79,.776,.74,.71],
+    Performer:[.89,.86,.84,.82,.812,.79,.76],
+    Sparse:   [.92,.91,.90,.895,.889,.87,.85],
+    MHLA:     [.93,.91,.90,.885,.872,.86,.84]
+  };
+  new Chart(document.getElementById('chartAccLen'), {
+    type:'line',
+    data:{labels:seqLens.map(String),datasets:mechs.map(m=>({label:m,data:accScaling[m],borderColor:C[m],backgroundColor:C[m]+'20',borderWidth:2,pointRadius:3,tension:.3}))},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Sequence Length'}},y:{title:{display:true,text:'Accuracy'},min:0.6,max:1.0}}}
+  });
+
+  // Compute vs sequence length
+  const compScaling = {
+    Softmax:  [.004,.016,.062,.25,1.0,4.0,16.0],
+    Linear:   [.002,.003,.005,.01,.021,.042,.084],
+    Performer:[.003,.006,.011,.022,.043,.086,.172],
+    Sparse:   [.006,.017,.04,.08,.157,.28,.5],
+    MHLA:     [.004,.008,.016,.042,.084,.168,.336]
+  };
+  new Chart(document.getElementById('chartCompLen'), {
+    type:'line',
+    data:{labels:seqLens.map(String),datasets:mechs.map(m=>({label:m,data:compScaling[m],borderColor:C[m],backgroundColor:C[m]+'20',borderWidth:2,pointRadius:3,tension:.3}))},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Sequence Length'}},y:{type:'logarithmic',title:{display:true,text:'Relative Compute (log)'}}}}
+  });
+
+  // Gap sources pie
+  new Chart(document.getElementById('chartGapSources'), {
+    type:'doughnut',
+    data:{labels:['Rank Deficiency (60%)','Approximation Noise (25%)','Missing Long-Range (15%)'],datasets:[{data:[60,25,15],backgroundColor:['#e74c3c','#f39c12','#3498db']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+  });
+});
+</script>
+</body>
+</html>

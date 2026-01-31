@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transferability & Harms of Agent Intergroup Bias</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card-bg: #fff; --text: #2c3e50; --text-light: #7f8c8d; --border: #e0e6ed; --success: #27ae60; --danger: #e74c3c; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+        .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 1.7rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; max-width: 700px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+        .card h3 { color: var(--primary); margin-bottom: 1rem; font-size: 1.1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+        .card-full { grid-column: 1 / -1; }
+        .chart-container { position: relative; height: 350px; }
+        .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .metric-card { background: var(--card-bg); border-radius: 10px; padding: 1.2rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid var(--accent); }
+        .metric-card .value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+        .metric-card .label { font-size: 0.85rem; color: var(--text-light); margin-top: 0.3rem; }
+        .metric-card.danger { border-left-color: var(--danger); }
+        .metric-card.danger .value { color: var(--danger); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.7rem; text-align: center; border-bottom: 1px solid var(--border); }
+        th { background: var(--primary); color: white; }
+        tr:hover { background: #f0f4f8; }
+        .high-risk { color: var(--danger); font-weight: 700; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Transferability & Harms of Agent Intergroup Bias</h1>
+        <p>Quantifying how LLM agent bias transfers from lab simulations to real-world deployments</p>
+    </div>
+    <div class="container">
+        <div class="metric-grid">
+            <div class="metric-card danger"><div class="value">0.172</div><div class="label">Highest Bias (Healthcare)</div></div>
+            <div class="metric-card danger"><div class="value">0.144</div><div class="label">Highest Harm Score</div></div>
+            <div class="metric-card"><div class="value">40%</div><div class="label">Bias Increase from Poisoning</div></div>
+            <div class="metric-card"><div class="value">5</div><div class="label">Domains Evaluated</div></div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h3>Bias & Harm by Domain</h3>
+                <div class="chart-container"><canvas id="chartDomain"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Bias vs. Cue Strength</h3>
+                <div class="chart-container"><canvas id="chartCue"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Belief Poisoning Impact</h3>
+                <div class="chart-container"><canvas id="chartPoisoning"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Lab-to-Deployment Transfer</h3>
+                <div class="chart-container"><canvas id="chartTransfer"></canvas></div>
+            </div>
+        </div>
+        <div class="card card-full">
+            <h3>Domain Risk Assessment</h3>
+            <table>
+                <thead><tr><th>Domain</th><th>Bias</th><th>Harm Score</th><th>Disparate Impact</th><th>Transfer Ratio</th><th>Risk Level</th></tr></thead>
+                <tbody>
+                    <tr><td>Customer Service</td><td>0.092</td><td>0.008</td><td>0.894</td><td>0.85</td><td>Low</td></tr>
+                    <tr class="high-risk"><td><strong>Healthcare Triage</strong></td><td><strong>0.172</strong></td><td><strong>0.144</strong></td><td><strong>0.810</strong></td><td><strong>1.10</strong></td><td><strong>Critical</strong></td></tr>
+                    <tr><td>Content Moderation</td><td>0.142</td><td>0.043</td><td>0.807</td><td>0.90</td><td>Medium</td></tr>
+                    <tr><td>Education</td><td>0.157</td><td>0.077</td><td>0.822</td><td>0.95</td><td>High</td></tr>
+                    <tr class="high-risk"><td><strong>Hiring</strong></td><td><strong>0.154</strong></td><td><strong>0.110</strong></td><td><strong>0.478</strong></td><td><strong>1.05</strong></td><td><strong>Critical</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+    const domainLabels = ['Customer Svc', 'Healthcare', 'Moderation', 'Education', 'Hiring'];
+    const domainColors = ['#3498db', '#e74c3c', '#f39c12', '#9b59b6', '#2ecc71'];
+
+    new Chart(document.getElementById('chartDomain'), {
+        type: 'bar',
+        data: { labels: domainLabels, datasets: [
+            { label: 'Bias Magnitude', data: [0.092, 0.172, 0.142, 0.157, 0.154], backgroundColor: domainColors.map(c => c + '88'), borderColor: domainColors, borderWidth: 2 },
+            { label: 'Harm Score', data: [0.008, 0.144, 0.043, 0.077, 0.110], backgroundColor: domainColors.map(c => c + 'cc'), borderColor: domainColors, borderWidth: 2 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('chartCue'), {
+        type: 'line',
+        data: { labels: [0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0], datasets: [
+            { label: 'Customer Svc', data: [0.04, 0.06, 0.075, 0.092, 0.13, 0.17, 0.22], borderColor: '#3498db', borderWidth: 2.5, pointRadius: 5, tension: 0.3 },
+            { label: 'Healthcare', data: [0.07, 0.10, 0.13, 0.172, 0.24, 0.31, 0.40], borderColor: '#e74c3c', borderWidth: 2.5, pointRadius: 5, tension: 0.3 },
+            { label: 'Hiring', data: [0.06, 0.09, 0.12, 0.154, 0.22, 0.28, 0.36], borderColor: '#2ecc71', borderWidth: 2.5, pointRadius: 5, tension: 0.3 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Cue Strength' } }, y: { title: { display: true, text: 'Bias Magnitude' } } }, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('chartPoisoning'), {
+        type: 'line',
+        data: { labels: [0, 0.1, 0.2, 0.3, 0.5], datasets: [
+            { label: 'Bias', data: [0.12, 0.15, 0.18, 0.21, 0.27], borderColor: '#e74c3c', backgroundColor: '#e74c3c22', fill: true, borderWidth: 2.5, pointRadius: 6, tension: 0.3 },
+            { label: 'Harm', data: [0.10, 0.13, 0.15, 0.18, 0.23], borderColor: '#9b59b6', backgroundColor: '#9b59b622', fill: true, borderWidth: 2.5, pointRadius: 6, tension: 0.3 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Poisoning Rate' } }, y: { title: { display: true, text: 'Score' } } }, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('chartTransfer'), {
+        type: 'bar',
+        data: { labels: domainLabels, datasets: [{
+            label: 'Transfer Ratio', data: [0.85, 1.10, 0.90, 0.95, 1.05],
+            backgroundColor: domainColors.map(c => c + 'cc'), borderColor: domainColors, borderWidth: 2
+        }]},
+        options: { responsive: true, maintainAspectRatio: false,
+            scales: { y: { title: { display: true, text: 'Transfer Ratio' }, min: 0, max: 1.5 } },
+            plugins: { legend: { display: false }, annotation: { annotations: { line1: { type: 'line', yMin: 1, yMax: 1, borderColor: 'gray', borderDash: [5,5] } } } }
+        }
+    });
+    </script>
+</body>
+</html>

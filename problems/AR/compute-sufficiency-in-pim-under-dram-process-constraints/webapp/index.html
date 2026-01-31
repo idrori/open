@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compute Sufficiency in PIM under DRAM Process Constraints</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f5f7fa;--card:#fff;--text:#2c3e50;--text-light:#6c7a89;--success:#27ae60;--warning:#f39c12;--danger:#e74c3c;--border:#e1e8ef}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.hero{background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%);color:#fff;padding:3rem 2rem;text-align:center}.hero h1{font-size:2rem;margin-bottom:.5rem}.hero .subtitle{font-size:1.05rem;opacity:.9;max-width:850px;margin:0 auto}
+.container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.2rem;margin-bottom:2rem}
+.metric-card{background:var(--card);border-radius:12px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center;border-top:4px solid var(--accent)}.metric-card .value{font-size:1.8rem;font-weight:700;color:var(--primary)}.metric-card .label{font-size:.82rem;color:var(--text-light);margin-top:.3rem}
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:1.5rem;margin-bottom:2rem}
+.chart-card{background:var(--card);border-radius:12px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.06)}.chart-card h3{font-size:1.1rem;color:var(--primary);margin-bottom:1rem}
+.table-card{background:var(--card);border-radius:12px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:2rem;overflow-x:auto}.table-card h3{font-size:1.1rem;color:var(--primary);margin-bottom:1rem}
+table{width:100%;border-collapse:collapse}th,td{padding:.7rem 1rem;text-align:center;border-bottom:1px solid var(--border)}th{background:var(--primary);color:#fff;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px}tr:hover{background:#f0f4f8}
+.section-title{font-size:1.5rem;color:var(--primary);margin-bottom:1rem;font-weight:700}
+.insuf{color:var(--danger);font-weight:700}.suf{color:var(--success);font-weight:700}
+footer{text-align:center;padding:2rem;color:var(--text-light);font-size:.85rem;border-top:1px solid var(--border)}
+@media(max-width:768px){.hero h1{font-size:1.4rem}.charts-grid{grid-template-columns:1fr}.metrics-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Compute Sufficiency in PIM</h1>
+  <p class="subtitle">Quantifying the Processing-in-Memory compute gap for LLM inference under DRAM process constraints across nodes, power budgets, model sizes, and precision formats.</p>
+</div>
+
+<div class="container">
+  <div class="metrics-grid">
+    <div class="metric-card"><div class="value">7.3%</div><div class="label">PIM Sufficiency (7B, 2W)</div></div>
+    <div class="metric-card"><div class="value">0.8%</div><div class="label">PIM Sufficiency (70B, 2W)</div></div>
+    <div class="metric-card"><div class="value">18.4%</div><div class="label">Max PIM (5W, 10nm, INT4)</div></div>
+    <div class="metric-card"><div class="value">1.40</div><div class="label">PNM Sufficiency (7B)</div></div>
+    <div class="metric-card"><div class="value">13.7x</div><div class="label">Improvement Needed (7B)</div></div>
+  </div>
+
+  <h2 class="section-title">Architecture Comparison</h2>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Compute Sufficiency Ratio by Architecture (log scale)</h3>
+      <canvas id="archChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>PIM Power Budget Sweep (7B model)</h3>
+      <canvas id="powerChart"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>PIM Sufficiency: Power Budget vs Model Size</h3>
+      <canvas id="heatChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Energy Efficiency (GOPS/W)</h3>
+      <canvas id="effChart"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Detailed Results</h2>
+  <div class="table-card">
+    <h3>Architecture Comparison (14nm, 2W, INT8)</h3>
+    <table>
+      <thead><tr><th>Model</th><th>Arch</th><th>GOPS</th><th>Latency (ms)</th><th>Sufficiency</th><th>GOPS/W</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="3">7B</td><td>PIM</td><td>7.1</td><td>684</td><td class="insuf">0.073</td><td>5.06</td></tr>
+        <tr><td>PNM</td><td>200</td><td>35.7</td><td class="suf">1.399</td><td>50.6</td></tr>
+        <tr><td>GPU</td><td>623K</td><td>2.3</td><td class="suf">21.86</td><td>1558</td></tr>
+        <tr><td rowspan="3">70B</td><td>PIM</td><td>7.0</td><td>6513</td><td class="insuf">0.008</td><td>5.06</td></tr>
+        <tr><td>PNM</td><td>200</td><td>315</td><td class="insuf">0.159</td><td>50.6</td></tr>
+        <tr><td>GPU</td><td>624K</td><td>20.2</td><td class="suf">2.477</td><td>1561</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <h3>PIM Sufficiency vs Power Budget</h3>
+    <table>
+      <thead><tr><th>Power (W)</th><th>7B</th><th>13B</th><th>30B</th><th>70B</th></tr></thead>
+      <tbody>
+        <tr><td>0.5</td><td>0.018</td><td>0.010</td><td>0.004</td><td>0.002</td></tr>
+        <tr><td>1.0</td><td>0.037</td><td>0.019</td><td>0.008</td><td>0.004</td></tr>
+        <tr><td>2.0</td><td>0.073</td><td>0.038</td><td>0.016</td><td>0.008</td></tr>
+        <tr><td>3.0</td><td>0.110</td><td>0.058</td><td>0.023</td><td>0.012</td></tr>
+        <tr><td>5.0</td><td>0.184</td><td>0.096</td><td>0.039</td><td>0.020</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <h3>Precision Format Impact (14nm, 2W)</h3>
+    <table>
+      <thead><tr><th>Precision</th><th>7B</th><th>13B</th><th>30B</th><th>70B</th></tr></thead>
+      <tbody>
+        <tr><td>FP16</td><td>0.073</td><td>0.038</td><td>0.016</td><td>0.008</td></tr>
+        <tr><td>INT8</td><td>0.074</td><td>0.038</td><td>0.016</td><td>0.008</td></tr>
+        <tr><td>INT4</td><td>0.073</td><td>0.038</td><td>0.015</td><td>0.008</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer>Compute Sufficiency in PIM under DRAM Process Constraints &mdash; KDD 2026</footer>
+
+<script>
+const models=['7B','13B','30B','70B'];
+new Chart(document.getElementById('archChart'),{
+  type:'bar',
+  data:{labels:models,datasets:[
+    {label:'PIM',data:[0.0732,0.0383,0.0154,0.0077],backgroundColor:'#e74c3c'},
+    {label:'PNM',data:[1.3993,0.7826,0.3503,0.1585],backgroundColor:'#f39c12'},
+    {label:'GPU',data:[21.86,12.23,5.47,2.48],backgroundColor:'#2980b9'}
+  ]},
+  options:{responsive:true,plugins:{legend:{position:'top'},annotation:{}},scales:{y:{type:'logarithmic',title:{display:true,text:'Sufficiency Ratio (log)'}}}}
+});
+
+new Chart(document.getElementById('powerChart'),{
+  type:'line',
+  data:{labels:['0.5W','1.0W','1.5W','2.0W','3.0W','5.0W'],datasets:[
+    {label:'7B',data:[0.0184,0.0365,0.055,0.073,0.1104,0.1838],borderColor:'#2980b9',tension:.3,pointRadius:5},
+    {label:'13B',data:[0.0096,0.0193,0.0288,0.0383,0.0579,0.0958],borderColor:'#e67e22',tension:.3,pointRadius:5},
+    {label:'30B',data:[0.0039,0.0077,0.0116,0.0156,0.0232,0.0387],borderColor:'#9b59b6',tension:.3,pointRadius:5},
+    {label:'70B',data:[0.0019,0.0039,0.0058,0.0078,0.0117,0.0195],borderColor:'#e74c3c',tension:.3,pointRadius:5}
+  ]},
+  options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{title:{display:true,text:'Sufficiency Ratio'},max:0.2},x:{title:{display:true,text:'Power Budget'}}}}
+});
+
+// Heatmap-like representation using grouped bars
+new Chart(document.getElementById('heatChart'),{
+  type:'bar',
+  data:{labels:['0.5W','1W','2W','3W','5W'],datasets:[
+    {label:'7B',data:[0.0184,0.0365,0.073,0.1104,0.1838],backgroundColor:'rgba(41,128,185,0.7)'},
+    {label:'70B',data:[0.0019,0.0039,0.0078,0.0117,0.0195],backgroundColor:'rgba(231,76,60,0.7)'}
+  ]},
+  options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{title:{display:true,text:'Sufficiency Ratio'},max:0.2}}}
+});
+
+new Chart(document.getElementById('effChart'),{
+  type:'bar',
+  data:{labels:['PIM','PNM','GPU'],datasets:[{label:'GOPS/W',data:[5.06,50.62,1557.87],backgroundColor:['#e74c3c','#f39c12','#2980b9']}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{type:'logarithmic',title:{display:true,text:'GOPS/W (log)'}}}}
+});
+</script>
+</body>
+</html>

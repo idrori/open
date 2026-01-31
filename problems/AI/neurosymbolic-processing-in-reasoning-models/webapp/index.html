@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neurosymbolic Processing in Reasoning Models</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f7fa; color: #333; }
+  .header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.85; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+  .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.2rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .chart-container { position: relative; height: 350px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 768px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  .summary-item { text-align: center; padding: 1rem; border-radius: 8px; color: white; }
+  .summary-item .value { font-size: 1.6rem; font-weight: 700; }
+  .summary-item .label { font-size: 0.75rem; opacity: 0.85; margin-top: 0.3rem; }
+  .bg-no { background: linear-gradient(135deg, #95a5a6, #7f8c8d); }
+  .bg-partial { background: linear-gradient(135deg, #f39c12, #e67e22); }
+  .bg-yes { background: linear-gradient(135deg, var(--accent), #2471a3); }
+  .bg-strong { background: linear-gradient(135deg, var(--primary), #0d2137); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: var(--primary); color: white; }
+  tr:hover { background: #f0f4f8; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+  .badge-yes { background: #d4edda; color: #155724; }
+  .badge-no { background: #f8d7da; color: #721c24; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Neurosymbolic Processing in Contemporary Reasoning Models</h1>
+  <p>Do LLMs performing chain-of-thought reasoning implement genuine neurosymbolic processing with symbol-like internal representations?</p>
+</div>
+<div class="container">
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Neurosymbolic Score by Probe Dimension</h2>
+      <div class="chart-container"><canvas id="probeChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Score vs Reasoning Depth</h2>
+      <div class="chart-container"><canvas id="depthChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Overall Neurosymbolic Assessment</h2>
+    <div class="chart-container"><canvas id="overallChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Detailed Results</h2>
+    <table>
+      <thead><tr><th>Model</th><th>Avg Score</th><th>Above Threshold</th><th>Detected</th></tr></thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+var models = ['base_llm','cot_finetuned','reasoning_model','neurosymbolic_hybrid'];
+var modelLabels = ['Base LLM','CoT Finetuned','Reasoning Model','Neurosymbolic Hybrid'];
+var modelColors = ['#95a5a6','#f39c12','#2980b9','#1a3a5c'];
+var bgClasses = ['bg-no','bg-partial','bg-yes','bg-strong'];
+var scores = [0.224, 0.424, 0.574, 0.725];
+var abovePct = [0.0, 13.0, 85.0, 100.0];
+var detected = [false, false, true, true];
+
+var probes = ['symbolic_consistency','compositionality','perturbation_sensitivity','trace_alignment'];
+var probeLabels = ['Symbolic Consistency','Compositionality','Perturbation Sensitivity','Trace Alignment'];
+var probeScores = {
+  base_llm: [0.29, 0.22, 0.18, 0.21],
+  cot_finetuned: [0.49, 0.42, 0.38, 0.41],
+  reasoning_model: [0.63, 0.56, 0.52, 0.55],
+  neurosymbolic_hybrid: [0.78, 0.72, 0.68, 0.72]
+};
+var depths = [1,3,5,7,10];
+var depthScores = {
+  base_llm: [0.25, 0.24, 0.22, 0.21, 0.19],
+  cot_finetuned: [0.46, 0.44, 0.42, 0.40, 0.37],
+  reasoning_model: [0.62, 0.60, 0.57, 0.54, 0.50],
+  neurosymbolic_hybrid: [0.78, 0.76, 0.73, 0.70, 0.66]
+};
+
+// Summary
+var sg = document.getElementById('summaryGrid');
+models.forEach(function(m, i) {
+  var d = document.createElement('div');
+  d.className = 'summary-item ' + bgClasses[i];
+  var v = document.createElement('div'); v.className = 'value'; v.textContent = scores[i].toFixed(3);
+  var l = document.createElement('div'); l.className = 'label'; l.textContent = modelLabels[i];
+  d.appendChild(v); d.appendChild(l); sg.appendChild(d);
+});
+
+// Probe chart
+new Chart(document.getElementById('probeChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: probeLabels,
+    datasets: models.map(function(m, i) {
+      return { label: modelLabels[i], data: probeScores[m], backgroundColor: modelColors[i] };
+    })
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    scales: { y: { title:{display:true,text:'Score'}, max:1, beginAtZero:true }},
+    plugins: { legend:{position:'bottom'}, annotation: {} }
+  }
+});
+
+// Depth chart
+new Chart(document.getElementById('depthChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: depths,
+    datasets: models.map(function(m, i) {
+      return { label: modelLabels[i], data: depthScores[m], borderColor: modelColors[i],
+               backgroundColor: modelColors[i]+'33', borderWidth:2, pointRadius:5, tension:0.3 };
+    })
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    scales: { x:{title:{display:true,text:'Reasoning Depth'}}, y:{title:{display:true,text:'Score'}, max:1, beginAtZero:true }},
+    plugins: { legend:{position:'bottom'} }
+  }
+});
+
+// Overall chart
+new Chart(document.getElementById('overallChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: modelLabels,
+    datasets: [{label:'Neurosymbolic Score', data:scores, backgroundColor:modelColors}]
+  },
+  options: { responsive:true, maintainAspectRatio:false, indexAxis:'y',
+    scales: { x:{title:{display:true,text:'Score'}, max:1, beginAtZero:true }},
+    plugins: { legend:{display:false} }
+  }
+});
+
+// Table
+var tbody = document.getElementById('resultsBody');
+models.forEach(function(m, i) {
+  var tr = document.createElement('tr');
+  var cells = [modelLabels[i], scores[i].toFixed(3), abovePct[i].toFixed(1)+'%'];
+  cells.forEach(function(text) {
+    var td = document.createElement('td'); td.textContent = text; tr.appendChild(td);
+  });
+  var td = document.createElement('td');
+  var span = document.createElement('span');
+  span.className = 'badge ' + (detected[i] ? 'badge-yes' : 'badge-no');
+  span.textContent = detected[i] ? 'Yes' : 'No';
+  td.appendChild(span); tr.appendChild(td);
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

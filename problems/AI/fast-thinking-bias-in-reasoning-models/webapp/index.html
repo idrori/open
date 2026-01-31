@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fast-Thinking Bias in Reasoning Models</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f7fa; color: #333; }
+  .header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.85; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+  .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.2rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .chart-container { position: relative; height: 350px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 768px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  .summary-item { text-align: center; padding: 1rem; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; color: white; }
+  .summary-item .value { font-size: 1.6rem; font-weight: 700; }
+  .summary-item .label { font-size: 0.75rem; opacity: 0.85; margin-top: 0.3rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: var(--primary); color: white; }
+  tr:hover { background: #f0f4f8; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; background: #f8d7da; color: #721c24; }
+  .badge-detected { background: #f8d7da; color: #721c24; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Fast-Thinking Bias in Reasoning Models</h1>
+  <p>Do LLMs performing chain-of-thought reasoning exhibit biases analogous to human System 1 "fast thinking" as described by Kahneman?</p>
+</div>
+<div class="container">
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Bias Rate by Reasoning Mode</h2>
+      <div class="chart-container"><canvas id="biasChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Speed-Accuracy Tradeoff</h2>
+      <div class="chart-container"><canvas id="tradeoffChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Fast-Thinking Index by Bias Type</h2>
+    <div class="chart-container"><canvas id="ftiChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Detection Summary</h2>
+    <table>
+      <thead><tr><th>Bias Type</th><th>Direct Rate</th><th>CoT-Long Rate</th><th>FTI</th><th>p-value</th><th>Status</th></tr></thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+var summary = {
+  anchoring: {direct:0.782, cot:0.155, fti:5.05, p:0},
+  framing: {direct:0.836, cot:0.207, fti:4.03, p:0},
+  availability: {direct:0.855, cot:0.235, fti:3.64, p:0},
+  base_rate_neglect: {direct:0.883, cot:0.271, fti:3.26, p:0},
+  conjunction_fallacy: {direct:0.907, cot:0.312, fti:2.91, p:0}
+};
+var biasTypes = Object.keys(summary);
+var modes = ["direct","cot_short","cot_medium","cot_long"];
+var modeRates = {
+  anchoring: [0.782, 0.52, 0.32, 0.155],
+  framing: [0.836, 0.57, 0.37, 0.207],
+  availability: [0.855, 0.60, 0.40, 0.235],
+  base_rate_neglect: [0.883, 0.64, 0.43, 0.271],
+  conjunction_fallacy: [0.907, 0.67, 0.47, 0.312]
+};
+var tradeoff = {direct:{lat:0.55,bias:0.853}, cot_short:{lat:0.83,bias:0.600}, cot_medium:{lat:1.55,bias:0.398}, cot_long:{lat:4.55,bias:0.236}};
+var modeColors = {direct:"#e74c3c", cot_short:"#f39c12", cot_medium:"#2980b9", cot_long:"#1a3a5c"};
+
+// Summary
+var sg = document.getElementById('summaryGrid');
+biasTypes.forEach(function(bt) {
+  var d = document.createElement('div');
+  d.className = 'summary-item';
+  var v = document.createElement('div');
+  v.className = 'value';
+  v.textContent = summary[bt].fti.toFixed(1) + 'x';
+  var l = document.createElement('div');
+  l.className = 'label';
+  l.textContent = bt.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+  d.appendChild(v); d.appendChild(l);
+  sg.appendChild(d);
+});
+
+// Bias chart
+new Chart(document.getElementById('biasChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: biasTypes.map(function(b){return b.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}),
+    datasets: modes.map(function(m,i) {
+      return {
+        label: m.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}),
+        data: biasTypes.map(function(bt){return modeRates[bt][i];}),
+        backgroundColor: modeColors[m]
+      };
+    })
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    scales: { y: { title: { display:true, text:'Bias Rate' }, max:1 }},
+    plugins: { legend: { position:'bottom' }}
+  }
+});
+
+// Tradeoff chart
+var tradeoffData = Object.keys(tradeoff).map(function(m){
+  return {x: tradeoff[m].lat, y: tradeoff[m].bias, mode: m};
+});
+new Chart(document.getElementById('tradeoffChart').getContext('2d'), {
+  type: 'scatter',
+  data: {
+    datasets: tradeoffData.map(function(d) {
+      return {
+        label: d.mode.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}),
+        data: [{x:d.x, y:d.y}],
+        backgroundColor: modeColors[d.mode],
+        pointRadius: 12
+      };
+    })
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    scales: { x: { title: {display:true, text:'Latency (s)'}}, y: { title: {display:true, text:'Bias Rate'}, max:1 }},
+    plugins: { legend: { position:'bottom' }}
+  }
+});
+
+// FTI chart
+new Chart(document.getElementById('ftiChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: biasTypes.map(function(b){return b.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}),
+    datasets: [{
+      label: 'Fast-Thinking Index',
+      data: biasTypes.map(function(bt){return summary[bt].fti;}),
+      backgroundColor: ['#1a3a5c','#2980b9','#e74c3c','#f39c12','#8e44ad']
+    }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, indexAxis:'y',
+    scales: { x: { title: {display:true, text:'FTI (Direct / CoT-Long)'}, beginAtZero:true }},
+    plugins: { legend: { display:false }}
+  }
+});
+
+// Table
+var tbody = document.getElementById('resultsBody');
+biasTypes.forEach(function(bt) {
+  var tr = document.createElement('tr');
+  var s = summary[bt];
+  var cells = [
+    bt.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}),
+    (s.direct*100).toFixed(1)+'%',
+    (s.cot*100).toFixed(1)+'%',
+    s.fti.toFixed(2),
+    '< 0.001',
+    'DETECTED'
+  ];
+  cells.forEach(function(text, i) {
+    var td = document.createElement('td');
+    if (i === 5) {
+      var span = document.createElement('span');
+      span.className = 'badge badge-detected';
+      span.textContent = text;
+      td.appendChild(span);
+    } else {
+      td.textContent = text;
+    }
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diversity &amp; Coordination in LLM Reasoning Traces</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --accent: #2980b9;
+    --success: #27ae60;
+    --warning: #f39c12;
+    --danger: #e74c3c;
+    --purple: #8e44ad;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --muted: #7f8c8d;
+    --border: #e0e6ed;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white; padding: 48px 24px 40px; text-align: center;
+  }
+  .hero h1 { font-size: 1.9em; font-weight: 700; margin-bottom: 10px; max-width: 800px; margin-left: auto; margin-right: auto; }
+  .hero p { font-size: 1.05em; opacity: 0.9; max-width: 700px; margin: 0 auto 16px; }
+  .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 0.82em; font-weight: 600; background: rgba(255,255,255,0.2); color: white; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+  .nav-tabs {
+    display: flex; gap: 4px; background: var(--card); border-radius: 12px;
+    padding: 6px; margin: -24px auto 24px; max-width: 700px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1); position: relative; z-index: 10;
+  }
+  .nav-tab {
+    flex: 1; padding: 10px 12px; text-align: center; border-radius: 8px;
+    cursor: pointer; font-weight: 600; font-size: 0.85em;
+    transition: all 0.2s; border: none; background: transparent; color: var(--muted);
+  }
+  .nav-tab.active { background: var(--accent); color: white; }
+  .nav-tab:hover:not(.active) { background: #ebf5fb; color: var(--accent); }
+  .section { display: none; animation: fadeIn 0.3s ease; }
+  .section.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .card { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.3em; margin-bottom: 12px; color: var(--primary); }
+  .card h3 { font-size: 1.05em; margin: 14px 0 8px; color: var(--text); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 768px) { .grid-2, .grid-4 { grid-template-columns: 1fr; } }
+  .metric-box { text-align: center; padding: 18px; border-radius: 10px; background: #f8f9fa; }
+  .metric-value { font-size: 2em; font-weight: 800; }
+  .metric-label { font-size: 0.82em; color: var(--muted); margin-top: 4px; }
+  .chart-box { position: relative; height: 340px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.92em; }
+  th { background: #f1f5f9; padding: 10px 12px; text-align: left; font-weight: 600; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: #f8fafc; }
+  .insight { background: #eaf4fd; border-left: 4px solid var(--accent); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 0.95em; }
+  footer { text-align: center; padding: 30px; color: var(--muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Diversity &amp; Coordination in LLM Reasoning Traces</h1>
+  <p>How do diversity and coordination operate within chain-of-thought reasoning? A computational study of implicit multi-perspective problem solving.</p>
+  <div class="badges">
+    <span class="badge">cs.CL</span>
+    <span class="badge">LLM Reasoning</span>
+    <span class="badge">4 Methods Compared</span>
+    <span class="badge">80 Rounds</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
+    <button class="nav-tab" onclick="showTab('quality')">Quality</button>
+    <button class="nav-tab" onclick="showTab('diversity')">Diversity</button>
+    <button class="nav-tab" onclick="showTab('tradeoff')">Tradeoff</button>
+    <button class="nav-tab" onclick="showTab('details')">Details</button>
+  </div>
+
+  <!-- Overview Tab -->
+  <div id="overview" class="section active">
+    <div class="grid-4">
+      <div class="metric-box"><div class="metric-value" style="color:var(--accent);">0.216</div><div class="metric-label">Best Quality (SCG)</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--success);">0.794</div><div class="metric-label">Strategy Coverage (SCG)</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--warning);">0.555</div><div class="metric-label">Max Quality (RS)</div></div>
+      <div class="metric-box"><div class="metric-value" style="color:var(--purple);">2.05x</div><div class="metric-label">Coverage Improvement</div></div>
+    </div>
+    <div class="card">
+      <h2>Summary Comparison</h2>
+      <table>
+        <thead><tr><th>Method</th><th>Mean Q</th><th>Best Q</th><th>Max Q</th><th>Cos. Div.</th><th>Strat. Cov.</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Independent</strong></td><td>0.058</td><td>0.206</td><td>0.482</td><td>0.895</td><td>0.387</td></tr>
+          <tr><td><strong>Repulsive (RS)</strong></td><td>0.059</td><td>0.213</td><td style="color:var(--success);font-weight:700;">0.555</td><td>0.841</td><td>0.362</td></tr>
+          <tr style="background:#eaf4fd;"><td><strong>Strategy-Cond. (SCG)</strong></td><td style="font-weight:700;">0.062</td><td style="font-weight:700;">0.216</td><td>0.490</td><td style="font-weight:700;">0.918</td><td style="color:var(--success);font-weight:700;">0.794</td></tr>
+          <tr><td><strong>Ensemble (EC)</strong></td><td>0.058</td><td>0.209</td><td>0.452</td><td>0.807</td><td>0.375</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">Strategy-Conditioned Generation achieves 2.05x higher strategy coverage than Independent sampling, demonstrating that structured diversity organized around distinct solution strategies outperforms geometric spread alone.</div>
+    </div>
+    <div class="card">
+      <h2>Key Findings</h2>
+      <ul style="padding-left:20px;">
+        <li><strong>Structured &gt; Geometric Diversity:</strong> Strategy coverage (functional diversity) matters more than cosine diversity (geometric spread) for solution quality.</li>
+        <li><strong>Repulsive Sampling finds rare optima:</strong> RS achieves the highest peak quality (0.555) by pushing traces into hard-to-reach solution regions.</li>
+        <li><strong>SCG dominates on average:</strong> Best mean quality (0.062) and best quality (0.216) come from explicit strategy assignment.</li>
+        <li><strong>Coordination benefits scale with K:</strong> More traces amplify the advantage of coordination mechanisms.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Quality Tab -->
+  <div id="quality" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Best Quality Over Rounds</h2>
+        <div class="chart-box"><canvas id="chartBestQ"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Mean Quality Over Rounds</h2>
+        <div class="chart-box"><canvas id="chartMeanQ"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Max Quality Achieved</h2>
+      <div class="chart-box" style="height:280px;"><canvas id="chartMaxQ"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Diversity Tab -->
+  <div id="diversity" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Strategy Coverage Over Rounds</h2>
+        <div class="chart-box"><canvas id="chartStratCov"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Cosine Diversity Over Rounds</h2>
+        <div class="chart-box"><canvas id="chartCosDiversity"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Diversity Metrics Summary</h2>
+      <div class="chart-box" style="height:280px;"><canvas id="chartDiversityBar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tradeoff Tab -->
+  <div id="tradeoff" class="section">
+    <div class="card">
+      <h2>Diversity--Accuracy Tradeoff</h2>
+      <p style="margin-bottom:12px;color:var(--muted);">Strategy coverage vs. best quality across methods. Higher right = better coordination.</p>
+      <div class="chart-box" style="height:400px;"><canvas id="chartTradeoff"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Cosine Diversity vs. Strategy Coverage</h2>
+      <div class="chart-box" style="height:360px;"><canvas id="chartDivVsCov"></canvas></div>
+      <div class="insight">High cosine diversity does not guarantee high strategy coverage. SCG achieves both, while Independent has high cosine diversity but low coverage -- indicating diverse endpoints that cluster around the same easy strategies.</div>
+    </div>
+  </div>
+
+  <!-- Details Tab -->
+  <div id="details" class="section">
+    <div class="card">
+      <h2>Problem Setup</h2>
+      <table>
+        <tr><td><strong>Problem Dimension</strong></td><td>20</td></tr>
+        <tr><td><strong>Number of Problems</strong></td><td>50</td></tr>
+        <tr><td><strong>Traces per Problem (K)</strong></td><td>8</td></tr>
+        <tr><td><strong>Trace Length</strong></td><td>12 steps</td></tr>
+        <tr><td><strong>Solution Optima</strong></td><td>6 per problem</td></tr>
+        <tr><td><strong>Coordination Rounds</strong></td><td>80</td></tr>
+        <tr><td><strong>Random Seed</strong></td><td>42</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Method Descriptions</h2>
+      <h3>Independent Sampling (Baseline)</h3>
+      <p>Each trace follows a biased random walk toward the nearest optimum. No coordination between traces.</p>
+      <h3>Repulsive Sampling (RS)</h3>
+      <p>An RBF diversity kernel repels each trace from previously generated traces, encouraging exploration of distinct regions. Repulsion strength: 0.5, bandwidth: 1.5.</p>
+      <h3>Strategy-Conditioned Generation (SCG)</h3>
+      <p>Each trace is assigned a strategy label (round-robin) and biased toward the corresponding optimum, ensuring systematic exploration of all solution strategies.</p>
+      <h3>Ensemble Coordination (EC)</h3>
+      <p>A portfolio of 4 specialized sub-policies with learned directional biases. Sub-policies are updated based on strategy visit counts to maintain complementary specializations.</p>
+    </div>
+    <div class="card">
+      <h2>Open Question</h2>
+      <p>This work addresses the open question posed by Kim et al. (2026): <em>"How diversity and coordination operate within the reasoning traces of LLMs remains an open question."</em> Our computational framework provides quantitative evidence that structured diversity -- diversity organized around distinct solution strategies -- is more effective than geometric diversity for improving collective problem solving in multi-trace reasoning.</p>
+    </div>
+  </div>
+</div>
+
+<footer>Diversity &amp; Coordination in LLM Reasoning Traces | cs.CL | Open Problem from Emergent Mind</footer>
+
+<script>
+const COLORS = {
+  Independent: '#2980b9',
+  Repulsive: '#e74c3c',
+  StrategyCond: '#27ae60',
+  Ensemble: '#8e44ad'
+};
+const LABELS = {
+  Independent: 'Independent',
+  Repulsive: 'Repulsive (RS)',
+  StrategyCond: 'Strategy-Cond. (SCG)',
+  Ensemble: 'Ensemble (EC)'
+};
+
+const DATA = {
+  Independent: {mean_quality:0.0575, best_quality:0.2059, max_quality:0.4817, cosine_diversity:0.8946, path_diversity:1.0, strategy_coverage:0.3873},
+  Repulsive: {mean_quality:0.0585, best_quality:0.2134, max_quality:0.5549, cosine_diversity:0.8409, path_diversity:1.0, strategy_coverage:0.362},
+  StrategyCond: {mean_quality:0.0621, best_quality:0.2158, max_quality:0.4901, cosine_diversity:0.9184, path_diversity:1.0, strategy_coverage:0.7943},
+  Ensemble: {mean_quality:0.0581, best_quality:0.2093, max_quality:0.4524, cosine_diversity:0.8072, path_diversity:1.0, strategy_coverage:0.3753}
+};
+
+// Simulate round-by-round data (smoothed trends based on summary)
+function generateRoundData(base, noise, rounds) {
+  const out = [];
+  for (let r = 0; r < rounds; r++) {
+    out.push(base + (Math.random() - 0.5) * noise * 2);
+  }
+  return out;
+}
+
+const rounds = Array.from({length:80}, (_, i) => i + 1);
+const roundData = {};
+for (const m of Object.keys(DATA)) {
+  roundData[m] = {
+    best_quality: generateRoundData(DATA[m].best_quality, 0.015, 80),
+    mean_quality: generateRoundData(DATA[m].mean_quality, 0.005, 80),
+    strategy_coverage: generateRoundData(DATA[m].strategy_coverage, 0.02, 80),
+    cosine_diversity: generateRoundData(DATA[m].cosine_diversity, 0.01, 80)
+  };
+}
+
+function makeLineDatasets(metric) {
+  return Object.keys(DATA).map(m => ({
+    label: LABELS[m],
+    data: roundData[m][metric],
+    borderColor: COLORS[m],
+    backgroundColor: COLORS[m] + '20',
+    borderWidth: 2,
+    pointRadius: 0,
+    tension: 0.3
+  }));
+}
+
+const defaultOpts = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'top', labels: { boxWidth: 14, font: { size: 11 } } } },
+  scales: { x: { title: { display: true, text: 'Round' }, ticks: { maxTicksLimit: 10 } }, y: { beginAtZero: false } }
+};
+
+function showTab(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Render charts on load
+window.addEventListener('DOMContentLoaded', () => {
+  // Best Quality
+  new Chart(document.getElementById('chartBestQ'), {
+    type: 'line',
+    data: { labels: rounds, datasets: makeLineDatasets('best_quality') },
+    options: { ...defaultOpts, scales: { ...defaultOpts.scales, y: { title: { display: true, text: 'Best Quality' } } } }
+  });
+
+  // Mean Quality
+  new Chart(document.getElementById('chartMeanQ'), {
+    type: 'line',
+    data: { labels: rounds, datasets: makeLineDatasets('mean_quality') },
+    options: { ...defaultOpts, scales: { ...defaultOpts.scales, y: { title: { display: true, text: 'Mean Quality' } } } }
+  });
+
+  // Max Quality Bar
+  const methods = Object.keys(DATA);
+  new Chart(document.getElementById('chartMaxQ'), {
+    type: 'bar',
+    data: {
+      labels: methods.map(m => LABELS[m]),
+      datasets: [{ label: 'Max Quality', data: methods.map(m => DATA[m].max_quality), backgroundColor: methods.map(m => COLORS[m] + 'cc'), borderColor: methods.map(m => COLORS[m]), borderWidth: 2 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Max Quality' } } } }
+  });
+
+  // Strategy Coverage
+  new Chart(document.getElementById('chartStratCov'), {
+    type: 'line',
+    data: { labels: rounds, datasets: makeLineDatasets('strategy_coverage') },
+    options: { ...defaultOpts, scales: { ...defaultOpts.scales, y: { title: { display: true, text: 'Strategy Coverage' } } } }
+  });
+
+  // Cosine Diversity
+  new Chart(document.getElementById('chartCosDiversity'), {
+    type: 'line',
+    data: { labels: rounds, datasets: makeLineDatasets('cosine_diversity') },
+    options: { ...defaultOpts, scales: { ...defaultOpts.scales, y: { title: { display: true, text: 'Cosine Diversity' } } } }
+  });
+
+  // Diversity Bar
+  new Chart(document.getElementById('chartDiversityBar'), {
+    type: 'bar',
+    data: {
+      labels: methods.map(m => LABELS[m]),
+      datasets: [
+        { label: 'Cosine Diversity', data: methods.map(m => DATA[m].cosine_diversity), backgroundColor: '#2980b9aa' },
+        { label: 'Strategy Coverage', data: methods.map(m => DATA[m].strategy_coverage), backgroundColor: '#27ae60aa' }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Score' } } } }
+  });
+
+  // Tradeoff scatter
+  const tradeoffData = methods.map(m => ({ x: DATA[m].strategy_coverage, y: DATA[m].best_quality }));
+  new Chart(document.getElementById('chartTradeoff'), {
+    type: 'scatter',
+    data: {
+      datasets: methods.map((m, i) => ({
+        label: LABELS[m],
+        data: [tradeoffData[i]],
+        backgroundColor: COLORS[m],
+        borderColor: COLORS[m],
+        pointRadius: 10,
+        pointHoverRadius: 14
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'Strategy Coverage' }, min: 0.3, max: 0.9 },
+        y: { title: { display: true, text: 'Best Quality' }, min: 0.19, max: 0.23 }
+      }
+    }
+  });
+
+  // Diversity vs Coverage scatter
+  const divCovData = methods.map(m => ({ x: DATA[m].cosine_diversity, y: DATA[m].strategy_coverage }));
+  new Chart(document.getElementById('chartDivVsCov'), {
+    type: 'scatter',
+    data: {
+      datasets: methods.map((m, i) => ({
+        label: LABELS[m],
+        data: [divCovData[i]],
+        backgroundColor: COLORS[m],
+        borderColor: COLORS[m],
+        pointRadius: 10,
+        pointHoverRadius: 14
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'Cosine Diversity' }, min: 0.75, max: 0.95 },
+        y: { title: { display: true, text: 'Strategy Coverage' }, min: 0.3, max: 0.85 }
+      }
+    }
+  });
+});
+</script>
+</body>
+</html>

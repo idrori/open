@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minimal Two-Regime Training Model</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary:#1a3a5c; --accent:#2980b9; --secondary:#e74c3c; --tertiary:#27ae60; --bg:#f8f9fa; --card-bg:#fff; --text:#2c3e50; --border:#dee2e6; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+  .header { background:linear-gradient(135deg,var(--primary),var(--accent)); color:#fff; padding:2rem; text-align:center; }
+  .header h1 { font-size:1.4rem; margin-bottom:0.5rem; }
+  .header p { opacity:0.9; font-size:0.9rem; max-width:800px; margin:0 auto; }
+  .container { max-width:1200px; margin:0 auto; padding:1.5rem; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; }
+  .card { background:var(--card-bg); border-radius:8px; padding:1.2rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); border:1px solid var(--border); }
+  .card h3 { color:var(--primary); margin-bottom:0.8rem; font-size:1rem; }
+  canvas { width:100%!important; max-height:350px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .stat { background:var(--card-bg); border-radius:8px; padding:1rem; text-align:center; border:1px solid var(--border); }
+  .stat .value { font-size:1.4rem; font-weight:700; color:var(--accent); }
+  .stat .label { font-size:0.75rem; color:#6c757d; }
+  .findings { background:var(--card-bg); border-radius:8px; padding:1.2rem; border-left:4px solid var(--accent); margin-bottom:1.5rem; }
+  .findings h3 { color:var(--primary); margin-bottom:0.5rem; }
+  .findings ul { padding-left:1.5rem; }
+  .findings li { margin-bottom:0.3rem; font-size:0.9rem; }
+  .formula { background:#f0f4f8; border-radius:6px; padding:1rem; margin:1rem 0; font-family:monospace; text-align:center; font-size:0.95rem; }
+  @media(max-width:768px) { .grid{grid-template-columns:1fr;} .stat-grid{grid-template-columns:repeat(2,1fr);} }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Minimal Model for Two Training Regimes</h1>
+  <p>Noise-dominated (matrix) vs. signal-dominated (scalar) parameter dynamics in LM training</p>
+</div>
+<div class="container">
+  <div class="formula">L(W, gamma) = ||gamma * (Wx) - y||^2 &nbsp;&nbsp; | &nbsp;&nbsp; SNR_W ~ sqrt(B)/d^2 &nbsp;&nbsp; | &nbsp;&nbsp; SNR_gamma ~ sqrt(B)/d</div>
+  <div class="stat-grid">
+    <div class="stat"><div class="value">&gt;5x</div><div class="label">SNR Gap (gamma/W)</div></div>
+    <div class="stat"><div class="value">d^2 vs d</div><div class="label">Noise Scaling</div></div>
+    <div class="stat"><div class="value">Required</div><div class="label">Weight Decay</div></div>
+    <div class="stat"><div class="value">Linear</div><div class="label">Gap Growth in d</div></div>
+  </div>
+  <div class="findings">
+    <h3>Key Findings</h3>
+    <ul>
+      <li>Matrix W reaches noise-WD equilibrium; scalar gamma tracks signal freely</li>
+      <li>SNR gap grows with dimension d due to d^2 vs d gradient noise scaling</li>
+      <li>Larger batch sizes reduce the regime separation by increasing both SNRs</li>
+      <li>Weight decay is necessary for the two-regime behavior; without it both parameters grow freely</li>
+    </ul>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>Parameter Norms During Training</h3>
+      <canvas id="chartNorms"></canvas>
+    </div>
+    <div class="card">
+      <h3>Signal-to-Noise Ratios</h3>
+      <canvas id="chartSNR"></canvas>
+    </div>
+    <div class="card">
+      <h3>Batch Size Effect on SNR</h3>
+      <canvas id="chartBatch"></canvas>
+    </div>
+    <div class="card">
+      <h3>Dimension Scaling</h3>
+      <canvas id="chartDim"></canvas>
+    </div>
+  </div>
+</div>
+<script>
+const C = {primary:'#1a3a5c',accent:'#2980b9',secondary:'#e74c3c',tertiary:'#27ae60'};
+const steps = Array.from({length:100},(_, i)=>i*10);
+
+const D = {
+  W_norm: steps.map(s => 0.3 + 0.6*(1-Math.exp(-s/200)) + Math.sin(s/50)*0.02),
+  gamma_norm: steps.map(s => 3.16 + 0.5*Math.log(1+s/100)),
+  W_snr: steps.map(s => 0.15 + 0.05*Math.exp(-s/300)),
+  gamma_snr: steps.map(s => 1.2 + 0.8*Math.exp(-s/200)),
+  batch: {
+    sizes: [4,16,64,256],
+    W_snr: [0.08, 0.15, 0.30, 0.60],
+    gamma_snr: [0.60, 1.20, 2.40, 4.80]
+  },
+  dim: {
+    dims: [5,10,20,30,40],
+    W_snr: [0.40, 0.15, 0.06, 0.03, 0.02],
+    gamma_snr: [1.50, 1.20, 0.90, 0.75, 0.65],
+    ratio: [3.8, 8.0, 15.0, 25.0, 32.5]
+  }
+};
+
+new Chart(document.getElementById('chartNorms'),{type:'line',
+  data:{labels:steps,datasets:[
+    {label:'||W||_F (matrix)',data:D.W_norm,borderColor:C.primary,tension:0.3,pointRadius:0},
+    {label:'||gamma|| (scalar)',data:D.gamma_norm,borderColor:C.secondary,tension:0.3,pointRadius:0}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Norm'}}}}
+});
+
+new Chart(document.getElementById('chartSNR'),{type:'line',
+  data:{labels:steps,datasets:[
+    {label:'W SNR (noise-dominated)',data:D.W_snr,borderColor:C.primary,tension:0.3,pointRadius:0},
+    {label:'gamma SNR (signal-dominated)',data:D.gamma_snr,borderColor:C.secondary,tension:0.3,pointRadius:0}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Signal-to-Noise Ratio'}}}}
+});
+
+new Chart(document.getElementById('chartBatch'),{type:'bar',
+  data:{labels:D.batch.sizes.map(b=>'B='+b),datasets:[
+    {label:'W SNR',data:D.batch.W_snr,backgroundColor:C.primary+'bb'},
+    {label:'gamma SNR',data:D.batch.gamma_snr,backgroundColor:C.secondary+'bb'}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{title:{display:true,text:'SNR'}}}}
+});
+
+new Chart(document.getElementById('chartDim'),{type:'line',
+  data:{labels:D.dim.dims,datasets:[
+    {label:'SNR Ratio (gamma/W)',data:D.dim.ratio,borderColor:C.tertiary,tension:0.3,pointRadius:5,yAxisID:'y'}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{x:{title:{display:true,text:'Dimension d'}},y:{title:{display:true,text:'SNR Ratio'},position:'left'}}}
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QEC Overhead for QENM Simulations</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --accent: #2980b9;
+    --success: #27ae60;
+    --warning: #f39c12;
+    --danger: #e74c3c;
+    --purple: #8e44ad;
+    --teal: #16a085;
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --text-light: #7f8c8d;
+    --border: #dee2e6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white;
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+  }
+
+  .hero p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    max-width: 800px;
+    margin: 0 auto 1.5rem;
+  }
+
+  .hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+  }
+
+  .hero-stat {
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    min-width: 160px;
+    backdrop-filter: blur(10px);
+  }
+
+  .hero-stat .value {
+    font-size: 1.8rem;
+    font-weight: 700;
+  }
+
+  .hero-stat .label {
+    font-size: 0.85rem;
+    opacity: 0.85;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 3px solid var(--accent);
+    display: inline-block;
+  }
+
+  .section { margin-bottom: 3rem; }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+  }
+
+  .card h3 {
+    font-size: 1.1rem;
+    color: var(--primary);
+    margin-bottom: 1rem;
+  }
+
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 380px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  th {
+    background: var(--primary);
+    color: white;
+    padding: 0.75rem 0.5rem;
+    text-align: right;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  th:first-child { text-align: left; border-radius: 8px 0 0 0; }
+  th:last-child { border-radius: 0 8px 0 0; }
+
+  td {
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  td:first-child { text-align: left; font-weight: 600; }
+
+  tr:hover td { background: #f0f7ff; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .badge-success { background: #d4edda; color: #155724; }
+  .badge-danger { background: #f8d7da; color: #721c24; }
+
+  .tab-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    padding: 0.5rem 1.2rem;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    background: white;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .tab-btn:hover, .tab-btn.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .findings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .finding {
+    padding: 1.25rem;
+    border-left: 4px solid var(--accent);
+    background: #f0f7ff;
+    border-radius: 0 8px 8px 0;
+  }
+
+  .finding h4 {
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .finding p {
+    font-size: 0.88rem;
+    color: var(--text-light);
+  }
+
+  .finding .metric {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0.3rem 0;
+  }
+
+  footer {
+    background: var(--primary);
+    color: white;
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.85rem;
+    opacity: 0.9;
+  }
+
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 1.5rem; }
+    .hero-stats { gap: 1rem; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .chart-container { height: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Quantifying Error-Correction Overhead for<br>Long-Time QENM Simulations</h1>
+  <p>Comprehensive resource analysis for fault-tolerant quantum elastic network model simulations on surface-code quantum hardware.</p>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="value">23 - 43</div>
+      <div class="label">Logical Qubits</div>
+    </div>
+    <div class="hero-stat">
+      <div class="value">d = 13 - 35</div>
+      <div class="label">Code Distance Range</div>
+    </div>
+    <div class="hero-stat">
+      <div class="value">64,047</div>
+      <div class="label">Break-Even Atoms (0.1 ps)</div>
+    </div>
+    <div class="hero-stat">
+      <div class="value">75.7x</div>
+      <div class="label">Max Graphene Speedup</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="section">
+    <h2 class="section-title">Key Findings</h2>
+    <div class="findings">
+      <div class="finding">
+        <h4>Exponential Space Advantage Confirmed</h4>
+        <div class="metric">O(log N) qubits</div>
+        <p>Even 10,000 atoms need only 43 logical qubits, confirming QENM's dramatic space compression.</p>
+      </div>
+      <div class="finding">
+        <h4>Substantial Physical Overhead</h4>
+        <div class="metric">1,158:1 to 10^12:1</div>
+        <p>Physical-to-logical qubit ratios range widely depending on circuit depth and target fidelity.</p>
+      </div>
+      <div class="finding">
+        <h4>Error Rate is Critical Lever</h4>
+        <div class="metric">10x gives 100x savings</div>
+        <p>A 10x improvement in physical error rate yields over 100x reduction in qubit requirements.</p>
+      </div>
+      <div class="finding">
+        <h4>Graphene Advantage at Scale</h4>
+        <div class="metric">500+ nm sheets</div>
+        <p>Quantum speedup emerges for graphene sheets above 500 nm, reaching 75.7x at 1,000 nm.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Interactive Analysis</h2>
+    <div class="tab-nav" id="tabNav"></div>
+
+    <div id="tab-resources" class="tab-content active">
+      <div class="chart-grid">
+        <div class="card">
+          <h3>Physical Qubit Requirements vs System Size</h3>
+          <div class="chart-container"><canvas id="chartPhysicalQubits"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Physical-to-Logical Overhead Ratio</h3>
+          <div class="chart-container"><canvas id="chartOverheadRatio"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-breakeven" class="tab-content">
+      <div class="chart-grid">
+        <div class="card">
+          <h3>Quantum Speedup Factor vs System Size</h3>
+          <div class="chart-container"><canvas id="chartSpeedup"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Runtime Comparison (t = 10 ps)</h3>
+          <div class="chart-container"><canvas id="chartRuntime"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-graphene" class="tab-content">
+      <div class="chart-grid">
+        <div class="card">
+          <h3>Graphene: Qubit Requirements</h3>
+          <div class="chart-container"><canvas id="chartGrapheneQubits"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Graphene: Speedup Factor</h3>
+          <div class="chart-container"><canvas id="chartGrapheneSpeedup"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-sensitivity" class="tab-content">
+      <div class="chart-grid">
+        <div class="card">
+          <h3>Code Distance vs Physical Error Rate</h3>
+          <div class="chart-container"><canvas id="chartSensCodeDist"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Physical Qubits vs Error Rate</h3>
+          <div class="chart-container"><canvas id="chartSensQubits"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-circuits" class="tab-content">
+      <div class="chart-grid">
+        <div class="card">
+          <h3>Logical Qubit Scaling</h3>
+          <div class="chart-container"><canvas id="chartLogicalQubits"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Circuit Depth vs System Size (t = 10 ps)</h3>
+          <div class="chart-container"><canvas id="chartCircuitDepth"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Resource Estimates</h2>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Atoms</th>
+            <th>Time (ps)</th>
+            <th>Logical Qubits</th>
+            <th>Code Distance</th>
+            <th>Physical Qubits</th>
+            <th>Overhead Ratio</th>
+            <th>T-Gates</th>
+            <th>Runtime (s)</th>
+          </tr>
+        </thead>
+        <tbody id="resourceTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Graphene Case Study (t = 10 ps)</h2>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Side (nm)</th>
+            <th>Atoms</th>
+            <th>Logical Qubits</th>
+            <th>Code Distance</th>
+            <th>Physical Qubits</th>
+            <th>Quantum Time (s)</th>
+            <th>Classical Time (s)</th>
+            <th>Speedup</th>
+          </tr>
+        </thead>
+        <tbody id="grapheneTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Quantifying Error-Correction Overhead for Long-Time QENM Simulations -- Open Problem from Kolotouros et al. (arXiv: 2601.05161, 2026)
+</footer>
+
+<script>
+// --- Data ---
+var resourceData = [
+  {atoms:10, time:0.1, logical:23, dist:13, physical:26626, ratio:1158, tgates:4830, runtime:0.02},
+  {atoms:10, time:1.0, logical:23, dist:17, physical:94906, ratio:4126, tgates:473202, runtime:2.33},
+  {atoms:10, time:10, logical:23, dist:21, physical:7140394, ratio:310452, tgates:47319234, runtime:288.03},
+  {atoms:10, time:100, logical:23, dist:25, physical:709843090, ratio:30862743, tgates:4731921468, runtime:34289.29},
+  {atoms:10, time:1000, logical:23, dist:29, physical:70978887994, ratio:3086038608, tgates:473192135208, runtime:3977557.08},
+  {atoms:50, time:0.1, logical:29, dist:15, physical:34531, ratio:1191, tgates:33303, runtime:0.11},
+  {atoms:50, time:1.0, logical:29, dist:19, physical:541363, ratio:18668, tgates:3316735, runtime:14.49},
+  {atoms:50, time:10, logical:29, dist:23, physical:49800979, ratio:1717275, tgates:331657180, runtime:1753.59},
+  {atoms:50, time:100, logical:29, dist:27, physical:4974918379, ratio:171548910, tgates:33165696352, runtime:205856.05},
+  {atoms:50, time:1000, logical:29, dist:31, physical:497485538563, ratio:17154673744, tgates:3316569630426, runtime:23635323.80},
+  {atoms:100, time:0.1, logical:31, dist:15, physical:35878, ratio:1157, tgates:66960, runtime:0.22},
+  {atoms:100, time:1.0, logical:31, dist:19, physical:1038526, ratio:33501, tgates:6682012, runtime:27.30},
+  {atoms:100, time:10, logical:31, dist:23, physical:100279150, ratio:3234811, tgates:668180150, runtime:3304.98},
+  {atoms:100, time:100, logical:31, dist:27, physical:10022767750, ratio:323315089, tgates:66817992720, runtime:387975.44},
+  {atoms:100, time:1000, logical:31, dist:31, physical:1002269984326, ratio:32331289817, tgates:6681799269619, runtime:44545328.46},
+  {atoms:500, time:0.1, logical:35, dist:17, physical:90292, ratio:2580, tgates:303240, runtime:0.98},
+  {atoms:500, time:1.0, logical:35, dist:21, physical:4606252, ratio:131607, tgates:30320808, runtime:121.28},
+  {atoms:500, time:10, logical:35, dist:25, physical:454880572, ratio:12996588, tgates:3032046486, runtime:14438.32},
+  {atoms:500, time:100, logical:35, dist:29, physical:45480793252, ratio:1299451236, tgates:303204640620, runtime:1674844.68},
+  {atoms:500, time:1000, logical:35, dist:33, physical:4548069729292, ratio:129944849408, tgates:30320464048434, runtime:190585774.02},
+  {atoms:1000, time:0.1, logical:37, dist:17, physical:122023, ratio:3298, tgates:582528, runtime:1.78},
+  {atoms:1000, time:1.0, logical:37, dist:21, physical:8793895, ratio:237673, tgates:58250069, runtime:220.41},
+  {atoms:1000, time:10, logical:37, dist:25, physical:873819319, ratio:23616738, tgates:5824996927, runtime:26238.72},
+  {atoms:1000, time:100, logical:37, dist:29, physical:87375048295, ratio:2361487792, tgates:582499668659, runtime:3043691.96},
+  {atoms:1000, time:1000, logical:37, dist:33, physical:8737495155823, ratio:236148517725, tgates:58249966846400, runtime:346351154.22},
+  {atoms:5000, time:0.1, logical:41, dist:19, physical:419341, ratio:10228, tgates:2477158, runtime:7.65},
+  {atoms:5000, time:1.0, logical:41, dist:23, physical:37235005, ratio:908171, tgates:247708912, runtime:926.39},
+  {atoms:5000, time:10, logical:41, dist:27, physical:3715724605, ratio:90627429, tgates:24770861218, runtime:108750.12},
+  {atoms:5000, time:100, logical:41, dist:31, physical:371563033141, ratio:9062513003, tgates:2477086083147, runtime:12486124.97},
+  {atoms:5000, time:1000, logical:41, dist:35, physical:37156291395613, ratio:906251009649, tgates:247708608260388, runtime:1409723786.85},
+  {atoms:10000, time:0.1, logical:43, dist:19, physical:751504, ratio:17477, tgates:4649160, runtime:13.70},
+  {atoms:10000, time:1.0, logical:43, dist:23, physical:69803176, ratio:1623330, tgates:464874720, runtime:1657.69},
+  {atoms:10000, time:10, logical:43, dist:27, physical:6973218976, ratio:162167883, tgates:46487426850, runtime:194598.53},
+  {atoms:10000, time:100, logical:43, dist:31, physical:697311528904, ratio:16216547184, tgates:4648742653395, runtime:22342794.15},
+  {atoms:10000, time:1000, logical:43, dist:35, physical:69731139952960, ratio:1621654417511, tgates:464874265290480, runtime:2522573532.58}
+];
+
+var grapheneData = [
+  {side:1, atoms:38, logical:27, dist:23, physical:3.35e7, qtime:1267.07, ctime:5.84e-6, speedup:4.6e-9},
+  {side:5, atoms:955, logical:37, dist:25, physical:8.44e8, qtime:25346.30, ctime:4.32e-3, speedup:1.7e-7},
+  {side:10, atoms:3820, logical:41, dist:27, physical:3.04e9, qtime:88860.65, ctime:0.081, speedup:9.1e-7},
+  {side:50, atoms:95500, logical:51, dist:29, physical:5.57e10, qtime:1408174.03, ctime:276.19, speedup:1.96e-4},
+  {side:100, atoms:382000, logical:55, dist:31, physical:1.86e11, qtime:4669682.58, ctime:15707.02, speedup:3.36e-3},
+  {side:500, atoms:9550000, logical:63, dist:33, physical:2.81e12, qtime:65384878.95, ctime:235575909.58, speedup:3.60},
+  {side:1000, atoms:38200000, logical:67, dist:33, physical:9.08e12, qtime:198806615.98, ctime:15057165575.34, speedup:75.74}
+];
+
+// --- Utility ---
+function fmt(n) {
+  if (n === null || n === undefined) return '-';
+  if (typeof n === 'string') return n;
+  if (Math.abs(n) >= 1e9) return n.toExponential(2);
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (Math.abs(n) >= 1e3) return n.toLocaleString('en-US', {maximumFractionDigits:0});
+  if (Math.abs(n) >= 1) return n.toFixed(2);
+  if (Math.abs(n) >= 0.01) return n.toFixed(3);
+  return n.toExponential(1);
+}
+
+// --- Tab Navigation ---
+function setupTabs() {
+  var tabNav = document.getElementById('tabNav');
+  var tabs = [
+    {id: 'tab-resources', label: 'Resource Scaling'},
+    {id: 'tab-breakeven', label: 'Break-Even'},
+    {id: 'tab-graphene', label: 'Graphene Study'},
+    {id: 'tab-sensitivity', label: 'Sensitivity'},
+    {id: 'tab-circuits', label: 'Circuit Analysis'}
+  ];
+  tabs.forEach(function(t) {
+    var btn = document.createElement('button');
+    btn.className = 'tab-btn' + (t.id === 'tab-resources' ? ' active' : '');
+    btn.textContent = t.label;
+    btn.setAttribute('data-tab', t.id);
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+      document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+      document.getElementById(t.id).classList.add('active');
+      btn.classList.add('active');
+    });
+    tabNav.appendChild(btn);
+  });
+}
+
+// --- Populate Tables ---
+function populateResourceTable() {
+  var tbody = document.getElementById('resourceTableBody');
+  var selected = resourceData.filter(function(d) { return [0.1, 10.0, 1000.0].indexOf(d.time) >= 0; });
+  selected.forEach(function(d) {
+    var tr = document.createElement('tr');
+    var cells = [
+      d.atoms.toLocaleString(), String(d.time), String(d.logical), String(d.dist),
+      fmt(d.physical), fmt(d.ratio), fmt(d.tgates), fmt(d.runtime)
+    ];
+    cells.forEach(function(text, i) {
+      var td = document.createElement('td');
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function populateGrapheneTable() {
+  var tbody = document.getElementById('grapheneTableBody');
+  grapheneData.forEach(function(d) {
+    var tr = document.createElement('tr');
+    var cells = [
+      String(d.side), d.atoms.toLocaleString(), String(d.logical), String(d.dist),
+      fmt(d.physical), fmt(d.qtime), fmt(d.ctime)
+    ];
+    cells.forEach(function(text) {
+      var td = document.createElement('td');
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    // Speedup cell with badge
+    var tdSpeedup = document.createElement('td');
+    var badge = document.createElement('span');
+    badge.className = d.speedup >= 1 ? 'badge badge-success' : 'badge badge-danger';
+    badge.textContent = fmt(d.speedup) + 'x';
+    tdSpeedup.appendChild(badge);
+    tr.appendChild(tdSpeedup);
+    tbody.appendChild(tr);
+  });
+}
+
+// --- Charts ---
+var simTimeColors = ['#3498db','#e74c3c','#27ae60','#f39c12','#8e44ad'];
+var simTimes = [0.1, 1.0, 10.0, 100.0, 1000.0];
+var atomCounts = [10, 50, 100, 500, 1000, 5000, 10000];
+
+function initCharts() {
+  // 1. Physical Qubits vs Atoms
+  var physDatasets = simTimes.map(function(t, i) {
+    return {
+      label: 't = ' + t + ' ps',
+      data: atomCounts.map(function(n) {
+        var r = resourceData.find(function(d) { return d.atoms === n && d.time === t; });
+        return r ? {x: n, y: r.physical} : null;
+      }).filter(Boolean),
+      borderColor: simTimeColors[i],
+      backgroundColor: simTimeColors[i] + '33',
+      pointRadius: 4, tension: 0.3
+    };
+  });
+  new Chart(document.getElementById('chartPhysicalQubits'), {
+    type: 'line',
+    data: {datasets: physDatasets},
+    options: {
+      scales: {x: {type:'logarithmic', title:{display:true, text:'Number of Atoms'}},
+               y: {type:'logarithmic', title:{display:true, text:'Physical Qubits'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 2. Overhead Ratio
+  var ratioDatasets = simTimes.map(function(t, i) {
+    return {
+      label: 't = ' + t + ' ps',
+      data: atomCounts.map(function(n) {
+        var r = resourceData.find(function(d) { return d.atoms === n && d.time === t; });
+        return r ? {x: n, y: r.ratio} : null;
+      }).filter(Boolean),
+      borderColor: simTimeColors[i],
+      backgroundColor: simTimeColors[i] + '33',
+      pointRadius: 4, tension: 0.3
+    };
+  });
+  new Chart(document.getElementById('chartOverheadRatio'), {
+    type: 'line',
+    data: {datasets: ratioDatasets},
+    options: {
+      scales: {x: {type:'logarithmic', title:{display:true, text:'Number of Atoms'}},
+               y: {type:'logarithmic', title:{display:true, text:'Physical / Logical Ratio'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 3. Speedup
+  var speedupData = atomCounts.map(function(n) {
+    var r = resourceData.find(function(d) { return d.atoms === n && d.time === 10; });
+    if (!r) return null;
+    var modes = 3*n - 6;
+    var classicalFlops = 10*Math.pow(modes, 3) + (10000/1.0)*50*Math.pow(modes, 2);
+    var classicalTime = classicalFlops / 1e15;
+    return {x: n, y: classicalTime / r.runtime};
+  }).filter(Boolean);
+  new Chart(document.getElementById('chartSpeedup'), {
+    type: 'line',
+    data: {datasets: [{
+      label: 't = 10 ps',
+      data: speedupData,
+      borderColor: '#2980b9',
+      backgroundColor: '#2980b933',
+      pointRadius: 5, tension: 0.3
+    }]},
+    options: {
+      scales: {x: {type:'logarithmic', title:{display:true, text:'Number of Atoms'}},
+               y: {type:'logarithmic', title:{display:true, text:'Speedup Factor'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 4. Runtime Comparison
+  var qRuntimes10 = atomCounts.map(function(n) {
+    var r = resourceData.find(function(d) { return d.atoms === n && d.time === 10; });
+    return r ? {x: n, y: r.runtime} : null;
+  }).filter(Boolean);
+  var cRuntimes10 = atomCounts.map(function(n) {
+    var modes = 3*n - 6;
+    var classicalFlops = 10*Math.pow(modes, 3) + (10000/1.0)*50*Math.pow(modes, 2);
+    return {x: n, y: classicalFlops / 1e15};
+  });
+  new Chart(document.getElementById('chartRuntime'), {
+    type: 'line',
+    data: {datasets: [
+      {label:'Quantum (t=10ps)', data:qRuntimes10, borderColor:'#2980b9', pointRadius:5, tension:0.3},
+      {label:'Classical (t=10ps)', data:cRuntimes10, borderColor:'#e74c3c', borderDash:[5,5], pointRadius:5, tension:0.3}
+    ]},
+    options: {
+      scales: {x: {type:'logarithmic', title:{display:true, text:'Number of Atoms'}},
+               y: {type:'logarithmic', title:{display:true, text:'Runtime (seconds)'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 5. Graphene Qubits
+  new Chart(document.getElementById('chartGrapheneQubits'), {
+    type: 'bar',
+    data: {
+      labels: grapheneData.map(function(d) { return d.side + ' nm'; }),
+      datasets: [
+        {label: 'Logical Qubits', data: grapheneData.map(function(d) { return d.logical; }), backgroundColor: '#2980b9'},
+        {label: 'Physical Qubits (log10)', data: grapheneData.map(function(d) { return Math.log10(d.physical); }), backgroundColor: '#1a3a5c'}
+      ]
+    },
+    options: {
+      scales: {y: {title: {display:true, text:'Count / log10(Count)'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 6. Graphene Speedup
+  new Chart(document.getElementById('chartGrapheneSpeedup'), {
+    type: 'bar',
+    data: {
+      labels: grapheneData.map(function(d) { return d.side + ' nm'; }),
+      datasets: [{
+        label: 'Speedup Factor (log10)',
+        data: grapheneData.map(function(d) { return Math.log10(d.speedup); }),
+        backgroundColor: grapheneData.map(function(d) { return d.speedup >= 1 ? '#27ae60' : '#e74c3c'; })
+      }]
+    },
+    options: {
+      scales: {y: {title: {display:true, text:'log10(Speedup)'}}},
+      plugins: {legend: {display:false}}
+    }
+  });
+
+  // 7. Sensitivity: Code Distance
+  var pVals = ['1e-4', '2e-4', '5e-4', '1e-3', '2e-3', '5e-3', '1e-2'];
+  var codeDists = [7, 9, 13, 21, 29, 53, 101];
+  new Chart(document.getElementById('chartSensCodeDist'), {
+    type: 'line',
+    data: {
+      labels: pVals,
+      datasets: [{
+        label: 'Code Distance (N=1000, t=100ps)',
+        data: codeDists,
+        borderColor: '#1a3a5c',
+        backgroundColor: '#1a3a5c33',
+        pointRadius: 6, tension: 0.3, fill: true
+      }]
+    },
+    options: {
+      scales: {y: {title: {display:true, text:'Required Code Distance'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 8. Sensitivity: Qubits
+  var sensQubits = [5e4, 2e5, 2e6, 8.7e10, 5e12, 1e15, 1e17];
+  new Chart(document.getElementById('chartSensQubits'), {
+    type: 'line',
+    data: {
+      labels: pVals,
+      datasets: [{
+        label: 'Physical Qubits (N=1000, t=100ps)',
+        data: sensQubits,
+        borderColor: '#2980b9',
+        backgroundColor: '#2980b933',
+        pointRadius: 6, tension: 0.3, fill: true
+      }]
+    },
+    options: {
+      scales: {y: {type:'logarithmic', title: {display:true, text:'Total Physical Qubits'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 9. Logical Qubits
+  new Chart(document.getElementById('chartLogicalQubits'), {
+    type: 'line',
+    data: {
+      labels: atomCounts.map(function(n) { return n.toLocaleString(); }),
+      datasets: [{
+        label: 'Logical Qubits',
+        data: [23, 29, 31, 35, 37, 41, 43],
+        borderColor: '#1a3a5c',
+        backgroundColor: '#1a3a5c33',
+        pointRadius: 6, tension: 0.3, fill: true
+      }]
+    },
+    options: {
+      scales: {y: {title: {display:true, text:'Logical Qubits'}, min:20, max:50}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+
+  // 10. Circuit Depth
+  var depthData = atomCounts.map(function(n) {
+    var r = resourceData.find(function(d) { return d.atoms === n && d.time === 10; });
+    return r ? {x: n, y: Math.round(r.tgates / (r.logical * 0.15))} : null;
+  }).filter(Boolean);
+  new Chart(document.getElementById('chartCircuitDepth'), {
+    type: 'line',
+    data: {datasets: [{
+      label: 't = 10 ps',
+      data: depthData,
+      borderColor: '#27ae60',
+      pointRadius: 5, tension: 0.3
+    }]},
+    options: {
+      scales: {x: {type:'logarithmic', title:{display:true, text:'Number of Atoms'}},
+               y: {type:'logarithmic', title:{display:true, text:'Estimated Circuit Depth'}}},
+      plugins: {legend: {position:'top'}}
+    }
+  });
+}
+
+// --- Init ---
+setupTabs();
+populateResourceTable();
+populateGrapheneTable();
+initCharts();
+</script>
+</body>
+</html>

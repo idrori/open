@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Long-Horizon Video Generation for Robotics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .full-width { grid-column: 1 / -1; }
+  .chart-container { position: relative; height: 350px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-box { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .metric-box .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+  .metric-box .delta { font-size: 0.85rem; color: var(--success); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Long-Horizon Video Generation for Robotics</h1>
+  <p>Hierarchical Temporal Diffusion with Coherence Anchoring (HTDCA) for minutes-long video generation with sustained temporal coherence.</p>
+</div>
+<div class="container">
+  <div class="metric-grid">
+    <div class="metric-box"><div class="value">0.911</div><div class="label">HTDCA Quality @ 1024 frames</div><div class="delta">vs 0.175 Direct</div></div>
+    <div class="metric-box"><div class="value">0%</div><div class="label">HTDCA Artifact Rate</div><div class="delta">vs 15.1% Stitching</div></div>
+    <div class="metric-box"><div class="value">2.3x</div><div class="label">Memory Quality Boost</div><div class="delta">0.39 to 0.92 @ 512 frames</div></div>
+    <div class="metric-box"><div class="value">1024</div><div class="label">Max Frames Tested</div><div class="delta">~34 seconds @ 30fps</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Quality vs Sequence Length</h2>
+      <div class="chart-container"><canvas id="chartQuality"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Artifact Rate vs Sequence Length</h2>
+      <div class="chart-container"><canvas id="chartArtifact"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Memory Ablation (512 frames)</h2>
+      <div class="chart-container"><canvas id="chartMemory"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Task Complexity Scaling</h2>
+      <div class="chart-container"><canvas id="chartComplexity"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Full Results Table</h2>
+      <table>
+        <thead><tr><th>Frames</th><th>Method</th><th>Quality</th><th>Consistency</th><th>Artifact %</th></tr></thead>
+        <tbody id="resultsTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const lengths = ['32','64','128','256','512','1024'];
+const methods = {
+  direct:  {q:[0.949,0.949,0.700,0.401,0.251,0.175],a:[0,0,31.9,65.9,83.0,91.5],c:[0.829,0.836,0.823,0.902,0.951,0.975]},
+  stitch:  {q:[0.920,0.906,0.900,0.896,0.894,0.894],a:[0,7.8,11.7,13.7,14.6,15.1],c:[1.0,0.950,0.924,0.911,0.905,0.903]},
+  blend:   {q:[0.914,0.915,0.911,0.911,0.910,0.910],a:[0,0,0,0,0,0],c:[0.926,0.931,0.908,0.910,0.906,0.906]},
+  htdca:   {q:[0.927,0.922,0.920,0.918,0.915,0.911],a:[0,0,0,0,0,0],c:[0.867,0.890,0.904,0.903,0.904,0.904]}
+};
+const colors = {direct:'#e74c3c',stitch:'#e67e22',blend:'#95a5a6',htdca:'#2980b9'};
+const labels = {direct:'Direct',stitch:'Naive Stitching',blend:'Overlap Blending',htdca:'HTDCA (Ours)'};
+
+new Chart(document.getElementById('chartQuality'),{
+  type:'line',data:{labels:lengths,datasets:Object.keys(methods).map(m=>({label:labels[m],data:methods[m].q,borderColor:colors[m],tension:0.3,pointRadius:4,borderWidth:2}))},
+  options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:1,title:{display:true,text:'Quality'}},x:{title:{display:true,text:'Sequence Length (frames)'}}}}
+});
+
+new Chart(document.getElementById('chartArtifact'),{
+  type:'line',data:{labels:lengths,datasets:Object.keys(methods).map(m=>({label:labels[m],data:methods[m].a,borderColor:colors[m],tension:0.3,pointRadius:4,borderWidth:2}))},
+  options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,title:{display:true,text:'Artifact Rate (%)'}},x:{title:{display:true,text:'Sequence Length (frames)'}}}}
+});
+
+new Chart(document.getElementById('chartMemory'),{
+  type:'bar',data:{labels:['Quality','Consistency','Artifact Rate'],datasets:[
+    {label:'With Memory',data:[0.915,0.905,0],backgroundColor:'rgba(41,128,185,0.7)'},
+    {label:'Without Memory',data:[0.391,0.955,85.6],backgroundColor:'rgba(231,76,60,0.7)'}
+  ]},options:{responsive:true,maintainAspectRatio:false}
+});
+
+new Chart(document.getElementById('chartComplexity'),{
+  type:'line',data:{labels:['2','4','6','8','10'],datasets:[
+    {label:'Quality',data:[0.890,0.863,0.835,0.808,0.781],borderColor:'#2980b9',tension:0.3,pointRadius:4},
+    {label:'Consistency',data:[0.877,0.850,0.822,0.795,0.768],borderColor:'#e67e22',tension:0.3,pointRadius:4}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0.7,max:0.95,title:{display:true,text:'Score'}},x:{title:{display:true,text:'Number of Subtasks'}}}}
+});
+
+const tbody=document.getElementById('resultsTable');
+var rows=[];
+lengths.forEach(function(l){
+  Object.keys(methods).forEach(function(m){
+    var i=lengths.indexOf(l);
+    rows.push([l,labels[m],methods[m].q[i].toFixed(3),methods[m].c[i].toFixed(3),methods[m].a[i].toFixed(1)]);
+  });
+});
+rows.forEach(function(r){
+  var tr=document.createElement('tr');
+  r.forEach(function(val,idx){
+    var td=document.createElement('td');
+    td.textContent=val;
+    if(idx===2 && parseFloat(val)>0.9) td.style.fontWeight='bold';
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

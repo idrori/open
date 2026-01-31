@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reliability of Agentic LLMs in Physics-Governed Planning Domains</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0f172a;--card:#1e293b;--card-hover:#253349;
+    --text:#e2e8f0;--text-muted:#94a3b8;--text-dim:#64748b;
+    --border:#334155;
+    --red:#e74c3c;--amber:#f39c12;--blue:#3498db;--green:#2ecc71;
+    --radius:12px;
+  }
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:var(--bg);color:var(--text);
+    line-height:1.6;padding:0;
+  }
+
+  /* ---------- HEADER ---------- */
+  .hero{
+    background:linear-gradient(135deg,#0f172a 0%,#1a2744 50%,#0f172a 100%);
+    text-align:center;padding:56px 24px 48px;
+    border-bottom:1px solid var(--border);
+    position:relative;overflow:hidden;
+  }
+  .hero::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(52,152,219,.12),transparent);
+    pointer-events:none;
+  }
+  .hero h1{
+    font-size:clamp(1.5rem,3.2vw,2.4rem);font-weight:700;
+    letter-spacing:-.02em;max-width:900px;margin:0 auto 12px;
+    background:linear-gradient(90deg,#e2e8f0,#94a3b8);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .hero .subtitle{
+    font-size:clamp(.92rem,1.6vw,1.1rem);color:var(--text-muted);
+    max-width:640px;margin:0 auto 20px;
+  }
+  .badge{
+    display:inline-block;padding:4px 14px;border-radius:100px;
+    font-size:.78rem;font-weight:600;letter-spacing:.04em;
+    border:1px solid var(--blue);color:var(--blue);
+    background:rgba(52,152,219,.1);
+  }
+
+  /* ---------- LAYOUT ---------- */
+  .container{max-width:1280px;margin:0 auto;padding:32px 20px 64px}
+  .grid-1{display:grid;gap:28px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+
+  /* ---------- CARDS ---------- */
+  .card{
+    background:var(--card);border-radius:var(--radius);
+    border:1px solid var(--border);
+    padding:28px 28px 24px;position:relative;
+    transition:transform .2s,box-shadow .25s,border-color .25s;
+  }
+  .card:hover{
+    transform:translateY(-3px);
+    box-shadow:0 12px 32px rgba(0,0,0,.35);
+    border-color:#475569;
+  }
+  .card[data-accent="red"]{border-top:3px solid var(--red)}
+  .card[data-accent="amber"]{border-top:3px solid var(--amber)}
+  .card[data-accent="blue"]{border-top:3px solid var(--blue)}
+  .card[data-accent="green"]{border-top:3px solid var(--green)}
+  .card[data-accent="multi"]{
+    border-top:3px solid transparent;
+    border-image:linear-gradient(90deg,var(--red),var(--amber),var(--blue),var(--green)) 1;
+  }
+  .card h2{
+    font-size:1.15rem;font-weight:700;margin-bottom:6px;
+    color:#f1f5f9;letter-spacing:-.01em;
+  }
+  .card .card-desc{font-size:.86rem;color:var(--text-muted);margin-bottom:18px}
+  .chart-wrap{position:relative;width:100%;min-height:280px}
+  .chart-wrap canvas{width:100%!important}
+
+  /* ---------- CHIPS ---------- */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 6px}
+  .chip{
+    display:inline-block;padding:3px 12px;border-radius:100px;
+    font-size:.76rem;font-weight:600;letter-spacing:.03em;
+    border:1px solid;
+  }
+  .chip-red{color:var(--red);border-color:var(--red);background:rgba(231,76,60,.1)}
+  .chip-amber{color:var(--amber);border-color:var(--amber);background:rgba(243,156,18,.1)}
+  .chip-blue{color:var(--blue);border-color:var(--blue);background:rgba(52,152,219,.1)}
+  .chip-green{color:var(--green);border-color:var(--green);background:rgba(46,204,113,.1)}
+  .chip-domain{
+    color:var(--text-muted);border-color:var(--border);
+    background:rgba(148,163,184,.08);
+  }
+
+  /* ---------- PROBLEM STATEMENT ---------- */
+  .problem-text{
+    font-size:.92rem;color:var(--text-muted);line-height:1.7;
+    max-width:960px;
+  }
+  .problem-text strong{color:var(--text)}
+
+  /* ---------- KEY FINDINGS ---------- */
+  .findings-list{list-style:none;padding:0}
+  .findings-list li{
+    position:relative;padding:10px 0 10px 28px;
+    font-size:.9rem;color:var(--text-muted);
+    border-bottom:1px solid rgba(51,65,85,.5);
+  }
+  .findings-list li:last-child{border-bottom:none}
+  .findings-list li::before{
+    content:'';position:absolute;left:0;top:18px;
+    width:10px;height:10px;border-radius:50%;
+  }
+  .findings-list li:nth-child(1)::before{background:var(--green)}
+  .findings-list li:nth-child(2)::before{background:var(--amber)}
+  .findings-list li:nth-child(3)::before{background:var(--red)}
+  .findings-list li:nth-child(4)::before{background:var(--blue)}
+  .findings-list li:nth-child(5)::before{background:var(--green)}
+  .findings-list li:nth-child(6)::before{background:var(--red)}
+  .findings-list li .hl{color:#f1f5f9;font-weight:600}
+
+  /* ---------- STATS ROW ---------- */
+  .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+  .stat-card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;text-align:center;
+    transition:transform .2s,box-shadow .25s;
+  }
+  .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  .stat-val{font-size:1.7rem;font-weight:800;letter-spacing:-.02em}
+  .stat-label{font-size:.76rem;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.06em}
+
+  /* ---------- SCROLLBAR ---------- */
+  ::-webkit-scrollbar{width:8px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}
+
+  /* ---------- FOOTER ---------- */
+  .footer{
+    text-align:center;padding:32px 20px;
+    border-top:1px solid var(--border);
+    font-size:.78rem;color:var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== HEADER ==================== -->
+<header class="hero">
+  <h1>Reliability of Agentic LLMs in Physics-Governed Planning Domains</h1>
+  <p class="subtitle">Simulation-based evaluation of LLM planning under physical constraints</p>
+  <span class="badge">cs.AI &nbsp;|&nbsp; Jan 2026</span>
+</header>
+
+<div class="container">
+
+<!-- ==================== PROBLEM STATEMENT ==================== -->
+<section class="grid-1" style="margin-bottom:28px">
+  <div class="card" data-accent="multi">
+    <h2>Problem Statement</h2>
+    <p class="problem-text">
+      This study evaluates the <strong>reliability of large language models</strong> when used as autonomous
+      planning agents in domains governed by <strong>physical laws and hard constraints</strong>. Four distinct
+      prompting strategies are benchmarked across six physics-governed planning domains, varying planning
+      horizon length and constraint tightness to quantify how well current LLMs respect physical feasibility.
+    </p>
+    <div style="margin-top:16px">
+      <p style="font-size:.78rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-weight:600">Strategies</p>
+      <div class="chips">
+        <span class="chip chip-red">Direct Prompt</span>
+        <span class="chip chip-amber">ReAct-Style</span>
+        <span class="chip chip-blue">CoT Planning</span>
+        <span class="chip chip-green">Physics-Augmented</span>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <p style="font-size:.78rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-weight:600">Domains</p>
+      <div class="chips">
+        <span class="chip chip-domain">Orbit Transfer</span>
+        <span class="chip chip-domain">Resource Allocation</span>
+        <span class="chip chip-domain">Multi-Agent Scheduling</span>
+        <span class="chip chip-domain">Trajectory Optimization</span>
+        <span class="chip chip-domain">Rendezvous &amp; Docking</span>
+        <span class="chip chip-domain">Constellation Mgmt.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== STATS ROW ==================== -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-val" style="color:var(--green)">56.79%</div>
+    <div class="stat-label">Best Success Rate</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:var(--green)">+52.31%</div>
+    <div class="stat-label">Physics-Aug. Gain</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:var(--red)">-0.53%</div>
+    <div class="stat-label">Per-Step Decay</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:var(--green)">79.7%</div>
+    <div class="stat-label">Violation Reduction</div>
+  </div>
+</div>
+
+<!-- ==================== OVERALL STRATEGY COMPARISON ==================== -->
+<section class="grid-1" style="margin-bottom:28px">
+  <div class="card" data-accent="blue">
+    <h2>Overall Strategy Comparison</h2>
+    <p class="card-desc">Mean success rate across all domains and horizons (with standard deviation)</p>
+    <div class="chart-wrap"><canvas id="chartOverall"></canvas></div>
+  </div>
+</section>
+
+<!-- ==================== HORIZON DEGRADATION ==================== -->
+<section class="grid-1" style="margin-bottom:28px">
+  <div class="card" data-accent="amber">
+    <h2>Horizon Degradation</h2>
+    <p class="card-desc">Success rate as planning horizon increases from 3 to 30 steps</p>
+    <div class="chart-wrap"><canvas id="chartHorizon"></canvas></div>
+  </div>
+</section>
+
+<!-- ==================== CONSTRAINT TIGHTNESS (DUAL) ==================== -->
+<section class="grid-2" style="margin-bottom:28px">
+  <div class="card" data-accent="green">
+    <h2>Success Rate vs. Constraint Tightness</h2>
+    <p class="card-desc">Higher tightness = stricter physical constraints</p>
+    <div class="chart-wrap"><canvas id="chartTightSuccess"></canvas></div>
+  </div>
+  <div class="card" data-accent="red">
+    <h2>Avg. Violations vs. Constraint Tightness</h2>
+    <p class="card-desc">Mean number of constraint violations per plan</p>
+    <div class="chart-wrap"><canvas id="chartTightViolations"></canvas></div>
+  </div>
+</section>
+
+<!-- ==================== CROSS-DOMAIN ==================== -->
+<section class="grid-1" style="margin-bottom:28px">
+  <div class="card" data-accent="multi">
+    <h2>Cross-Domain Comparison</h2>
+    <p class="card-desc">Direct Prompt vs. Physics-Augmented across six planning domains</p>
+    <div class="chart-wrap"><canvas id="chartDomain"></canvas></div>
+  </div>
+</section>
+
+<!-- ==================== CONSTRAINT VIOLATIONS ==================== -->
+<section class="grid-1" style="margin-bottom:28px">
+  <div class="card" data-accent="red">
+    <h2>Mean Constraint Violations per Plan</h2>
+    <p class="card-desc">Average number of physical constraint violations across all scenarios</p>
+    <div class="chart-wrap"><canvas id="chartViolations"></canvas></div>
+  </div>
+</section>
+
+<!-- ==================== KEY FINDINGS ==================== -->
+<section class="grid-1" style="margin-bottom:28px">
+  <div class="card" data-accent="multi">
+    <h2>Key Findings</h2>
+    <ul class="findings-list">
+      <li>Physics-augmented planning improves reliability by <span class="hl">+52.31%</span> over direct prompting, establishing explicit physics integration as the most impactful strategy.</li>
+      <li>Even the best strategy achieves only a <span class="hl">56.79% success rate</span>, indicating that current LLMs remain far from dependable in constrained physical domains.</li>
+      <li>Horizon degradation: success decays at approximately <span class="hl">-0.53% per additional planning step</span>, with direct prompting collapsing to near-zero beyond 15 steps.</li>
+      <li>Domain gap: <span class="hl">7.94 percentage points</span> between the best-performing domain (Orbit Transfer) and the worst (Constellation Mgmt.), suggesting domain-specific tuning is necessary.</li>
+      <li>Physics-based constraint checking reduces violations by <span class="hl">79.7%</span> compared to unchecked direct prompting.</li>
+      <li>Current LLMs <span class="hl">cannot reliably operate</span> in physics-governed planning domains without external physics-aware scaffolding.</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+
+<footer class="footer">
+  Simulation-based evaluation &mdash; cs.AI &nbsp;|&nbsp; Jan 2026
+</footer>
+
+<!-- ==================== CHART.JS SCRIPTS ==================== -->
+<script>
+(function(){
+  /* ---- Shared defaults ---- */
+  Chart.defaults.color='#94a3b8';
+  Chart.defaults.borderColor='rgba(51,65,85,.45)';
+  Chart.defaults.font.family="'Segoe UI',system-ui,sans-serif";
+
+  const COLORS={
+    red:'#e74c3c',amber:'#f39c12',blue:'#3498db',green:'#2ecc71'
+  };
+  const alpha=(c,a)=>{
+    const m=c.match(/\w\w/g).map(x=>parseInt(x,16));
+    return `rgba(${m[0]},${m[1]},${m[2]},${a})`;
+  };
+
+  const tooltipStyle={
+    backgroundColor:'#1e293b',titleColor:'#f1f5f9',bodyColor:'#cbd5e1',
+    borderColor:'#475569',borderWidth:1,cornerRadius:8,
+    padding:12,boxPadding:4
+  };
+
+  /* ======== 1. OVERALL STRATEGY COMPARISON ======== */
+  new Chart(document.getElementById('chartOverall'),{
+    type:'bar',
+    data:{
+      labels:['Direct Prompt','ReAct-Style','CoT Planning','Physics-Augmented'],
+      datasets:[{
+        label:'Mean Success Rate',
+        data:[0.0448,0.2589,0.3763,0.5679],
+        backgroundColor:[alpha(COLORS.red,.75),alpha(COLORS.amber,.75),alpha(COLORS.blue,.75),alpha(COLORS.green,.75)],
+        borderColor:[COLORS.red,COLORS.amber,COLORS.blue,COLORS.green],
+        borderWidth:2,borderRadius:6,
+        errorBars:{
+          'Direct Prompt':{plus:0.0402,minus:0.0402},
+          'ReAct-Style':{plus:0.0723,minus:0.0723},
+          'CoT Planning':{plus:0.0655,minus:0.0655},
+          'Physics-Augmented':{plus:0.0599,minus:0.0599}
+        }
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{...tooltipStyle,callbacks:{
+          label:ctx=>`Success Rate: ${(ctx.parsed.y*100).toFixed(2)}%`
+        }}
+      },
+      scales:{
+        y:{beginAtZero:true,max:0.7,ticks:{callback:v=>(v*100).toFixed(0)+'%'},
+          title:{display:true,text:'Success Rate (%)',color:'#94a3b8'}},
+        x:{grid:{display:false}}
+      }
+    },
+    plugins:[{
+      id:'errorBars',
+      afterDraw(chart){
+        const meta=chart.getDatasetMeta(0);
+        const ctx=chart.ctx;
+        const stds=[0.0402,0.0723,0.0655,0.0599];
+        const colors=[COLORS.red,COLORS.amber,COLORS.blue,COLORS.green];
+        meta.data.forEach((bar,i)=>{
+          const x=bar.x;
+          const yScale=chart.scales.y;
+          const mean=chart.data.datasets[0].data[i];
+          const yTop=yScale.getPixelForValue(mean+stds[i]);
+          const yBot=yScale.getPixelForValue(Math.max(0,mean-stds[i]));
+          ctx.save();
+          ctx.strokeStyle=colors[i];ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(x,yTop);ctx.lineTo(x,yBot);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(x-8,yTop);ctx.lineTo(x+8,yTop);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(x-8,yBot);ctx.lineTo(x+8,yBot);ctx.stroke();
+          ctx.restore();
+        });
+      }
+    }]
+  });
+
+  /* ======== 2. HORIZON DEGRADATION ======== */
+  const horizons=[3,5,8,10,15,20,25,30];
+  new Chart(document.getElementById('chartHorizon'),{
+    type:'line',
+    data:{
+      labels:horizons,
+      datasets:[
+        {label:'Direct Prompt',data:[.1167,.13,.0567,.0233,.02,.0067,.0067,.0067],
+         borderColor:COLORS.red,backgroundColor:alpha(COLORS.red,.12),fill:true,tension:.35,pointRadius:4,pointHoverRadius:7,borderWidth:2.5},
+        {label:'ReAct-Style',data:[.3467,.3433,.2933,.2667,.2333,.1933,.13,.08],
+         borderColor:COLORS.amber,backgroundColor:alpha(COLORS.amber,.10),fill:true,tension:.35,pointRadius:4,pointHoverRadius:7,borderWidth:2.5},
+        {label:'CoT Planning',data:[.4567,.47,.4533,.39,.3833,.3067,.2433,.2267],
+         borderColor:COLORS.blue,backgroundColor:alpha(COLORS.blue,.10),fill:true,tension:.35,pointRadius:4,pointHoverRadius:7,borderWidth:2.5},
+        {label:'Physics-Augmented',data:[.6133,.63,.6133,.58,.5733,.5233,.5267,.48],
+         borderColor:COLORS.green,backgroundColor:alpha(COLORS.green,.10),fill:true,tension:.35,pointRadius:4,pointHoverRadius:7,borderWidth:2.5}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',padding:16,font:{size:12}}},
+        tooltip:{...tooltipStyle,callbacks:{label:ctx=>`${ctx.dataset.label}: ${(ctx.parsed.y*100).toFixed(2)}%`}}
+      },
+      scales:{
+        y:{beginAtZero:true,max:0.7,ticks:{callback:v=>(v*100).toFixed(0)+'%'},
+          title:{display:true,text:'Success Rate (%)',color:'#94a3b8'}},
+        x:{title:{display:true,text:'Planning Horizon (steps)',color:'#94a3b8'},grid:{display:false}}
+      }
+    }
+  });
+
+  /* ======== 3a. CONSTRAINT TIGHTNESS – Success ======== */
+  const tightness=['0.1','0.2','0.3','0.4','0.5','0.6','0.7','0.8','0.9'];
+  const tightDatasets=(metric)=>{
+    const d={
+      success:{
+        dp:[.1167,.0767,.0767,.0733,.0633,.0533,.0333,.0333,.0033],
+        rs:[.3333,.3633,.3167,.29,.3133,.28,.28,.2667,.3067],
+        ct:[.4267,.44,.38,.3967,.4,.42,.4167,.3733,.4167],
+        pa:[.5667,.5267,.5267,.5,.5833,.6333,.5667,.6133,.5867]
+      },
+      violations:{
+        dp:[.17,.3567,.4367,.6133,.8133,.9667,1.2067,1.3933,1.6433],
+        rs:[.1,.1867,.3367,.45,.52,.6233,.7933,.89,.9667],
+        ct:[.07,.14,.2267,.3067,.3567,.4033,.5567,.6767,.68],
+        pa:[.0367,.0733,.1233,.1233,.1533,.1567,.2267,.2433,.2967]
+      }
+    };
+    return d[metric];
+  };
+
+  const mkTightChart=(id,metric)=>{
+    const d=tightDatasets(metric);
+    const isViol=metric==='violations';
+    new Chart(document.getElementById(id),{
+      type:'line',
+      data:{
+        labels:tightness,
+        datasets:[
+          {label:'Direct Prompt',data:d.dp,borderColor:COLORS.red,backgroundColor:alpha(COLORS.red,.10),fill:true,tension:.3,pointRadius:3.5,pointHoverRadius:6,borderWidth:2.5},
+          {label:'ReAct-Style',data:d.rs,borderColor:COLORS.amber,backgroundColor:alpha(COLORS.amber,.08),fill:true,tension:.3,pointRadius:3.5,pointHoverRadius:6,borderWidth:2.5},
+          {label:'CoT Planning',data:d.ct,borderColor:COLORS.blue,backgroundColor:alpha(COLORS.blue,.08),fill:true,tension:.3,pointRadius:3.5,pointHoverRadius:6,borderWidth:2.5},
+          {label:'Physics-Augmented',data:d.pa,borderColor:COLORS.green,backgroundColor:alpha(COLORS.green,.08),fill:true,tension:.3,pointRadius:3.5,pointHoverRadius:6,borderWidth:2.5}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',padding:14,font:{size:11}}},
+          tooltip:{...tooltipStyle,callbacks:{
+            label:ctx=>isViol?`${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)} violations`
+                              :`${ctx.dataset.label}: ${(ctx.parsed.y*100).toFixed(2)}%`
+          }}
+        },
+        scales:{
+          y:{beginAtZero:true,
+            ticks:{callback:v=>isViol?v.toFixed(1):(v*100).toFixed(0)+'%'},
+            title:{display:true,text:isViol?'Avg. Violations':'Success Rate (%)',color:'#94a3b8'}
+          },
+          x:{title:{display:true,text:'Constraint Tightness',color:'#94a3b8'},grid:{display:false}}
+        }
+      }
+    });
+  };
+  mkTightChart('chartTightSuccess','success');
+  mkTightChart('chartTightViolations','violations');
+
+  /* ======== 4. CROSS-DOMAIN COMPARISON ======== */
+  const domains=['Orbit Transfer','Resource Alloc.','Multi-Agent Sched.','Trajectory Opt.','Rendezvous Dock.','Constellation Mgmt.'];
+  new Chart(document.getElementById('chartDomain'),{
+    type:'bar',
+    data:{
+      labels:domains,
+      datasets:[
+        {label:'Direct Prompt',
+         data:[.0825,.0569,.0186,.0341,.0513,.0206],
+         backgroundColor:alpha(COLORS.red,.75),borderColor:COLORS.red,borderWidth:2,borderRadius:5},
+        {label:'Physics-Augmented',
+         data:[.6019,.5672,.5364,.5785,.5999,.5225],
+         backgroundColor:alpha(COLORS.green,.75),borderColor:COLORS.green,borderWidth:2,borderRadius:5}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'rectRounded',padding:16,font:{size:12}}},
+        tooltip:{...tooltipStyle,callbacks:{label:ctx=>`${ctx.dataset.label}: ${(ctx.parsed.y*100).toFixed(2)}%`}}
+      },
+      scales:{
+        y:{beginAtZero:true,max:0.7,ticks:{callback:v=>(v*100).toFixed(0)+'%'},
+          title:{display:true,text:'Success Rate (%)',color:'#94a3b8'}},
+        x:{grid:{display:false}}
+      }
+    }
+  });
+
+  /* ======== 5. CONSTRAINT VIOLATIONS BAR ======== */
+  new Chart(document.getElementById('chartViolations'),{
+    type:'bar',
+    data:{
+      labels:['Direct Prompt','ReAct-Style','CoT Planning','Physics-Augmented'],
+      datasets:[{
+        label:'Mean Violations',
+        data:[1.529,1.0188,0.7566,0.3107],
+        backgroundColor:[alpha(COLORS.red,.75),alpha(COLORS.amber,.75),alpha(COLORS.blue,.75),alpha(COLORS.green,.75)],
+        borderColor:[COLORS.red,COLORS.amber,COLORS.blue,COLORS.green],
+        borderWidth:2,borderRadius:6
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      indexAxis:'y',
+      plugins:{
+        legend:{display:false},
+        tooltip:{...tooltipStyle,callbacks:{
+          label:ctx=>`Violations: ${ctx.parsed.x.toFixed(4)}`
+        }}
+      },
+      scales:{
+        x:{beginAtZero:true,
+          title:{display:true,text:'Mean Constraint Violations per Plan',color:'#94a3b8'}},
+        y:{grid:{display:false}}
+      }
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

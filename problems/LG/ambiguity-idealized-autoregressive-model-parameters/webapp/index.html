@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parameterization Ambiguity in Idealized Autoregressive Transformers</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #333; --border: #d0d7de; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+  header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+  header p { opacity: 0.85; font-size: 0.95rem; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .chart-container { position: relative; height: 340px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: right; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: white; font-weight: 600; }
+  td:first-child, th:first-child { text-align: left; }
+  tr:hover { background: #eef3f8; }
+  .metric-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .metric { flex: 1; min-width: 140px; background: var(--primary); color: white; border-radius: 8px; padding: 1rem; text-align: center; }
+  .metric .val { font-size: 1.8rem; font-weight: 700; }
+  .metric .label { font-size: 0.8rem; opacity: 0.85; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Parameterization Ambiguity in Idealized Autoregressive Transformers</h1>
+  <p>Systematic computational study of continuous symmetries, solution manifold geometry, sparsity, and algorithmic multiplicity in transformer models.</p>
+</header>
+<div class="container">
+  <div class="metric-row">
+    <div class="metric"><div class="val">320</div><div class="label">Symmetry Upper Bound</div></div>
+    <div class="metric"><div class="val">4.0</div><div class="label">Empirical Null-Space Dim</div></div>
+    <div class="metric"><div class="val">95%</div><div class="label">Max Sparsity (Perfect Acc)</div></div>
+    <div class="metric"><div class="val">~0.0</div><div class="label">Mean Cosine Similarity</div></div>
+    <div class="metric"><div class="val">20</div><div class="label">Independent Models</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Symmetry Scaling: Parameters vs. Symmetry Dimension</h2>
+      <div class="chart-container"><canvas id="chartSymmetry"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Ambiguity Ratio vs. Model Dimension</h2>
+      <div class="chart-container"><canvas id="chartRatio"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Null-Space Dimension Across Tasks</h2>
+      <div class="chart-container"><canvas id="chartNullspace"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Sparsity vs. Accuracy (Copy-Last and XOR)</h2>
+      <div class="chart-container"><canvas id="chartSparsity"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Overparameterization: Null-Space Dim vs. Model Size</h2>
+      <div class="chart-container"><canvas id="chartOverparam"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>PCA Variance Explained (20 Solutions)</h2>
+      <div class="chart-container"><canvas id="chartPCA"></canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>Symmetry Group Dimensions Across Architectures</h2>
+    <div style="overflow-x:auto;">
+      <table id="symTable">
+        <thead><tr><th>Config (d, L, H)</th><th>Total Params</th><th>QK Sym</th><th>VO Sym</th><th>MLP Sym</th><th>Total Sym</th><th>Ratio</th></tr></thead>
+        <tbody>
+          <tr><td>d=8, L=1, H=1</td><td>800</td><td>64</td><td>64</td><td>32</td><td>160</td><td>0.200</td></tr>
+          <tr><td>d=8, L=1, H=2</td><td>800</td><td>32</td><td>32</td><td>32</td><td>96</td><td>0.120</td></tr>
+          <tr><td>d=16, L=1, H=2</td><td>3,200</td><td>128</td><td>128</td><td>64</td><td>320</td><td>0.100</td></tr>
+          <tr><td>d=16, L=2, H=2</td><td>6,272</td><td>256</td><td>256</td><td>128</td><td>640</td><td>0.102</td></tr>
+          <tr><td>d=32, L=2, H=4</td><td>25,088</td><td>512</td><td>512</td><td>256</td><td>1,280</td><td>0.051</td></tr>
+          <tr><td>d=64, L=4, H=8</td><td>198,656</td><td>2,048</td><td>2,048</td><td>1,024</td><td>5,120</td><td>0.026</td></tr>
+          <tr><td>d=128, L=6, H=8</td><td>1,187,840</td><td>12,288</td><td>12,288</td><td>3,072</td><td>27,648</td><td>0.023</td></tr>
+          <tr><td>d=512, L=12, H=8</td><td>37,879,808</td><td>393,216</td><td>393,216</td><td>24,576</td><td>811,008</td><td>0.021</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Null-Space Analysis Summary</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Task</th><th>Converged</th><th>Total Params</th><th>Mean Null Dim</th><th>Std</th><th>Upper Bound</th></tr></thead>
+        <tbody>
+          <tr><td>Copy-Last (V=2,T=3)</td><td>8/8</td><td>3,136</td><td>4.0</td><td>0.0</td><td>320</td></tr>
+          <tr><td>XOR (V=2,T=3)</td><td>8/8</td><td>3,136</td><td>4.0</td><td>0.0</td><td>320</td></tr>
+          <tr><td>Copy-Last (V=2,T=4)</td><td>8/8</td><td>3,136</td><td>16.1</td><td>0.33</td><td>320</td></tr>
+          <tr><td>Copy-Last (V=3,T=2)</td><td>8/8</td><td>3,168</td><td>0.0</td><td>0.0</td><td>320</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const baseOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11}}}}};
+
+new Chart(document.getElementById('chartSymmetry'),{type:'bar',data:{labels:['d=8','d=8','d=16','d=16','d=32','d=64','d=128','d=512'],datasets:[{label:'Total Params',data:[800,800,3200,6272,25088,198656,1187840,37879808],backgroundColor:'rgba(26,58,92,0.7)'},{label:'Symmetry Dim',data:[160,96,320,640,1280,5120,27648,811008],backgroundColor:'rgba(41,128,185,0.7)'}]},options:{...baseOpts,scales:{y:{type:'logarithmic',title:{display:true,text:'Count (log)'}}}}});
+
+new Chart(document.getElementById('chartRatio'),{type:'line',data:{labels:['d=8','d=16','d=32','d=64','d=128','d=256','d=512'],datasets:[{label:'Ambiguity Ratio',data:[0.179,0.096,0.050,0.026,0.013,0.006,0.003],borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.15)',fill:true,tension:0.3,pointRadius:5}]},options:{...baseOpts,scales:{y:{title:{display:true,text:'Ratio'}}}}});
+
+new Chart(document.getElementById('chartNullspace'),{type:'bar',data:{labels:['Copy-Last (V=2,T=3)','XOR (V=2,T=3)','Copy-Last (V=2,T=4)','Copy-Last (V=3,T=2)'],datasets:[{label:'Null-Space Dim',data:[4.0,4.0,16.125,0.0],backgroundColor:'rgba(41,128,185,0.8)'},{label:'Symmetry Upper Bound',data:[320,320,320,320],backgroundColor:'rgba(26,58,92,0.3)'}]},options:{...baseOpts,scales:{y:{title:{display:true,text:'Dimension'}}}}});
+
+new Chart(document.getElementById('chartSparsity'),{type:'line',data:{labels:['5%','10%','20%','30%','40%','50%','60%','70%','80%','90%','95%'],datasets:[{label:'Copy-Last (prune)',data:[1,1,1,1,1,1,1,1,0.5,0.5,0.5],borderColor:'#1a3a5c',borderDash:[5,5],tension:0.2,pointRadius:4},{label:'Copy-Last (retrain)',data:[1,1,1,1,1,1,1,1,1,1,1],borderColor:'#1a3a5c',tension:0.2,pointRadius:4},{label:'XOR (prune)',data:[1,1,1,1,1,1,1,0.875,0.5,0.5,0.5],borderColor:'#2980b9',borderDash:[5,5],tension:0.2,pointRadius:4},{label:'XOR (retrain)',data:[1,1,1,1,1,1,1,1,1,1,1],borderColor:'#2980b9',tension:0.2,pointRadius:4}]},options:{...baseOpts,scales:{y:{min:0,max:1.05,title:{display:true,text:'Accuracy'}},x:{title:{display:true,text:'Sparsity Level'}}}}});
+
+new Chart(document.getElementById('chartOverparam'),{type:'line',data:{labels:['d=8 (800)','d=12 (1776)','d=16 (3136)','d=24 (7008)','d=32 (12416)'],datasets:[{label:'Null-Space Dim',data:[4,4,4,4,4],borderColor:'#2980b9',pointRadius:6,pointBackgroundColor:'#2980b9',tension:0.1},{label:'Symmetry Upper Bound',data:[96,144,192,288,384],borderColor:'#1a3a5c',borderDash:[5,5],pointRadius:4,tension:0.1}]},options:{...baseOpts,scales:{y:{title:{display:true,text:'Dimension'}}}}});
+
+var pcaVar = [8.48,7.70,7.31,6.79,6.60,5.83,5.68,5.34,5.11,4.91,4.57,4.51,4.39,4.18,4.02,3.85,3.74,3.66,3.32,0.0];
+var pcaCum = []; var s=0; for(var i=0;i<pcaVar.length;i++){s+=pcaVar[i]; pcaCum.push(s);}
+new Chart(document.getElementById('chartPCA'),{type:'bar',data:{labels:pcaVar.map(function(_,i){return 'PC'+(i+1);}),datasets:[{label:'Variance %',data:pcaVar,backgroundColor:'rgba(41,128,185,0.7)',yAxisID:'y'},{label:'Cumulative %',data:pcaCum,type:'line',borderColor:'#1a3a5c',pointRadius:3,yAxisID:'y2'}]},options:{...baseOpts,scales:{y:{title:{display:true,text:'Variance %'},position:'left'},y2:{title:{display:true,text:'Cumulative %'},position:'right',min:0,max:100,grid:{drawOnChartArea:false}}}}});
+</script>
+</body>
+</html>

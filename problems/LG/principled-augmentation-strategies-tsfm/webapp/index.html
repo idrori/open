@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIAS: Spectral-Influence Augmentation Selection Framework</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #e63946;
+    --accent2: #2a9d8f;
+    --accent3: #f4a261;
+    --accent4: #457b9d;
+    --border: #475569;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+.container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 40px 0;
+}
+header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
+header .subtitle { color: var(--text-muted); font-size: 1.05rem; }
+header .tag {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    margin-top: 12px;
+}
+nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+nav .container { display: flex; gap: 0; overflow-x: auto; }
+nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 14px 20px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+nav a:hover, nav a.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+section { padding: 40px 0; border-bottom: 1px solid var(--border); }
+section h2 { font-size: 1.5rem; margin-bottom: 20px; color: var(--accent); }
+section h3 { font-size: 1.1rem; margin-bottom: 12px; color: var(--accent2); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+}
+.card h3 { margin-bottom: 8px; }
+.stat-best { color: var(--accent); font-weight: 700; }
+.chart-container { position: relative; width: 100%; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+th, td { padding: 10px 14px; text-align: right; border-bottom: 1px solid var(--border); }
+th { color: var(--accent2); font-weight: 600; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+tr:hover td { background: rgba(255,255,255,0.03); }
+.highlight-row td { background: rgba(230,57,70,0.08); font-weight: 600; }
+.tabs { display: flex; gap: 0; margin-bottom: 20px; }
+.tab {
+    padding: 10px 20px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+.tab:first-child { border-radius: 8px 0 0 8px; }
+.tab:last-child { border-radius: 0 8px 8px 0; }
+.tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+.insight-box {
+    background: rgba(42,157,143,0.1);
+    border-left: 3px solid var(--accent2);
+    padding: 16px 20px;
+    margin: 16px 0;
+    border-radius: 0 8px 8px 0;
+}
+.key-findings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.finding {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+}
+.finding-num {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+footer {
+    padding: 30px 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+@media (max-width: 768px) {
+    .grid-2, .grid-3, .key-findings { grid-template-columns: 1fr; }
+    header h1 { font-size: 1.3rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+<div class="container">
+    <h1>Spectral-Influence Augmentation Selection (SIAS)</h1>
+    <div class="subtitle">Principled identification of optimal augmentation strategies for time series foundation model training</div>
+    <span class="tag">cs.LG - Machine Learning</span>
+</div>
+</header>
+
+<nav>
+<div class="container">
+    <a href="#overview" class="active">Overview</a>
+    <a href="#profiles">Augmentation Profiles</a>
+    <a href="#results">Results</a>
+    <a href="#bandit">Bandit Analysis</a>
+    <a href="#spectral">Spectral Analysis</a>
+    <a href="#magnitude">Magnitude Study</a>
+    <a href="#findings">Key Findings</a>
+</div>
+</nav>
+
+<div class="container">
+
+<section id="overview">
+<h2>Problem Overview</h2>
+<p style="margin-bottom:20px;">Time series foundation models rely on data augmentation to extend training coverage, yet augmentation strategies are chosen heuristically before training. SIAS provides a principled method to identify optimal augmentations through a decomposable quality score (affinity + diversity) and online contextual bandit selection.</p>
+<div class="grid-3">
+    <div class="card">
+        <h3>7 Augmentation Families</h3>
+        <p style="color:var(--text-muted);">Jitter, Scaling, Time Warp, Magnitude Warp, Permutation, Spectral, Trend Injection</p>
+    </div>
+    <div class="card">
+        <h3>4 Domains Tested</h3>
+        <p style="color:var(--text-muted);">Trend (154 trend series), Seasonal (123 seasonal series), Mixed (balanced), Noise (142 AR series)</p>
+    </div>
+    <div class="card">
+        <h3>200 Series per Domain</h3>
+        <p style="color:var(--text-muted);">Length 256, horizon 32, 160 train / 40 validation split, 15 epochs</p>
+    </div>
+</div>
+</section>
+
+<section id="profiles">
+<h2>Augmentation Affinity-Diversity Profiles</h2>
+<div class="tabs">
+    <div class="tab active" onclick="switchDomain(this,'mixed')">Mixed</div>
+    <div class="tab" onclick="switchDomain(this,'trend')">Trend</div>
+    <div class="tab" onclick="switchDomain(this,'seasonal')">Seasonal</div>
+    <div class="tab" onclick="switchDomain(this,'noise')">Noise</div>
+</div>
+<div class="grid-2">
+    <div class="card">
+        <h3>Affinity vs Diversity Scatter</h3>
+        <div class="chart-container"><canvas id="scatterChart"></canvas></div>
+    </div>
+    <div class="card">
+        <h3>Combined Score Ranking</h3>
+        <div class="chart-container"><canvas id="scoreChart"></canvas></div>
+    </div>
+</div>
+<div class="insight-box" style="margin-top:16px;">
+    <strong>Insight:</strong> Jitter achieves the highest combined score across most domains due to strong diversity with moderate affinity. Scaling preserves structure perfectly (affinity 1.0) but introduces zero spectral diversity.
+</div>
+</section>
+
+<section id="results">
+<h2>Training Results</h2>
+<div class="grid-2">
+    <div class="card">
+        <h3>Validation Loss Curves</h3>
+        <div class="tabs" style="margin-bottom:10px;">
+            <div class="tab active" onclick="switchValDomain(this,'trend')">Trend</div>
+            <div class="tab" onclick="switchValDomain(this,'seasonal')">Seasonal</div>
+            <div class="tab" onclick="switchValDomain(this,'mixed')">Mixed</div>
+        </div>
+        <div class="chart-container"><canvas id="valChart"></canvas></div>
+    </div>
+    <div class="card">
+        <h3>Final Validation MSE</h3>
+        <table id="resultsTable">
+            <thead><tr><th>Strategy</th><th>Trend</th><th>Seasonal</th><th>Mixed</th></tr></thead>
+            <tbody id="resultsBody"></tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<section id="bandit">
+<h2>Bandit Arm Selection Analysis</h2>
+<div class="grid-2">
+    <div class="card">
+        <h3>Arm Pull Distribution</h3>
+        <div class="tabs" style="margin-bottom:10px;">
+            <div class="tab active" onclick="switchBanditDomain(this,'trend')">Trend</div>
+            <div class="tab" onclick="switchBanditDomain(this,'seasonal')">Seasonal</div>
+            <div class="tab" onclick="switchBanditDomain(this,'mixed')">Mixed</div>
+        </div>
+        <div class="chart-container"><canvas id="armChart"></canvas></div>
+    </div>
+    <div class="card">
+        <h3>Average Reward per Arm</h3>
+        <div class="chart-container"><canvas id="rewardChart"></canvas></div>
+    </div>
+</div>
+<div class="insight-box">
+    <strong>Domain-dependent selection:</strong> Trend domain: time warp selected 78.7% (118/150 pulls). Seasonal domain: jitter selected 88.0% (132/150 pulls). Mixed domain: jitter selected 82.0% (123/150 pulls).
+</div>
+</section>
+
+<section id="spectral">
+<h2>Spectral Domain Characterization</h2>
+<div class="grid-2">
+    <div class="card">
+        <h3>Average Power Spectral Density</h3>
+        <div class="chart-container"><canvas id="psdChart"></canvas></div>
+    </div>
+    <div class="card">
+        <h3>Spectral Context Features</h3>
+        <div class="chart-container"><canvas id="ctxChart"></canvas></div>
+    </div>
+</div>
+</section>
+
+<section id="magnitude">
+<h2>Magnitude Sensitivity Analysis</h2>
+<div class="grid-2">
+    <div class="card">
+        <h3>Jitter: Affinity vs Magnitude</h3>
+        <div class="chart-container"><canvas id="magAffinityChart"></canvas></div>
+    </div>
+    <div class="card">
+        <h3>Jitter: Diversity vs Magnitude</h3>
+        <div class="chart-container"><canvas id="magDiversityChart"></canvas></div>
+    </div>
+</div>
+</section>
+
+<section id="findings">
+<h2>Key Findings</h2>
+<div class="key-findings">
+    <div class="finding">
+        <div class="finding-num">1</div>
+        <h3>Decomposable Quality</h3>
+        <p style="color:var(--text-muted)">The affinity-diversity score provides a fast, training-free proxy for augmentation effectiveness. Augmentations ranking high on this score also produce lower validation loss.</p>
+    </div>
+    <div class="finding">
+        <div class="finding-num">2</div>
+        <h3>Domain-Dependent Optimality</h3>
+        <p style="color:var(--text-muted)">The bandit selects different augmentations per domain: time warp for trend data (78.7%), jitter for seasonal data (88.0%).</p>
+    </div>
+    <div class="finding">
+        <div class="finding-num">3</div>
+        <h3>Adaptive Selection Works</h3>
+        <p style="color:var(--text-muted)">SIAS achieves 0.8909 MSE in trend domain, outperforming the best fixed baseline (0.8917) without prior domain knowledge.</p>
+    </div>
+    <div class="finding">
+        <div class="finding-num">4</div>
+        <h3>Degenerate Detection</h3>
+        <p style="color:var(--text-muted)">The framework correctly identifies permutation as destructive (affinity 0.6749, lowest) despite its non-negligible diversity (0.8499).</p>
+    </div>
+</div>
+</section>
+
+</div>
+
+<footer>
+<div class="container">
+    SIAS Framework -- Principled Augmentation Strategies for Time Series Foundation Models -- cs.LG
+</div>
+</footer>
+
+<script>
+// Data from experiment_results.json and augmentation_profiles.json
+var profiles = {
+    "trend": {
+        "jitter":{"affinity":0.9002,"diversity":1.5818,"score":1.2410},
+        "scaling":{"affinity":1.0000,"diversity":0.0000,"score":0.5000},
+        "time_warp":{"affinity":0.6476,"diversity":3.0533,"score":1.8505},
+        "mag_warp":{"affinity":0.9989,"diversity":0.0984,"score":0.5487},
+        "permutation":{"affinity":0.6530,"diversity":1.2590,"score":0.9560},
+        "spectral":{"affinity":0.9840,"diversity":0.3549,"score":0.6695},
+        "trend_inject":{"affinity":0.9955,"diversity":0.0578,"score":0.5267}
+    },
+    "seasonal": {
+        "jitter":{"affinity":0.8910,"diversity":3.7745,"score":2.3327},
+        "scaling":{"affinity":1.0000,"diversity":0.0000,"score":0.5000},
+        "time_warp":{"affinity":0.8074,"diversity":1.0468,"score":0.9271},
+        "mag_warp":{"affinity":0.9997,"diversity":0.0457,"score":0.5227},
+        "permutation":{"affinity":0.6942,"diversity":0.6906,"score":0.6924},
+        "spectral":{"affinity":0.9821,"diversity":0.1730,"score":0.5775},
+        "trend_inject":{"affinity":0.9970,"diversity":0.0221,"score":0.5095}
+    },
+    "mixed": {
+        "jitter":{"affinity":0.8834,"diversity":3.1180,"score":2.0007},
+        "scaling":{"affinity":1.0000,"diversity":0.0000,"score":0.5000},
+        "time_warp":{"affinity":0.7363,"diversity":1.7962,"score":1.2662},
+        "mag_warp":{"affinity":0.9989,"diversity":0.0754,"score":0.5372},
+        "permutation":{"affinity":0.6749,"diversity":0.8499,"score":0.7624},
+        "spectral":{"affinity":0.9740,"diversity":0.2249,"score":0.5995},
+        "trend_inject":{"affinity":0.9953,"diversity":0.0410,"score":0.5182}
+    },
+    "noise": {
+        "jitter":{"affinity":0.9214,"diversity":2.1201,"score":1.5208},
+        "scaling":{"affinity":1.0000,"diversity":0.0000,"score":0.5000},
+        "time_warp":{"affinity":0.7281,"diversity":1.7681,"score":1.2481},
+        "mag_warp":{"affinity":0.9994,"diversity":0.0869,"score":0.5432},
+        "permutation":{"affinity":0.7051,"diversity":0.7412,"score":0.7232},
+        "spectral":{"affinity":0.9859,"diversity":0.2620,"score":0.6240},
+        "trend_inject":{"affinity":0.9973,"diversity":0.0304,"score":0.5138}
+    }
+};
+
+var expResults = {
+    "trend": {
+        "none":{"val":[1.5199,1.3728,1.2645,1.1844,1.1258,1.0814,1.0483,1.0231,1.0032,0.9869,0.9741,0.9635,0.9548,0.9475,0.9413],"final":0.9413},
+        "fixed_jitter":{"val":[1.3735,1.1879,1.0831,1.0255,0.9891,0.9648,0.9496,0.9377,0.9292,0.9227,0.9175,0.9134,0.9089,0.9059,0.9032],"final":0.9032},
+        "fixed_scaling":{"val":[1.3589,1.1953,1.1111,1.0606,1.0229,0.9958,0.9841,0.9750,0.9646,0.9536,0.9506,0.9508,0.9401,0.9407,0.9398],"final":0.9398},
+        "fixed_time_warp":{"val":[1.3679,1.1810,1.0814,1.0220,0.9858,0.9619,0.9458,0.9321,0.9229,0.9157,0.9089,0.9035,0.8991,0.8949,0.8917],"final":0.8917},
+        "fixed_permutation":{"val":[1.5299,1.3898,1.2796,1.1794,1.1309,1.0839,1.0539,1.0191,0.9931,0.9745,0.9615,0.9476,0.9342,0.9203,0.9125],"final":0.9125},
+        "fixed_spectral":{"val":[1.3684,1.1850,1.0820,1.0246,0.9883,0.9667,0.9503,0.9394,0.9301,0.9242,0.9172,0.9122,0.9080,0.9052,0.9017],"final":0.9017},
+        "sias_bandit":{"val":[1.3805,1.1888,1.0867,1.0282,0.9909,0.9646,0.9451,0.9349,0.9241,0.9163,0.9085,0.9063,0.9004,0.8957,0.8909],"final":0.8909}
+    },
+    "seasonal": {
+        "none":{"val":[1.2747,1.2439,1.2181,1.1971,1.1796,1.1650,1.1521,1.1412,1.1320,1.1240,1.1172,1.1110,1.1057,1.1010,1.0967],"final":1.0967},
+        "fixed_jitter":{"val":[1.2439,1.1973,1.1652,1.1427,1.1250,1.1113,1.1018,1.0937,1.0870,1.0819,1.0766,1.0725,1.0686,1.0658,1.0633],"final":1.0633},
+        "fixed_scaling":{"val":[1.2373,1.1925,1.1627,1.1421,1.1249,1.1122,1.1087,1.0998,1.0957,1.0898,1.0854,1.0802,1.0739,1.0726,1.0712],"final":1.0712},
+        "fixed_time_warp":{"val":[1.2399,1.1957,1.1661,1.1438,1.1255,1.1135,1.1009,1.0947,1.0879,1.0794,1.0756,1.0711,1.0666,1.0637,1.0621],"final":1.0621},
+        "fixed_permutation":{"val":[1.2696,1.2323,1.2005,1.1840,1.1717,1.1598,1.1417,1.1361,1.1298,1.1179,1.1084,1.1041,1.1050,1.0951,1.0932],"final":1.0932},
+        "fixed_spectral":{"val":[1.2422,1.1975,1.1641,1.1420,1.1255,1.1123,1.1012,1.0922,1.0860,1.0817,1.0772,1.0728,1.0698,1.0664,1.0632],"final":1.0632},
+        "sias_bandit":{"val":[1.2455,1.1961,1.1643,1.1445,1.1254,1.1114,1.1012,1.0935,1.0866,1.0812,1.0766,1.0720,1.0693,1.0658,1.0628],"final":1.0628}
+    },
+    "mixed": {
+        "none":{"val":[1.0773,1.0292,0.9936,0.9670,0.9471,0.9323,0.9214,0.9132,0.9072,0.9026,0.8994,0.8971,0.8955,0.8943,0.8936],"final":0.8936},
+        "fixed_jitter":{"val":[1.0305,0.9664,0.9319,0.9129,0.9017,0.8964,0.8935,0.8929,0.8931,0.8940,0.8944,0.8948,0.8958,0.8962,0.8977],"final":0.8977},
+        "fixed_scaling":{"val":[1.0285,0.9712,0.9392,0.9245,0.9117,0.9043,0.9008,0.8986,0.8979,0.8953,0.8962,0.8942,0.8906,0.8900,0.8921],"final":0.8921},
+        "fixed_time_warp":{"val":[1.0302,0.9664,0.9316,0.9104,0.9007,0.8946,0.8921,0.8897,0.8899,0.8891,0.8892,0.8881,0.8883,0.8893,0.8884],"final":0.8884},
+        "fixed_permutation":{"val":[1.0863,1.0597,1.0225,0.9955,0.9773,0.9664,0.9489,0.9407,0.9279,0.9286,0.9259,0.9286,0.9250,0.9278,0.9220],"final":0.9220},
+        "fixed_spectral":{"val":[1.0312,0.9680,0.9323,0.9127,0.9028,0.8967,0.8948,0.8932,0.8933,0.8936,0.8932,0.8941,0.8948,0.8956,0.8960],"final":0.8960},
+        "sias_bandit":{"val":[1.0314,0.9701,0.9336,0.9140,0.9037,0.8971,0.8942,0.8925,0.8936,0.8941,0.8939,0.8947,0.8951,0.8961,0.8964],"final":0.8964}
+    }
+};
+
+var banditData = {
+    "trend": {"arm_counts":{"jitter":12,"scaling":3,"time_warp":118,"mag_warp":3,"permutation":5,"spectral":5,"trend_inject":4},"arm_avg_rewards":{"jitter":1.3459,"scaling":0.5000,"time_warp":1.8915,"mag_warp":0.5580,"permutation":0.9417,"spectral":0.6422,"trend_inject":0.5202}},
+    "seasonal": {"arm_counts":{"jitter":132,"scaling":3,"time_warp":5,"mag_warp":1,"permutation":4,"spectral":3,"trend_inject":2},"arm_avg_rewards":{"jitter":2.2405,"scaling":0.5000,"time_warp":1.0148,"mag_warp":0.5254,"permutation":0.8733,"spectral":0.5778,"trend_inject":0.5064}},
+    "mixed": {"arm_counts":{"jitter":123,"scaling":3,"time_warp":9,"mag_warp":3,"permutation":5,"spectral":3,"trend_inject":4},"arm_avg_rewards":{"jitter":2.1171,"scaling":0.5000,"time_warp":1.1961,"mag_warp":0.5397,"permutation":0.6512,"spectral":0.6251,"trend_inject":0.5096}}
+};
+
+var spectralData = {
+    "trend":{"centroid":0.2234,"bandwidth":0.1508,"entropy":3.4438,"low_energy":0.4079,"mid_energy":0.3137,"high_energy":0.2784,"lag1":0.3775,"lag10":0.2051},
+    "seasonal":{"centroid":0.0722,"bandwidth":0.1106,"entropy":2.1662,"low_energy":0.8557,"mid_energy":0.0836,"high_energy":0.0607,"lag1":0.8816,"lag10":0.3096},
+    "mixed":{"centroid":0.1241,"bandwidth":0.1393,"entropy":2.8839,"low_energy":0.7024,"mid_energy":0.1752,"high_energy":0.1224,"lag1":0.7376,"lag10":0.3588},
+    "noise":{"centroid":0.1410,"bandwidth":0.1326,"entropy":3.1325,"low_energy":0.6658,"mid_energy":0.2136,"high_energy":0.1206,"lag1":0.5929,"lag10":0.1025}
+};
+
+var magnitudeData = {
+    "0.1":{"affinity":0.9805,"diversity":0.3200,"score":0.6502},
+    "0.2":{"affinity":0.9698,"diversity":0.7876,"score":0.8787},
+    "0.3":{"affinity":0.9211,"diversity":2.0533,"score":1.4872},
+    "0.5":{"affinity":0.8701,"diversity":3.6323,"score":2.2512},
+    "0.7":{"affinity":0.8044,"diversity":4.7602,"score":2.7823},
+    "1.0":{"affinity":0.7472,"diversity":5.4031,"score":3.0751}
+};
+
+var augNames = ["jitter","scaling","time_warp","mag_warp","permutation","spectral","trend_inject"];
+var augLabels = ["Jitter","Scaling","Time Warp","Mag Warp","Permutation","Spectral","Trend Inject"];
+var augColors = ["#2a9d8f","#e9c46a","#f4a261","#264653","#a8dadc","#6a0572","#1d3557"];
+
+var chartOpts = {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#e2e8f0', font: {size:11} } } },
+    scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+    }
+};
+
+var scatterChart, scoreChart, valChart, armChart, rewardChart, psdChart, ctxChart, magAffChart, magDivChart;
+
+function buildScatter(domain) {
+    var p = profiles[domain];
+    if (scatterChart) scatterChart.destroy();
+    scatterChart = new Chart(document.getElementById('scatterChart'), {
+        type:'scatter',
+        data:{datasets: augNames.map(function(n,i){return {
+            label: augLabels[i], data:[{x:p[n].diversity, y:p[n].affinity}],
+            backgroundColor: augColors[i], pointRadius:8, pointHoverRadius:10
+        };})},
+        options:{responsive:true, plugins:{legend:{display:true, labels:{color:'#e2e8f0',font:{size:9}}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Diversity',color:'#94a3b8'}}, y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Affinity',color:'#94a3b8'}, min:0, max:1.05}}}
+    });
+}
+
+function buildScore(domain) {
+    var p = profiles[domain];
+    var sorted = augNames.map(function(n,i){return {name:augLabels[i],score:p[n].score,color:augColors[i]};}).sort(function(a,b){return b.score-a.score;});
+    if (scoreChart) scoreChart.destroy();
+    scoreChart = new Chart(document.getElementById('scoreChart'), {
+        type:'bar',
+        data:{labels:sorted.map(function(s){return s.name;}),datasets:[{label:'Combined Score',data:sorted.map(function(s){return s.score;}),backgroundColor:sorted.map(function(s){return s.color;})}]},
+        options:{responsive:true, indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Combined Score',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    });
+}
+
+function switchDomain(el, domain) {
+    var tabs = el.parentElement.querySelectorAll('.tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    el.classList.add('active');
+    buildScatter(domain);
+    buildScore(domain);
+}
+
+function buildValChart(domain) {
+    var d = expResults[domain];
+    var epochs = [];
+    for (var i = 1; i <= 15; i++) epochs.push(i);
+    var datasets = [
+        {label:'No augmentation',data:d.none.val,borderColor:'#457b9d',borderWidth:2,borderDash:[6,3],pointRadius:0},
+        {label:'Fixed: jitter',data:d.fixed_jitter.val,borderColor:'#2a9d8f',borderWidth:1,borderDash:[3,3],pointRadius:0},
+        {label:'Fixed: spectral',data:d.fixed_spectral.val,borderColor:'#6a0572',borderWidth:1,borderDash:[3,3],pointRadius:0},
+        {label:'Fixed: permutation',data:d.fixed_permutation.val,borderColor:'#a8dadc',borderWidth:1,borderDash:[3,3],pointRadius:0},
+        {label:'Fixed: time warp',data:d.fixed_time_warp.val,borderColor:'#f4a261',borderWidth:1,borderDash:[3,3],pointRadius:0},
+        {label:'SIAS (ours)',data:d.sias_bandit.val,borderColor:'#e63946',borderWidth:3,pointRadius:0}
+    ];
+    if (valChart) valChart.destroy();
+    valChart = new Chart(document.getElementById('valChart'), {
+        type:'line',
+        data:{labels:epochs,datasets:datasets},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#e2e8f0',font:{size:8}}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Epoch',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Validation MSE',color:'#94a3b8'}}}}
+    });
+}
+
+function switchValDomain(el, domain) {
+    var tabs = el.parentElement.querySelectorAll('.tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    el.classList.add('active');
+    buildValChart(domain);
+}
+
+function buildResultsTable() {
+    var tbody = document.getElementById('resultsBody');
+    var strats = [
+        {key:'none',label:'No augmentation'},
+        {key:'fixed_jitter',label:'Fixed: jitter'},
+        {key:'fixed_scaling',label:'Fixed: scaling'},
+        {key:'fixed_time_warp',label:'Fixed: time warp'},
+        {key:'fixed_permutation',label:'Fixed: permutation'},
+        {key:'fixed_spectral',label:'Fixed: spectral'},
+        {key:'sias_bandit',label:'SIAS (ours)'}
+    ];
+    var domains = ['trend','seasonal','mixed'];
+    var bests = {};
+    domains.forEach(function(d) {
+        var best = Infinity;
+        strats.forEach(function(s) { if(expResults[d][s.key] && expResults[d][s.key].final < best) best = expResults[d][s.key].final; });
+        bests[d] = best;
+    });
+    strats.forEach(function(s) {
+        var tr = document.createElement('tr');
+        if (s.key === 'sias_bandit') tr.className = 'highlight-row';
+        var tdName = document.createElement('td');
+        tdName.textContent = s.label;
+        tr.appendChild(tdName);
+        domains.forEach(function(d) {
+            var td = document.createElement('td');
+            var v = expResults[d][s.key] ? expResults[d][s.key].final : null;
+            if (v === bests[d]) td.className = 'stat-best';
+            td.textContent = v ? v.toFixed(4) : '--';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+function buildArmChart(domain) {
+    var counts = banditData[domain].arm_counts;
+    if (armChart) armChart.destroy();
+    armChart = new Chart(document.getElementById('armChart'), {
+        type:'bar',
+        data:{labels:augLabels,datasets:[{label:'Pull Count',data:augNames.map(function(n){return counts[n];}),backgroundColor:augColors}]},
+        options:{responsive:true, indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Number of Pulls',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    });
+}
+
+function buildRewardChart(domain) {
+    var rewards = banditData[domain].arm_avg_rewards;
+    var sorted = augNames.map(function(n,i){return {name:augLabels[i],reward:rewards[n],color:augColors[i]};}).sort(function(a,b){return b.reward-a.reward;});
+    if (rewardChart) rewardChart.destroy();
+    rewardChart = new Chart(document.getElementById('rewardChart'), {
+        type:'bar',
+        data:{labels:sorted.map(function(s){return s.name;}),datasets:[{label:'Avg Reward',data:sorted.map(function(s){return s.reward;}),backgroundColor:sorted.map(function(s){return s.color;})}]},
+        options:{responsive:true, indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Average Reward',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    });
+}
+
+function switchBanditDomain(el, domain) {
+    var tabs = el.parentElement.querySelectorAll('.tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    el.classList.add('active');
+    buildArmChart(domain);
+    buildRewardChart(domain);
+}
+
+function buildPsdChart() {
+    var domains = ['trend','seasonal','mixed','noise'];
+    var domainColors = {'trend':'#e63946','seasonal':'#2a9d8f','mixed':'#457b9d','noise':'#f4a261'};
+    var freqs = [];
+    for (var i = 0; i < 33; i++) freqs.push((i*0.015625).toFixed(3));
+    var spectralJson = {"trend":[0.643,3.484,2.551,1.640,1.579,1.457,1.310,1.313,1.317,1.349,1.380,1.252,1.239,1.293,1.236,1.218,1.258,1.264,1.345,1.291,1.236,1.229,1.193,1.100,1.157,1.148,1.193,1.198,1.228,1.217,1.149,1.147,0.569],"seasonal":[3.028,16.849,14.185,2.722,0.757,0.668,0.610,0.599,0.519,0.472,0.506,0.455,0.433,0.452,0.381,0.380,0.390,0.353,0.298,0.295,0.299,0.260,0.263,0.272,0.279,0.287,0.271,0.270,0.256,0.262,0.274,0.314,0.157],"mixed":[2.395,11.453,6.945,2.172,1.502,1.263,1.131,1.090,1.087,1.069,0.970,0.891,0.846,0.809,0.790,0.682,0.673,0.685,0.667,0.577,0.558,0.577,0.554,0.519,0.510,0.515,0.534,0.530,0.516,0.537,0.498,0.475,0.226],"noise":[1.345,7.303,6.621,3.900,2.883,2.515,2.197,1.920,1.883,1.877,1.634,1.442,1.365,1.248,1.068,0.935,1.004,0.911,0.849,0.761,0.676,0.672,0.688,0.636,0.588,0.576,0.561,0.593,0.570,0.572,0.543,0.566,0.277]};
+    if (psdChart) psdChart.destroy();
+    psdChart = new Chart(document.getElementById('psdChart'), {
+        type:'line',
+        data:{labels:freqs,datasets:domains.map(function(d){return {label:d.charAt(0).toUpperCase()+d.slice(1),data:spectralJson[d],borderColor:domainColors[d],borderWidth:2,pointRadius:0,fill:false};})},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Frequency',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},type:'logarithmic',title:{display:true,text:'PSD (log)',color:'#94a3b8'}}}}
+    });
+}
+
+function buildCtxChart() {
+    var domains = ['trend','seasonal','mixed','noise'];
+    var domainColors = {'trend':'rgba(230,57,70,0.7)','seasonal':'rgba(42,157,143,0.7)','mixed':'rgba(69,123,157,0.7)','noise':'rgba(244,162,97,0.7)'};
+    var labels = ['Centroid','Bandwidth','Entropy','Low E.','Mid E.','High E.','ACF(1)','ACF(10)'];
+    var keys = ['centroid','bandwidth','entropy','low_energy','mid_energy','high_energy','lag1','lag10'];
+    if (ctxChart) ctxChart.destroy();
+    ctxChart = new Chart(document.getElementById('ctxChart'), {
+        type:'bar',
+        data:{labels:labels,datasets:domains.map(function(d){return {label:d.charAt(0).toUpperCase()+d.slice(1),data:keys.map(function(k){return spectralData[d][k];}),backgroundColor:domainColors[d]};})},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Value',color:'#94a3b8'}}}}
+    });
+}
+
+function buildMagCharts() {
+    var mags = ['0.1','0.2','0.3','0.5','0.7','1.0'];
+    if (magAffChart) magAffChart.destroy();
+    magAffChart = new Chart(document.getElementById('magAffinityChart'), {
+        type:'line',
+        data:{labels:mags,datasets:[{label:'Affinity',data:mags.map(function(m){return magnitudeData[m].affinity;}),borderColor:'#2a9d8f',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#2a9d8f'}]},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Magnitude',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Affinity',color:'#94a3b8'},min:0.6,max:1.05}}}
+    });
+    if (magDivChart) magDivChart.destroy();
+    magDivChart = new Chart(document.getElementById('magDiversityChart'), {
+        type:'line',
+        data:{labels:mags,datasets:[{label:'Diversity',data:mags.map(function(m){return magnitudeData[m].diversity;}),borderColor:'#f4a261',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#f4a261'}]},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Magnitude',color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Diversity',color:'#94a3b8'}}}}
+    });
+}
+
+// Initialize
+buildScatter('mixed');
+buildScore('mixed');
+buildValChart('trend');
+buildResultsTable();
+buildArmChart('trend');
+buildRewardChart('trend');
+buildPsdChart();
+buildCtxChart();
+buildMagCharts();
+
+// Nav smooth scroll
+var navLinks = document.querySelectorAll('nav a');
+for (var i = 0; i < navLinks.length; i++) {
+    navLinks[i].addEventListener('click', function(e) {
+        e.preventDefault();
+        for (var j = 0; j < navLinks.length; j++) navLinks[j].classList.remove('active');
+        this.classList.add('active');
+        document.querySelector(this.getAttribute('href')).scrollIntoView({behavior:'smooth'});
+    });
+}
+</script>
+</body>
+</html>

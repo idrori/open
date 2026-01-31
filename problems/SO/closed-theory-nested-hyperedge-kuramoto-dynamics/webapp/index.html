@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Closed Theory for Nested Hyperedge Kuramoto Dynamics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .full-width { grid-column: 1 / -1; }
+  .chart-container { position: relative; height: 350px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-box { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .metric-box .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+  .metric-box .delta { font-size: 0.85rem; color: var(--success); font-weight: 600; }
+  .formula { background: #f0f4f8; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; margin: 0.5rem 0; font-family: 'Courier New', monospace; font-size: 0.9rem; border-radius: 0 4px 4px 0; }
+  .controls { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+  .controls label { font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+  select, input[type=range] { padding: 0.4rem; border-radius: 4px; border: 1px solid var(--border); }
+  input[type=range] { width: 200px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Closed Theory for Nested Hyperedge Kuramoto Dynamics</h1>
+  <p>Analytical framework for synchronization onset and bistability on regular hypergraphs with tunable inter-order nestedness parameter alpha.</p>
+</div>
+<div class="container">
+  <div class="metric-grid">
+    <div class="metric-box"><div class="value">33.3%</div><div class="label">Onset Reduction (alpha=1)</div><div class="delta">sigma1*: 1.0 to 0.667</div></div>
+    <div class="metric-box"><div class="value">12.5%</div><div class="label">Bistability Increase</div><div class="delta">hat_sigma2: 1.0 to 1.125</div></div>
+    <div class="metric-box"><div class="value">N=200</div><div class="label">Simulation Nodes</div><div class="delta">k1=10, k2=5</div></div>
+    <div class="metric-box"><div class="value">0.5</div><div class="label">Lorentzian Width (gamma)</div><div class="delta">sigma2 = 3.0</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Synchronization Onset vs Nestedness</h2>
+      <div class="formula">sigma1*(alpha) = 2*gamma - alpha*sigma2*2k2/[k1(k1-1)]</div>
+      <div class="chart-container"><canvas id="chartOnset"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Bistability Threshold vs Nestedness</h2>
+      <div class="formula">hat_sigma2(alpha) = 2*gamma / [1 - alpha*2k2/(k1(k1-1))]</div>
+      <div class="chart-container"><canvas id="chartBistab"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Interactive: Onset and Bistability vs Parameters</h2>
+      <div class="controls">
+        <label>k1:</label><select id="selK1"><option value="6">6</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select>
+        <label>k2:</label><select id="selK2"><option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option></select>
+        <label>gamma:</label><input type="range" id="sliderGamma" min="0.1" max="2" step="0.1" value="0.5"><span id="gammaVal">0.5</span>
+        <label>sigma2:</label><input type="range" id="sliderSigma2" min="0.5" max="10" step="0.5" value="3"><span id="sigma2Val">3.0</span>
+      </div>
+      <div class="chart-container"><canvas id="chartInteractive"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Robustness Across Degree Configurations</h2>
+      <div class="chart-container"><canvas id="chartRobust"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Degree Configuration Details</h2>
+      <table>
+        <thead><tr><th>(k1, k2)</th><th>Onset alpha=0</th><th>Onset alpha=1</th><th>Reduction %</th><th>Bistab Increase %</th></tr></thead>
+        <tbody>
+          <tr><td>(6, 3)</td><td>1.000</td><td>0.400</td><td>60.0%</td><td>25.0%</td></tr>
+          <tr><td>(10, 5)</td><td>1.000</td><td>0.667</td><td>33.3%</td><td>12.5%</td></tr>
+          <tr><td>(15, 8)</td><td>1.000</td><td>0.771</td><td>22.9%</td><td>8.3%</td></tr>
+          <tr><td>(20, 10)</td><td>1.000</td><td>0.842</td><td>15.8%</td><td>5.6%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const alphas = [0,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0];
+const onsetTheory = [1.0,0.983,0.967,0.95,0.933,0.917,0.9,0.883,0.867,0.85,0.833,0.817,0.8,0.783,0.767,0.75,0.733,0.717,0.7,0.683,0.667];
+const bistabTheory = [1.0,1.006,1.011,1.017,1.023,1.029,1.034,1.040,1.047,1.053,1.059,1.065,1.071,1.078,1.084,1.091,1.098,1.104,1.111,1.118,1.125];
+
+new Chart(document.getElementById('chartOnset'), {
+  type:'line', data:{labels:alphas.map(a=>a.toFixed(2)),datasets:[
+    {label:'Theory',data:onsetTheory,borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.1)',fill:true,tension:0.3,pointRadius:2}
+  ]}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'sigma1*'},min:0.5,max:1.2},x:{title:{display:true,text:'alpha'}}}}
+});
+
+new Chart(document.getElementById('chartBistab'), {
+  type:'line', data:{labels:alphas.map(a=>a.toFixed(2)),datasets:[
+    {label:'Theory',data:bistabTheory,borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',fill:true,tension:0.3,pointRadius:2}
+  ]}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'hat_sigma2'},min:0.9,max:1.2},x:{title:{display:true,text:'alpha'}}}}
+});
+
+const robustData = {labels:['(6,3)','(10,5)','(15,8)','(20,10)'],onset:[60.0,33.3,22.9,15.8],bistab:[25.0,12.5,8.3,5.6]};
+new Chart(document.getElementById('chartRobust'), {
+  type:'bar', data:{labels:robustData.labels,datasets:[
+    {label:'Onset Reduction %',data:robustData.onset,backgroundColor:'rgba(41,128,185,0.7)',borderWidth:1},
+    {label:'Bistab Increase %',data:robustData.bistab,backgroundColor:'rgba(231,76,60,0.7)',borderWidth:1}
+  ]}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Percentage (%)'}}}}
+});
+
+let interactiveChart;
+function updateInteractive(){
+  const k1=parseInt(document.getElementById('selK1').value);
+  const k2=parseInt(document.getElementById('selK2').value);
+  const gamma=parseFloat(document.getElementById('sliderGamma').value);
+  const sigma2=parseFloat(document.getElementById('sliderSigma2').value);
+  document.getElementById('gammaVal').textContent=gamma.toFixed(1);
+  document.getElementById('sigma2Val').textContent=sigma2.toFixed(1);
+  const overlap=2*k2/(k1*(k1-1));
+  const onsetVals=alphas.map(a=>Math.max(0,2*gamma-a*sigma2*overlap));
+  const bistabVals=alphas.map(a=>{const d=1-a*overlap; return d>0.01?2*gamma/d:50;});
+  if(interactiveChart)interactiveChart.destroy();
+  interactiveChart=new Chart(document.getElementById('chartInteractive'),{
+    type:'line',data:{labels:alphas.map(a=>a.toFixed(2)),datasets:[
+      {label:'Onset sigma1*',data:onsetVals,borderColor:'#2980b9',tension:0.3,pointRadius:2},
+      {label:'Bistab hat_sigma2',data:bistabVals,borderColor:'#e74c3c',tension:0.3,pointRadius:2}
+    ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Coupling Threshold'}},x:{title:{display:true,text:'alpha'}}}}
+  });
+}
+document.getElementById('selK1').addEventListener('change',updateInteractive);
+document.getElementById('selK2').addEventListener('change',updateInteractive);
+document.getElementById('sliderGamma').addEventListener('input',updateInteractive);
+document.getElementById('sliderSigma2').addEventListener('input',updateInteractive);
+updateInteractive();
+</script>
+</body>
+</html>

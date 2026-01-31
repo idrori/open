@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>End-to-End Controllable Song Generation with Multi-Condition Inputs</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .full-width { grid-column: 1 / -1; }
+  .chart-container { position: relative; height: 350px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-box { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .metric-box .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+  .metric-box .delta { font-size: 0.85rem; color: var(--success); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; font-weight: 600; }
+  tr:hover { background: #f0f4f8; }
+  .controls { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; }
+  .controls label { font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+  select { padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.85rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>End-to-End Controllable Song Generation with Multi-Condition Inputs</h1>
+  <p>Cross-modal fusion framework for jointly conditioning on style descriptions, lyrics, and reference audio. 12,800 generations across 8 genres and 4 fusion methods.</p>
+</div>
+<div class="container">
+  <div class="metric-grid">
+    <div class="metric-box"><div class="value">0.774</div><div class="label">Best OCI (Gated Attention)</div><div class="delta">+123.5% vs baseline</div></div>
+    <div class="metric-box"><div class="value">9.08</div><div class="label">Best FAD (lower=better)</div><div class="delta">-56% vs unconditional</div></div>
+    <div class="metric-box"><div class="value">70.9%</div><div class="label">Synergy (Superadditivity)</div><div class="delta">Gated Attention</div></div>
+    <div class="metric-box"><div class="value">12,800</div><div class="label">Total Generations</div><div class="delta">8 genres x 8 configs x 4 models</div></div>
+  </div>
+  <div class="grid">
+    <div class="card"><h2>OCI by Condition Configuration</h2><div class="chart-container"><canvas id="chartOCI"></canvas></div></div>
+    <div class="card"><h2>Fusion Comparison (Triple-Condition)</h2><div class="chart-container"><canvas id="chartFusion"></canvas></div></div>
+    <div class="card"><h2>Condition Ablation (Gated Attention)</h2><div class="chart-container"><canvas id="chartAblation"></canvas></div></div>
+    <div class="card"><h2>Synergy Analysis</h2><div class="chart-container"><canvas id="chartSynergy"></canvas></div></div>
+    <div class="card full-width">
+      <h2>Genre Performance</h2>
+      <div class="controls"><label>Model:</label><select id="genreModel" onchange="updateGenreChart()"><option value="gated_attention">Gated Attention</option><option value="concat_fusion">Concat Fusion</option><option value="average_fusion">Average Fusion</option><option value="no_fusion_baseline">No Fusion Baseline</option></select></div>
+      <div class="chart-container"><canvas id="chartGenre"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Detailed Results</h2>
+      <table><thead><tr><th>Model</th><th>Config</th><th>FAD</th><th>Melody</th><th>Lyrics</th><th>Style</th><th>OCI</th></tr></thead><tbody id="resultsTable"></tbody></table>
+    </div>
+  </div>
+</div>
+<script>
+const ociData = [0.346,0.435,0.457,0.398,0.614,0.538,0.566,0.774];
+const configLabels = ['None','Style','Lyrics','Audio','Style+Lyrics','Style+Audio','Lyrics+Audio','All Three'];
+
+new Chart(document.getElementById('chartOCI'), {
+  type:'bar', data:{labels:configLabels, datasets:[{label:'OCI',data:ociData,backgroundColor:ociData.map((v,i)=>i===7?'#e74c3c':'rgba(41,128,185,0.7)'),borderWidth:1}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:1,title:{display:true,text:'OCI'}}}}
+});
+
+new Chart(document.getElementById('chartFusion'), {
+  type:'radar', data:{labels:['Melody Acc.','Lyrics Intel.','Style Adh.'],
+    datasets:[
+      {label:'Gated',data:[0.785,0.761,0.742],borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.15)',borderWidth:2},
+      {label:'Concat',data:[0.742,0.717,0.706],borderColor:'#e67e22',backgroundColor:'rgba(230,126,34,0.15)',borderWidth:2},
+      {label:'Average',data:[0.719,0.695,0.685],borderColor:'#27ae60',backgroundColor:'rgba(39,174,96,0.15)',borderWidth:2},
+      {label:'No Fusion',data:[0.627,0.606,0.598],borderColor:'#95a5a6',backgroundColor:'rgba(149,165,166,0.15)',borderWidth:2}
+    ]}, options:{responsive:true,maintainAspectRatio:false,scales:{r:{min:0.5,max:0.85}}}
+});
+
+new Chart(document.getElementById('chartAblation'), {
+  type:'bar', data:{labels:['Style','Lyrics','Audio','All Three'],datasets:[{label:'Delta OCI',data:[0.088,0.111,0.051,0.428],backgroundColor:['#2980b9','#3498db','#5dade2','#e74c3c'],borderWidth:1}]},
+  options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{title:{display:true,text:'Delta OCI'}}}}
+});
+
+new Chart(document.getElementById('chartSynergy'), {
+  type:'bar', data:{labels:['Gated Attention','Concat','Average','No Fusion'],
+    datasets:[
+      {label:'Sum of Singles',data:[0.250,0.250,0.250,0.217],backgroundColor:'rgba(41,128,185,0.5)',borderWidth:1},
+      {label:'Synergy Bonus',data:[0.177,0.138,0.116,0.071],backgroundColor:'rgba(231,76,60,0.7)',borderWidth:1}
+    ]}, options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Delta OCI'}}}}
+});
+
+const genreData = {
+  gated_attention:{pop:0.568,rock:0.535,jazz:0.486,classical:0.462,electronic:0.548,hiphop:0.511,folk:0.496,rnb:0.523},
+  concat_fusion:{pop:0.557,rock:0.524,jazz:0.476,classical:0.452,electronic:0.537,hiphop:0.500,folk:0.486,rnb:0.514},
+  average_fusion:{pop:0.551,rock:0.518,jazz:0.470,classical:0.446,electronic:0.531,hiphop:0.494,folk:0.480,rnb:0.509},
+  no_fusion_baseline:{pop:0.511,rock:0.480,jazz:0.436,classical:0.413,electronic:0.493,hiphop:0.458,folk:0.445,rnb:0.472}
+};
+let genreChart;
+function updateGenreChart(){
+  const m=document.getElementById('genreModel').value, gd=genreData[m], g=Object.keys(gd), v=Object.values(gd);
+  if(genreChart)genreChart.destroy();
+  genreChart=new Chart(document.getElementById('chartGenre'),{type:'bar',data:{labels:g.map(s=>s[0].toUpperCase()+s.slice(1)),datasets:[{label:'OCI',data:v,backgroundColor:v.map(x=>x>0.52?'rgba(39,174,96,0.7)':x>0.48?'rgba(41,128,185,0.7)':'rgba(230,126,34,0.7)'),borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0.35,max:0.65,title:{display:true,text:'OCI'}}}}});
+}
+updateGenreChart();
+
+const tableRows=[
+  ['Gated Attention','None',20.61,0.376,0.271,0.297,0.346],['Gated Attention','Style',18.15,0.423,0.300,0.536,0.435],
+  ['Gated Attention','Lyrics',17.73,0.425,0.559,0.332,0.457],['Gated Attention','Audio',18.68,0.553,0.291,0.321,0.398],
+  ['Gated Attention','All Three',9.08,0.785,0.761,0.742,0.774],['Concat','All Three',10.88,0.742,0.717,0.706,0.734],
+  ['Average','All Three',11.84,0.719,0.695,0.685,0.713],['No Fusion','All Three',15.71,0.627,0.606,0.598,0.625]
+];
+const tbody=document.getElementById('resultsTable');
+tableRows.forEach(function(r){
+  const tr=document.createElement('tr');
+  r.forEach(function(val,i){
+    const td=document.createElement('td');
+    td.textContent=(typeof val==='number')?(i===2?val.toFixed(2):val.toFixed(3)):val;
+    if(i===6)td.style.fontWeight='bold';
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

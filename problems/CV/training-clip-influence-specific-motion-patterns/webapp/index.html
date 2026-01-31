@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training Clip Influence on Specific Motion Patterns</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#222;--muted:#666;--border:#dde3ea}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;max-width:900px;margin:0 auto}
+header p{opacity:.85;margin-top:.5rem;font-size:.95rem}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+.card{background:var(--card);border-radius:10px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);border:1px solid var(--border)}
+.card h2{font-size:1.1rem;color:var(--primary);margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+.stat-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--bg);border-radius:8px;padding:1rem 1.25rem;flex:1;min-width:130px;text-align:center}
+.stat .val{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat .lbl{font-size:.78rem;color:var(--muted);margin-top:.25rem}
+canvas{max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:.5rem .75rem;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--primary);color:#fff;font-weight:600}
+tr:hover{background:#f0f4f8}
+</style>
+</head>
+<body>
+<header>
+<h1>Training Clip Influence on Specific Motion Patterns</h1>
+<p>Identifying which training clips drive specific motion generation behaviors</p>
+</header>
+<div class="container">
+<div class="stat-row">
+<div class="stat"><div class="val">200</div><div class="lbl">Training Clips</div></div>
+<div class="stat"><div class="val">6</div><div class="lbl">Motion Patterns</div></div>
+<div class="stat"><div class="val">0.390</div><div class="lbl">Mean MRR</div></div>
+<div class="stat"><div class="val">0.169</div><div class="lbl">Mean nDCG@20</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Precision@K by Motion Pattern</h2>
+<canvas id="precChart"></canvas>
+</div>
+<div class="card">
+<h2>Recall@K by Motion Pattern</h2>
+<canvas id="recChart"></canvas>
+</div>
+<div class="card">
+<h2>MRR and nDCG@20 by Pattern</h2>
+<canvas id="mrrChart"></canvas>
+</div>
+<div class="card">
+<h2>Score Gap (GT vs Non-GT)</h2>
+<canvas id="gapChart"></canvas>
+</div>
+</div>
+<div class="card">
+<h2>Per-Pattern Retrieval Results</h2>
+<table>
+<thead><tr><th>Pattern</th><th>GT Clips</th><th>P@5</th><th>P@10</th><th>R@20</th><th>MRR</th><th>nDCG@20</th><th>Avg GT Rank</th></tr></thead>
+<tbody>
+<tr><td>Horizontal Pan</td><td>33</td><td>0.00</td><td>0.10</td><td>0.030</td><td>0.111</td><td>0.043</td><td>109.5</td></tr>
+<tr><td>Vertical Tilt</td><td>25</td><td>0.00</td><td>0.10</td><td>0.160</td><td>0.143</td><td>0.154</td><td>106.8</td></tr>
+<tr><td>Diagonal Slide</td><td>41</td><td>0.20</td><td>0.20</td><td>0.073</td><td>0.250</td><td>0.141</td><td>91.8</td></tr>
+<tr><td>Rotation CW</td><td>31</td><td>0.20</td><td>0.20</td><td>0.129</td><td>0.500</td><td>0.211</td><td>98.9</td></tr>
+<tr style="font-weight:700"><td>Zoom In</td><td>45</td><td>0.40</td><td>0.40</td><td>0.133</td><td>1.000</td><td>0.357</td><td>95.2</td></tr>
+<tr><td>Random Motion</td><td>25</td><td>0.20</td><td>0.10</td><td>0.080</td><td>0.333</td><td>0.104</td><td>112.1</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<script>
+const patterns=['Horiz Pan','Vert Tilt','Diag Slide','Rotation CW','Zoom In','Random'];
+const p5=[0,0,0.2,0.2,0.4,0.2];
+const p10=[0.1,0.1,0.2,0.2,0.4,0.1];
+const p20=[0.05,0.2,0.15,0.2,0.3,0.1];
+new Chart(document.getElementById('precChart'),{type:'bar',data:{labels:patterns,datasets:[{label:'P@5',data:p5,backgroundColor:'#1a3a5c'},{label:'P@10',data:p10,backgroundColor:'#2980b9'},{label:'P@20',data:p20,backgroundColor:'#85c1e9'}]},options:{responsive:true,scales:{y:{title:{display:true,text:'Precision'},min:0,max:0.5}}}});
+const r5=[0,0,0.024,0.032,0.044,0.04];
+const r10=[0.030,0.04,0.049,0.065,0.089,0.04];
+const r20=[0.030,0.16,0.073,0.129,0.133,0.08];
+new Chart(document.getElementById('recChart'),{type:'bar',data:{labels:patterns,datasets:[{label:'R@5',data:r5,backgroundColor:'#1a3a5c'},{label:'R@10',data:r10,backgroundColor:'#2980b9'},{label:'R@20',data:r20,backgroundColor:'#85c1e9'}]},options:{responsive:true,scales:{y:{title:{display:true,text:'Recall'}}}}});
+const mrr=[0.111,0.143,0.25,0.5,1.0,0.333];
+const ndcg=[0.043,0.154,0.141,0.211,0.357,0.104];
+new Chart(document.getElementById('mrrChart'),{type:'bar',data:{labels:patterns,datasets:[{label:'MRR',data:mrr,backgroundColor:'#2980b9',borderRadius:4},{label:'nDCG@20',data:ndcg,backgroundColor:'#e67e22',borderRadius:4}]},options:{responsive:true,scales:{y:{title:{display:true,text:'Score'},min:0,max:1.1}}}});
+const scoreGap=[-0.0136,-0.009,0.012,0.0077,0.0062,-0.0147];
+const gapColors=scoreGap.map(g=>g>=0?'#27ae60':'#e74c3c');
+new Chart(document.getElementById('gapChart'),{type:'bar',data:{labels:patterns,datasets:[{label:'Score Gap',data:scoreGap,backgroundColor:gapColors,borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Mean Score Gap (GT - Non-GT)'}}}}});
+</script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atmosphere Retention of Rocky Planets Around M Dwarfs</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #2980b9;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #2c3e50;
+  --border: #dee2e6;
+  --success: #27ae60;
+  --danger: #e74c3c;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+header {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: #fff;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.summary-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 1.2rem;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-left: 4px solid var(--accent);
+}
+.summary-card .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.summary-card .label {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.3rem;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+.chart-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.chart-card h3 {
+  color: var(--primary);
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.5rem;
+}
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-height: 350px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+table th {
+  background: var(--primary);
+  color: #fff;
+  padding: 0.6rem;
+  text-align: left;
+}
+table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+table tr:nth-child(even) { background: #f0f4f8; }
+.retained { color: var(--success); font-weight: 600; }
+footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: #888;
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+}
+@media (max-width: 600px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  header h1 { font-size: 1.2rem; }
+  .summary-card .value { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Atmosphere Retention of Rocky Planets Around M Dwarfs</h1>
+  <p>A computational population study evaluating atmospheric retention using the cosmic shoreline framework and energy-limited escape modeling across 5,000 simulated planet-star systems.</p>
+</header>
+
+<div class="container">
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="value">97.6%</div>
+      <div class="label">Overall Retention Fraction</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">100%</div>
+      <div class="label">Habitable Zone Retention</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">5,000</div>
+      <div class="label">Simulated Systems</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">1,324</div>
+      <div class="label">JWST Viable Targets (TSM>10)</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">90</div>
+      <div class="label">HZ JWST Targets</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Retention Fraction by M Dwarf Spectral Type</h3>
+      <div class="chart-container">
+        <canvas id="retentionByType"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Retention Fraction by Orbital Period</h3>
+      <div class="chart-container">
+        <canvas id="retentionByPeriod"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Known Target Analysis: Fluence Ratios</h3>
+      <div class="chart-container">
+        <canvas id="knownTargets"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Known Targets: Detailed Properties</h3>
+      <table>
+        <thead>
+          <tr><th>Planet</th><th>v_esc (km/s)</th><th>Fluence Ratio</th><th>T_eq (K)</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>TOI-6716 b</td><td>11.2</td><td>0.030</td><td>358</td><td class="retained">Retained</td></tr>
+          <tr><td>TRAPPIST-1 e</td><td>9.7</td><td>0.061</td><td>326</td><td class="retained">Retained</td></tr>
+          <tr><td>TRAPPIST-1 f</td><td>11.2</td><td>0.020</td><td>284</td><td class="retained">Retained</td></tr>
+          <tr><td>TRAPPIST-1 g</td><td>12.0</td><td>0.010</td><td>258</td><td class="retained">Retained</td></tr>
+          <tr><td>LHS 1140 b</td><td>16.8</td><td>0.001</td><td>273</td><td class="retained">Retained</td></tr>
+          <tr><td>Proxima Cen b</td><td>11.5</td><td>0.023</td><td>343</td><td class="retained">Retained</td></tr>
+          <tr><td>GJ 1132 b</td><td>12.9</td><td>0.210</td><td>721</td><td class="retained">Retained</td></tr>
+          <tr><td>GJ 486 b</td><td>15.0</td><td>0.120</td><td>768</td><td class="retained">Retained</td></tr>
+          <tr><td>Gliese 12 b</td><td>11.0</td><td>0.027</td><td>363</td><td class="retained">Retained</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Data source: Computational population synthesis (N=5,000). Cosmic shoreline framework (Zahnle &amp; Catling 2017). Energy-limited escape model.
+</footer>
+
+<script>
+const PRIMARY = '#1a3a5c';
+const ACCENT = '#2980b9';
+const SUCCESS = '#27ae60';
+const WARN = '#f39c12';
+
+// --- Retention by Spectral Type ---
+const retentionData = {
+  M0: 0.9785, M1: 0.9534, M2: 0.9552, M3: 0.9655,
+  M4: 0.9793, M5: 0.9765, M6: 0.9801, M7: 0.9981, M8: 0.9964
+};
+
+new Chart(document.getElementById('retentionByType'), {
+  type: 'bar',
+  data: {
+    labels: Object.keys(retentionData),
+    datasets: [{
+      label: 'Retention Fraction',
+      data: Object.values(retentionData).map(v => v * 100),
+      backgroundColor: Object.values(retentionData).map(v =>
+        v > 0.98 ? SUCCESS : v > 0.96 ? ACCENT : WARN
+      ),
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `Retention: ${ctx.raw.toFixed(2)}%`
+        }
+      }
+    },
+    scales: {
+      y: {
+        min: 90,
+        max: 101,
+        title: { display: true, text: 'Retention (%)' }
+      },
+      x: {
+        title: { display: true, text: 'Spectral Type' }
+      }
+    }
+  }
+});
+
+// --- Retention by Period ---
+const periodCenters = [0.57,0.72,0.92,1.18,1.50,1.91,2.43,3.10,3.95,5.04,6.42,8.18,10.42,13.28,16.92,21.56,27.48,35.02,44.62];
+const periodRetention = [0.803,0.887,0.922,0.963,0.977,0.996,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0];
+
+new Chart(document.getElementById('retentionByPeriod'), {
+  type: 'line',
+  data: {
+    labels: periodCenters.map(v => v.toFixed(1)),
+    datasets: [{
+      label: 'Retention Fraction',
+      data: periodRetention.map(v => v * 100),
+      borderColor: ACCENT,
+      backgroundColor: 'rgba(41,128,185,0.15)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 4,
+      pointBackgroundColor: ACCENT
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: ctx => `Retention: ${ctx.raw.toFixed(1)}%`
+        }
+      }
+    },
+    scales: {
+      y: {
+        min: 75,
+        max: 102,
+        title: { display: true, text: 'Retention (%)' }
+      },
+      x: {
+        title: { display: true, text: 'Orbital Period (days)' }
+      }
+    }
+  }
+});
+
+// --- Known Targets ---
+const targets = [
+  { name: 'TOI-6716 b', ratio: 0.030 },
+  { name: 'TRAPPIST-1 e', ratio: 0.061 },
+  { name: 'TRAPPIST-1 f', ratio: 0.020 },
+  { name: 'TRAPPIST-1 g', ratio: 0.010 },
+  { name: 'LHS 1140 b', ratio: 0.001 },
+  { name: 'Proxima Cen b', ratio: 0.023 },
+  { name: 'GJ 1132 b', ratio: 0.210 },
+  { name: 'GJ 486 b', ratio: 0.120 },
+  { name: 'Gliese 12 b', ratio: 0.027 }
+];
+
+new Chart(document.getElementById('knownTargets'), {
+  type: 'bar',
+  data: {
+    labels: targets.map(t => t.name),
+    datasets: [{
+      label: 'Fluence Ratio (vs. Cosmic Shoreline)',
+      data: targets.map(t => t.ratio),
+      backgroundColor: targets.map(t =>
+        t.ratio < 0.05 ? SUCCESS : t.ratio < 0.15 ? ACCENT : WARN
+      ),
+      borderColor: PRIMARY,
+      borderWidth: 1
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: ctx => `Fluence Ratio: ${ctx.raw.toFixed(3)} (threshold = 1.0)`
+        }
+      },
+      annotation: undefined
+    },
+    scales: {
+      x: {
+        min: 0,
+        max: 0.3,
+        title: { display: true, text: 'Fluence Ratio (< 1.0 = Retained)' }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

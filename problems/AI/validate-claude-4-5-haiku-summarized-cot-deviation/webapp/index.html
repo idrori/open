@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoT Summarization Deviation Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f6f9; color: #333; }
+  header { background: var(--primary); color: #fff; padding: 2rem; text-align: center; }
+  header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  header p { font-size: 0.95rem; opacity: 0.85; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .chart-wrap { position: relative; height: 340px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { padding: 0.55rem 0.75rem; text-align: center; border-bottom: 1px solid #e0e0e0; }
+  th { background: var(--primary); color: #fff; }
+  tr:nth-child(even) { background: #f9fafb; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .kpi { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.2rem; text-align: center; }
+  .kpi .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .kpi .label { font-size: 0.82rem; color: #666; margin-top: 0.3rem; }
+  .warn { color: #e74c3c; font-weight: 700; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>CoT Summarization Deviation Analysis</h1>
+  <p>Quantifying how summarized chain-of-thought outputs affect honesty and faithfulness scores for Claude 4.5 Haiku.</p>
+</header>
+<div class="container">
+  <div class="kpi-row">
+    <div class="kpi"><div class="value">0.031</div><div class="label">Honesty MAD (3:1)</div></div>
+    <div class="kpi"><div class="value">0.047</div><div class="label">Faithfulness MAD (3:1)</div></div>
+    <div class="kpi"><div class="value">88%</div><div class="label">Min Signal Retention</div></div>
+    <div class="kpi"><div class="value">5,000</div><div class="label">Simulated CoTs</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Deviation by Compression Ratio (Signal Retention = 90%)</h2>
+    <table>
+      <thead><tr><th>Compression</th><th>Ratio</th><th>Honesty MAD</th><th>Faith. MAD</th><th>% &gt; 0.10</th></tr></thead>
+      <tbody>
+        <tr><td>1.3:1</td><td>0.75</td><td>0.012</td><td>0.018</td><td>1.1%</td></tr>
+        <tr><td>2:1</td><td>0.50</td><td>0.021</td><td>0.033</td><td>2.8%</td></tr>
+        <tr><td>3:1</td><td>0.33</td><td>0.031</td><td>0.047</td><td>6.0%</td></tr>
+        <tr><td>5:1</td><td>0.20</td><td>0.058</td><td>0.089</td><td>14.3%</td></tr>
+        <tr><td class="warn">10:1</td><td>0.10</td><td class="warn">0.142</td><td class="warn">0.198</td><td class="warn">38.7%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Deviation vs Compression Ratio</h2><div class="chart-wrap"><canvas id="deviationChart"></canvas></div></div>
+    <div class="card"><h2>Signal Retention Sensitivity</h2><div class="chart-wrap"><canvas id="retentionChart"></canvas></div></div>
+    <div class="card"><h2>Threshold Exceedance Rate</h2><div class="chart-wrap"><canvas id="thresholdChart"></canvas></div></div>
+    <div class="card"><h2>Critical Retention Requirements</h2><div class="chart-wrap"><canvas id="criticalChart"></canvas></div></div>
+  </div>
+</div>
+<script>
+const ratios = ['1.3:1','2:1','3:1','5:1','10:1'];
+
+new Chart(document.getElementById('deviationChart'),{type:'line',data:{labels:ratios,datasets:[
+  {label:'Honesty MAD',data:[0.012,0.021,0.031,0.058,0.142],borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.1)',fill:true,tension:0.3},
+  {label:'Faithfulness MAD',data:[0.018,0.033,0.047,0.089,0.198],borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',fill:true,tension:0.3}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,title:{display:true,text:'Mean Abs. Deviation'}},x:{title:{display:true,text:'Compression Ratio'}}}}});
+
+const retLabels = ['0.60','0.70','0.80','0.90','0.95','1.00'];
+new Chart(document.getElementById('retentionChart'),{type:'line',data:{labels:retLabels,datasets:[
+  {label:'Honesty MAD',data:[0.138,0.091,0.054,0.031,0.019,0.003],borderColor:'#2980b9',tension:0.3,pointRadius:5},
+  {label:'Faithfulness MAD',data:[0.187,0.128,0.079,0.047,0.028,0.005],borderColor:'#e74c3c',tension:0.3,pointRadius:5}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,title:{display:true,text:'MAD at 3:1 Compression'}},x:{title:{display:true,text:'Signal Retention Probability'}}}}});
+
+new Chart(document.getElementById('thresholdChart'),{type:'bar',data:{labels:ratios,datasets:[
+  {label:'> 0.05',data:[0.4,1.2,3.1,8.5,27.2],backgroundColor:'#f39c12'},
+  {label:'> 0.10',data:[0.1,0.5,1.8,5.2,18.4],backgroundColor:'#e67e22'},
+  {label:'> 0.15',data:[0.0,0.1,0.6,2.8,12.1],backgroundColor:'#e74c3c'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,title:{display:true,text:'Exceedance Rate (%)'}}},plugins:{legend:{position:'top'}}}});
+
+new Chart(document.getElementById('criticalChart'),{type:'bar',data:{labels:['3:1','5:1','10:1'],datasets:[
+  {label:'Min p_s (Honesty)',data:[0.88,0.94,0.98],backgroundColor:'#2980b9'},
+  {label:'Min p_f (Faithfulness)',data:[0.85,0.92,0.97],backgroundColor:'#e74c3c'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0.8,max:1.0,title:{display:true,text:'Required Signal Retention'}}},plugins:{legend:{position:'top'}}}});
+</script>
+</body>
+</html>

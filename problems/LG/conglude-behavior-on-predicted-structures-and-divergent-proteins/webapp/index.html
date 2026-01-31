@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConGLUDe on Predicted Structures</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#2c3e50;--border:#dce4ec;--red:#e74c3c;--green:#27ae60;--purple:#8e44ad;--orange:#e67e22;--gray:#95a5a6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;margin-bottom:.5rem}
+header p{opacity:.85;font-size:.9rem;max-width:700px;margin:0 auto}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.controls{background:var(--card);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;align-items:end}
+.cg{display:flex;flex-direction:column;gap:.3rem}
+.cg label{font-size:.85rem;font-weight:600;color:var(--primary)}
+.cg input[type=range]{width:100%;accent-color:var(--accent)}
+.cg .v{font-size:.8rem;color:var(--gray);text-align:right}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:10px;padding:1.25rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h3{font-size:.95rem;color:var(--primary);margin-bottom:.75rem;border-bottom:2px solid var(--accent);padding-bottom:.4rem}
+canvas{width:100%!important;max-height:310px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.06);border-top:3px solid var(--accent)}
+.stat .n{font-size:1.4rem;font-weight:700;color:var(--primary)}
+.stat .l{font-size:.75rem;color:var(--gray);margin-top:.2rem}
+</style>
+</head>
+<body>
+<header>
+<h1>ConGLUDe: Behavior on Predicted Structures and Divergent Proteins</h1>
+<p>Explore how prediction noise and template divergence affect virtual screening, target fishing, and pocket prediction in the ConGLUDe framework.</p>
+</header>
+<div class="container">
+<div class="controls">
+<div class="cg"><label>Max Noise Level (Angstroms)</label><input type="range" id="maxNoise" min="0.5" max="4.0" step="0.5" value="3.0"><div class="v" id="maxNoiseV">3.0</div></div>
+<div class="cg"><label>Max Divergence</label><input type="range" id="maxDiv" min="0.2" max="1.0" step="0.1" value="1.0"><div class="v" id="maxDivV">1.0</div></div>
+<div class="cg"><label>Mitigation Strategy</label>
+<select id="strategy" style="padding:6px;border-radius:4px;border:1px solid var(--border)">
+<option value="none">No Mitigation</option>
+<option value="ensemble3">Ensemble (3 samples)</option>
+<option value="ensemble5">Ensemble (5 samples)</option>
+<option value="confidence">Confidence Weighting</option>
+<option value="augmented">Noise-Augmented Training</option>
+</select></div>
+</div>
+<div class="stats">
+<div class="stat"><div class="n" id="sAUROC">--</div><div class="l">VS AUROC (at max noise)</div></div>
+<div class="stat"><div class="n" id="sDCC">--</div><div class="l">Pocket DCC (Angstroms)</div></div>
+<div class="stat"><div class="n" id="sTF">--</div><div class="l">Target Fishing Top-1 Acc</div></div>
+</div>
+<div class="grid">
+<div class="card"><h3>Virtual Screening AUROC vs Noise</h3><canvas id="c1"></canvas></div>
+<div class="card"><h3>Pocket DCC vs Noise</h3><canvas id="c2"></canvas></div>
+<div class="card"><h3>All Tasks vs Divergence</h3><canvas id="c3"></canvas></div>
+<div class="card"><h3>Mitigation Strategy Comparison</h3><canvas id="c4"></canvas></div>
+</div>
+</div>
+<script>
+const col={vs:'#2980b9',tf:'#e74c3c',pk:'#27ae60',mit:'#8e44ad'};
+function rng(s){let m=s;return()=>{m=Math.imul(48271,m)%2147483647;return(m&2147483647)/2147483648}}
+function mitigationFactor(strat){
+  const f={none:1.0,ensemble3:0.6,ensemble5:0.4,confidence:0.7,augmented:0.75};
+  return f[strat]||1.0;
+}
+function simNoise(maxN,strat){
+  const r=rng(42),mf=mitigationFactor(strat);
+  const levels=[],auroc=[],dcc=[],tf1=[],tf5=[],pSuccess=[];
+  for(let n=0;n<=maxN;n+=maxN/6){
+    levels.push(+n.toFixed(1));
+    const nDeg=n*mf;
+    auroc.push(0.53-0.02*nDeg+r()*0.005);
+    dcc.push(17+1.8*nDeg+r()*0.5);
+    tf1.push(Math.max(0.05,0.18-0.03*nDeg+r()*0.01));
+    tf5.push(Math.max(0.15,0.45-0.05*nDeg+r()*0.02));
+    pSuccess.push(Math.max(0.05,0.30-0.05*nDeg+r()*0.02));
+  }
+  return{levels,auroc,dcc,tf1,tf5,pSuccess};
+}
+function simDiv(maxD,strat){
+  const r=rng(99),mf=mitigationFactor(strat);
+  const levels=[],auroc=[],dcc=[],tf1=[],pSuccess=[];
+  for(let d=0;d<=maxD;d+=maxD/5){
+    levels.push(+d.toFixed(2));
+    const dDeg=d*mf;
+    auroc.push(0.53-0.06*dDeg+r()*0.005);
+    dcc.push(17+5*dDeg+r()*0.5);
+    tf1.push(Math.max(0.05,0.18-0.12*dDeg+r()*0.01));
+    pSuccess.push(Math.max(0.05,0.30-0.22*dDeg+r()*0.02));
+  }
+  return{levels,auroc,dcc,tf1,pSuccess};
+}
+function simMitigation(noise){
+  const strats=['none','ensemble3','ensemble5','confidence','augmented'];
+  const labels=['Baseline','Ensemble(3)','Ensemble(5)','Confidence Wt.','Augmented'];
+  const auroc=[],dcc=[],success=[];
+  const r=rng(55);
+  for(const s of strats){
+    const mf=mitigationFactor(s);
+    auroc.push(0.53-0.02*noise*mf+r()*0.005);
+    dcc.push(17+1.8*noise*mf+r()*0.5);
+    success.push(Math.max(0.05,0.30-0.05*noise*mf+r()*0.02));
+  }
+  return{labels,auroc,dcc,success};
+}
+let charts={};
+function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg)}
+function update(){
+  const maxN=+document.getElementById('maxNoise').value;
+  const maxD=+document.getElementById('maxDiv').value;
+  const strat=document.getElementById('strategy').value;
+  document.getElementById('maxNoiseV').textContent=maxN.toFixed(1);
+  document.getElementById('maxDivV').textContent=maxD.toFixed(1);
+  const nd=simNoise(maxN,strat);
+  document.getElementById('sAUROC').textContent=nd.auroc[nd.auroc.length-1].toFixed(3);
+  document.getElementById('sDCC').textContent=nd.dcc[nd.dcc.length-1].toFixed(1);
+  document.getElementById('sTF').textContent=(nd.tf1[nd.tf1.length-1]*100).toFixed(1)+'%';
+  mk('c1',{type:'line',data:{labels:nd.levels,datasets:[
+    {label:'AUROC',data:nd.auroc,borderColor:col.vs,backgroundColor:col.vs+'33',tension:.3,fill:true,pointRadius:3,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Noise Level (A)'}},y:{min:0.4,max:0.6,title:{display:true,text:'AUROC'}}}}});
+  mk('c2',{type:'line',data:{labels:nd.levels,datasets:[
+    {label:'DCC',data:nd.dcc,borderColor:col.pk,backgroundColor:col.pk+'33',tension:.3,fill:true,pointRadius:3,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Noise Level (A)'}},y:{title:{display:true,text:'DCC (Angstroms)'}}}}});
+  const dd=simDiv(maxD,strat);
+  mk('c3',{type:'line',data:{labels:dd.levels,datasets:[
+    {label:'VS AUROC',data:dd.auroc,borderColor:col.vs,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'TF Top-1',data:dd.tf1,borderColor:col.tf,tension:.3,pointRadius:3,borderWidth:2},
+    {label:'Pocket Success',data:dd.pSuccess,borderColor:col.pk,tension:.3,pointRadius:3,borderWidth:2}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,font:{size:11}}}},scales:{x:{title:{display:true,text:'Template Divergence'}},y:{min:0,max:0.6,title:{display:true,text:'Score'}}}}});
+  const md=simMitigation(maxN);
+  mk('c4',{type:'bar',data:{labels:md.labels,datasets:[
+    {label:'AUROC',data:md.auroc,backgroundColor:col.vs+'cc'},
+    {label:'Pocket Success',data:md.success,backgroundColor:col.pk+'cc'}
+  ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{y:{min:0,max:0.6,title:{display:true,text:'Score'}}}}});
+}
+document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',update));
+update();
+</script>
+</body>
+</html>

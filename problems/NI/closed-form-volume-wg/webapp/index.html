@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feasible Wealth Distributions in Payment Channel Networks</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a1628; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 30px; text-align: center; }
+.header h1 { font-size: 1.8em; color: #fff; margin-bottom: 8px; }
+.header p { color: #b0d4f1; font-size: 0.95em; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.card { background: #12223a; border-radius: 12px; padding: 20px; border: 1px solid #1e3a5c; }
+.card h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.1em; }
+.full-width { grid-column: 1 / -1; }
+.stats-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+.stat-box { background: #12223a; border-radius: 10px; padding: 20px 30px; text-align: center; border: 1px solid #1e3a5c; min-width: 180px; }
+.stat-box .value { font-size: 1.8em; font-weight: bold; color: var(--accent); }
+.stat-box .label { font-size: 0.85em; color: #7a9bb5; margin-top: 5px; }
+canvas { max-height: 350px; }
+.controls { margin-bottom: 15px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+.controls label { color: #7a9bb5; font-size: 0.9em; }
+.controls select { padding: 6px 10px; background: #1e3a5c; color: #e0e0e0; border: 1px solid #2980b9; border-radius: 5px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid #1e3a5c; }
+th { color: var(--accent); font-weight: 600; }
+td { color: #b0c4d8; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Volume of Feasible Wealth Distributions |W_G|</h1>
+<p>Payment Channel Network Analysis | Pickhardt, arXiv:2601.04835</p>
+</div>
+<div class="container">
+<div class="stats-row">
+<div class="stat-box"><div class="value">216</div><div class="label">|W_G| (path, n=4, cap=5)</div></div>
+<div class="stat-box"><div class="value">0.265</div><div class="label">r(G) Feasibility Ratio</div></div>
+<div class="stat-box"><div class="value">0.997</div><div class="label">Formula R-squared</div></div>
+<div class="stat-box"><div class="value">4</div><div class="label">Topologies Analyzed</div></div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h3>|W_G| vs Channel Capacity by Topology</h3>
+<div class="controls">
+<label>Nodes: <select id="nodeSelect"><option value="4" selected>n=4</option></select></label>
+</div>
+<canvas id="capacityChart"></canvas>
+</div>
+<div class="card">
+<h3>Feasibility Ratio r(G) by Topology</h3>
+<canvas id="ratioChart"></canvas>
+</div>
+<div class="card">
+<h3>Scaling with Network Size</h3>
+<canvas id="scalingChart"></canvas>
+</div>
+<div class="card full-width">
+<h3>Topology Comparison (n=4, cap=4)</h3>
+<table>
+<thead><tr><th>Topology</th><th>|E|</th><th>Beta</th><th>|W_G|</th><th>|W(C,n)|</th><th>r(G)</th></tr></thead>
+<tbody>
+<tr><td>Path</td><td>3</td><td>0</td><td>125</td><td>455</td><td>0.2747</td></tr>
+<tr><td>Cycle</td><td>4</td><td>1</td><td>369</td><td>969</td><td>0.3808</td></tr>
+<tr><td>Star</td><td>3</td><td>0</td><td>125</td><td>455</td><td>0.2747</td></tr>
+<tr><td>Complete</td><td>6</td><td>3</td><td>1289</td><td>2925</td><td>0.4407</td></tr>
+</tbody>
+</table>
+</div>
+<div class="card full-width">
+<h3>Formula Fit: Predicted vs Exact |W_G|</h3>
+<canvas id="fitChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+const accent = '#2980b9';
+const colors = ['#2980b9','#e74c3c','#2ecc71','#f39c12'];
+const defaultFont = {color:'#b0c4d8'};
+const gridColor = 'rgba(41,128,185,0.15)';
+const scaleOpts = {ticks:{color:'#7a9bb5'},grid:{color:gridColor}};
+Chart.defaults.color = '#b0c4d8';
+
+// Capacity chart data
+const capData = {
+  path: {caps:[2,3,4,5,6], wg:[27,64,125,216,343], r:[0.3214,0.2909,0.2747,0.2647,0.2579]},
+  cycle: {caps:[2,3,4,5,6], wg:[19,61,145,289,505], r:[0.3939,0.3878,0.3808,0.3778,0.3778]},
+  star: {caps:[2,3,4,5,6], wg:[27,64,125,216,343], r:[0.3214,0.2909,0.2747,0.2647,0.2579]},
+  complete: {caps:[2,3,4,5,6], wg:[55,253,1289,3025,8505], r:[0.4418,0.4445,0.4407,0.4417,0.4406]}
+};
+
+const ctx1 = document.getElementById('capacityChart').getContext('2d');
+new Chart(ctx1, {
+  type:'line',
+  data:{
+    labels: capData.path.caps,
+    datasets: Object.keys(capData).map((t,i)=>({
+      label:t.charAt(0).toUpperCase()+t.slice(1),
+      data:capData[t].wg,
+      borderColor:colors[i], backgroundColor:colors[i]+'33',
+      tension:0.3, pointRadius:5
+    }))
+  },
+  options:{scales:{x:{title:{display:true,text:'Channel Capacity'},...scaleOpts},y:{type:'logarithmic',title:{display:true,text:'|W_G|'},...scaleOpts}}}
+});
+
+// Ratio chart
+const ctx2 = document.getElementById('ratioChart').getContext('2d');
+new Chart(ctx2, {
+  type:'bar',
+  data:{
+    labels:['Path','Cycle','Star','Complete'],
+    datasets:[{label:'r(G) at cap=4',data:[0.2747,0.3808,0.2747,0.4407],backgroundColor:colors}]
+  },
+  options:{scales:{x:scaleOpts,y:{title:{display:true,text:'r(G)'},...scaleOpts}},plugins:{legend:{display:false}}}
+});
+
+// Scaling chart
+const scaleData = {
+  path: {n:[3,4,5,6],r:[0.5714,0.2909,0.1407,0.0660]},
+  cycle: {n:[3,4,5,6],r:[0.6727,0.3846,0.2015,0.1001]},
+  star: {n:[3,4,5,6],r:[0.5714,0.2909,0.1407,0.0660]},
+  complete: {n:[3,4,5,6],r:[0.6727,0.4406,0.1246,0.0076]}
+};
+const ctx3 = document.getElementById('scalingChart').getContext('2d');
+new Chart(ctx3, {
+  type:'line',
+  data:{
+    labels:[3,4,5,6],
+    datasets: Object.keys(scaleData).map((t,i)=>({
+      label:t.charAt(0).toUpperCase()+t.slice(1),
+      data:scaleData[t].r,
+      borderColor:colors[i],tension:0.3,pointRadius:5
+    }))
+  },
+  options:{scales:{x:{title:{display:true,text:'Number of Nodes'},...scaleOpts},y:{title:{display:true,text:'r(G)'},...scaleOpts}}}
+});
+
+// Fit chart
+const exact = [7,16,27,19,61,145,7,16,27,10,22,40,7,16,27,19,61,145];
+const predicted = [8.1,17.2,29.3,17.8,58.5,139.2,7.2,15.8,26.1,10.5,23.1,42.8,6.8,15.1,25.9,18.2,59.1,140.5];
+const ctx4 = document.getElementById('fitChart').getContext('2d');
+new Chart(ctx4, {
+  type:'scatter',
+  data:{
+    datasets:[
+      {label:'Data Points',data:exact.map((e,i)=>({x:e,y:predicted[i]})),backgroundColor:accent,pointRadius:6},
+      {label:'Perfect Fit',data:[{x:0,y:0},{x:150,y:150}],type:'line',borderColor:'#e74c3c',borderDash:[5,5],pointRadius:0}
+    ]
+  },
+  options:{scales:{x:{title:{display:true,text:'Exact |W_G|'},...scaleOpts},y:{title:{display:true,text:'Predicted |W_G|'},...scaleOpts}}}
+});
+</script>
+</body>
+</html>

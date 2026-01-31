@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decomposed Hybrid Reasoning for Autonomous Driving</title>
+<style>
+:root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --border: #2e3141;
+    --text: #e4e6f0;
+    --text-muted: #8b8fa3;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --red: #e74c3c;
+    --orange: #f39c12;
+    --blue: #3498db;
+    --green: #2ecc71;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+header {
+    background: linear-gradient(135deg, #1a1040 0%, #0f1117 50%, #0a1628 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 0 40px;
+}
+header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+header .subtitle { color: var(--text-muted); font-size: 1.05rem; margin-bottom: 20px; }
+.badge {
+    display: inline-block; padding: 4px 12px; border-radius: 20px;
+    font-size: 0.8rem; font-weight: 600; margin-right: 8px;
+}
+.badge-venue { background: var(--accent); color: white; }
+.badge-track { background: var(--surface2); color: var(--accent2); border: 1px solid var(--accent2); }
+nav {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+}
+nav ul { display: flex; list-style: none; gap: 0; overflow-x: auto; }
+nav li a {
+    display: block; padding: 14px 20px; color: var(--text-muted);
+    text-decoration: none; font-size: 0.9rem; font-weight: 500;
+    border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap;
+}
+nav li a:hover, nav li a.active { color: var(--accent); border-bottom-color: var(--accent); }
+section { padding: 48px 0; border-bottom: 1px solid var(--border); }
+section:last-child { border-bottom: none; }
+section h2 { font-size: 1.5rem; margin-bottom: 24px; color: var(--text); }
+section h3 { font-size: 1.15rem; margin: 20px 0 12px; color: var(--accent2); }
+.card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; margin-bottom: 20px;
+}
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; text-align: center;
+}
+.stat-card .value { font-size: 2.2rem; font-weight: 700; margin: 8px 0 4px; }
+.stat-card .label { font-size: 0.85rem; color: var(--text-muted); }
+.stat-card .delta { font-size: 0.85rem; color: var(--green); font-weight: 600; }
+.chart-container {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; margin-bottom: 24px;
+}
+.bar-chart {
+    display: flex; align-items: flex-end; gap: 6px; height: 220px;
+    padding: 0 10px; border-bottom: 2px solid var(--border); margin-bottom: 8px;
+}
+.bar-group { flex: 1; display: flex; align-items: flex-end; gap: 3px; position: relative; }
+.bar {
+    flex: 1; border-radius: 4px 4px 0 0; min-width: 16px;
+    position: relative; cursor: pointer; transition: opacity 0.2s;
+}
+.bar:hover { opacity: 0.85; }
+.bar-label {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    font-size: 0.7rem; font-weight: 600; color: var(--text); white-space: nowrap; display: none;
+}
+.bar:hover .bar-label { display: block; }
+.bar-group-label { text-align: center; font-size: 0.8rem; color: var(--text-muted); padding-top: 8px; }
+.legend { display: flex; gap: 20px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-muted); }
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+.heatmap-grid { display: grid; gap: 3px; margin: 20px 0; }
+.heatmap-cell {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    padding: 12px 4px; cursor: default; transition: transform 0.15s;
+}
+.heatmap-cell:hover { transform: scale(1.05); }
+.heatmap-header { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 8px 4px; }
+.arch-flow { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; }
+.arch-box {
+    padding: 16px 28px; border-radius: 10px; font-weight: 600;
+    text-align: center; width: 100%; max-width: 340px; position: relative;
+}
+.arch-split { display: flex; gap: 24px; width: 100%; max-width: 600px; justify-content: center; }
+.arch-split .arch-box { flex: 1; max-width: 260px; }
+.arch-arrow { font-size: 1.5rem; color: var(--text-muted); line-height: 1; }
+.arch-label { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+.demo-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.demo-controls .field { margin-bottom: 16px; }
+.demo-controls label {
+    display: block; font-size: 0.85rem; color: var(--text-muted);
+    margin-bottom: 6px; font-weight: 500;
+}
+.demo-controls select, .demo-controls input[type=range] {
+    width: 100%; padding: 8px 12px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.9rem;
+}
+.demo-controls input[type=range] { padding: 4px 0; }
+.range-val { font-size: 0.85rem; color: var(--accent2); font-weight: 600; float: right; }
+.demo-output { background: var(--surface2); border-radius: 12px; padding: 20px; }
+.decision-badge {
+    display: inline-block; padding: 6px 16px; border-radius: 8px;
+    font-weight: 700; font-size: 1.1rem; margin-bottom: 12px; color: white;
+}
+.confidence-bar { height: 8px; background: var(--surface); border-radius: 4px; overflow: hidden; margin: 8px 0 16px; }
+.confidence-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+.output-detail { font-size: 0.85rem; color: var(--text-muted); margin: 4px 0; }
+.output-detail strong { color: var(--text); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.data-table th, .data-table td {
+    padding: 10px 14px; text-align: center; border-bottom: 1px solid var(--border);
+}
+.data-table th {
+    background: var(--surface2); color: var(--text-muted); font-weight: 600;
+    font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.data-table td:first-child { text-align: left; font-weight: 500; }
+.data-table tr:hover td { background: var(--surface2); }
+.highlight { color: var(--green); font-weight: 700; }
+.constraint-box {
+    margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 0.85rem;
+}
+.constraint-ok { background: rgba(46,204,113,0.15); }
+.constraint-warn { background: rgba(231,76,60,0.15); }
+footer {
+    padding: 32px 0; text-align: center; color: var(--text-muted);
+    font-size: 0.85rem; border-top: 1px solid var(--border);
+}
+footer a { color: var(--accent); text-decoration: none; }
+@media (max-width: 768px) {
+    header h1 { font-size: 1.4rem; }
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+    .demo-panel { grid-template-columns: 1fr; }
+    .arch-split { flex-direction: column; align-items: center; }
+}
+</style>
+</head>
+<body>
+
+<header>
+<div class="container">
+    <span class="badge badge-venue">KDD 2026</span>
+    <span class="badge badge-track">Research Track</span>
+    <h1>Decomposed Hybrid Reasoning for Autonomous Driving</h1>
+    <p class="subtitle">Fusing Physics-Based and Policy-Based Constraints via Interval Arithmetic</p>
+</div>
+</header>
+
+<nav>
+<div class="container">
+<ul>
+    <li><a href="#overview" class="active">Overview</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#heatmap">Conditions</a></li>
+    <li><a href="#demo">Interactive Demo</a></li>
+    <li><a href="#physics">Physics</a></li>
+</ul>
+</div>
+</nav>
+
+<section id="overview">
+<div class="container">
+    <h2>The Problem: Hybrid Reasoning in LLMs</h2>
+    <p style="color:var(--text-muted); margin-bottom:24px;">
+        Current LLMs cannot reliably fuse physics-based numerical reasoning with policy-based symbolic reasoning for autonomous driving decisions. We propose architectural decomposition as the solution.
+    </p>
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="label">Monolithic LLM</div>
+            <div class="value" style="color:var(--red)">57.5%</div>
+            <div class="label">Overall Accuracy</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">CoT Prompting</div>
+            <div class="value" style="color:var(--orange)">62.3%</div>
+            <div class="label">Overall Accuracy</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Tool-Augmented</div>
+            <div class="value" style="color:var(--blue)">73.2%</div>
+            <div class="label">Overall Accuracy</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Hybrid (Ours)</div>
+            <div class="value" style="color:var(--green)">88.3%</div>
+            <div class="delta">+34.7 pp vs Monolithic</div>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Key Finding</h3>
+        <p>On the hardest <strong>hybrid-reasoning scenarios</strong> (requiring simultaneous physics and policy integration), our decomposed framework achieves <strong style="color:var(--green)">86.2%</strong> accuracy compared to <strong style="color:var(--red)">51.5%</strong> for monolithic LLMs &mdash; a <strong>34.7 percentage-point improvement</strong>. Physics computation errors drop from 12.2m to 0.9m (13x reduction).</p>
+    </div>
+</div>
+</section>
+
+<section id="architecture">
+<div class="container">
+    <h2>Architecture: Decomposed Hybrid Reasoning</h2>
+    <p style="color:var(--text-muted); margin-bottom:24px;">Each reasoning mode is handled by a dedicated module operating in its area of strength.</p>
+    <div class="card">
+        <div class="arch-flow">
+            <div class="arch-box" style="background:var(--surface2); border:2px solid var(--border);">Scenario Description (Natural Language)</div>
+            <div class="arch-arrow">&darr;</div>
+            <div class="arch-box" style="background:#1a3a6a; border:2px solid var(--blue);">LLM Scenario Parser<br><span class="arch-label">Extract entities, speeds, distances, conditions</span></div>
+            <div class="arch-arrow">&darr;</div>
+            <div class="arch-split">
+                <div class="arch-box" style="background:#5a1a1a; border:2px solid var(--red);">Physics Engine<br><span class="arch-label">Interval arithmetic: braking, TTC, gaps</span></div>
+                <div class="arch-box" style="background:#5a3a0a; border:2px solid var(--orange);">Policy Engine<br><span class="arch-label">Rule DB: speed limits, margins, zones</span></div>
+            </div>
+            <div class="arch-arrow">&darr;</div>
+            <div class="arch-box" style="background:#0a4a2a; border:2px solid var(--green);">Constraint Fusion &amp; Decision<br><span class="arch-label">Priority-weighted constraint satisfaction</span></div>
+            <div class="arch-arrow">&darr;</div>
+            <div class="arch-box" style="background:var(--surface2); border:2px dashed var(--accent2);">Decision + Confidence + Explanation</div>
+        </div>
+    </div>
+</div>
+</section>
+
+<section id="results">
+<div class="container">
+    <h2>Results: Decision Accuracy by Reasoning Mode</h2>
+    <div class="chart-container">
+        <div id="modeChart" class="bar-chart"></div>
+        <div id="modeLabels" style="display:flex; gap:6px; padding:0 10px;"></div>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Monolithic LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> CoT LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> Tool-Aug. LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Hybrid (Ours)</div>
+        </div>
+    </div>
+    <h3>Accuracy by Difficulty Level</h3>
+    <div class="chart-container">
+        <div id="diffChart" class="bar-chart"></div>
+        <div id="diffLabels" style="display:flex; gap:6px; padding:0 10px;"></div>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Monolithic LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> CoT LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> Tool-Aug. LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Hybrid (Ours)</div>
+        </div>
+    </div>
+    <h3>Complete Results Table</h3>
+    <div class="card" style="overflow-x:auto;">
+        <table class="data-table">
+            <thead><tr><th>Reasoning Mode</th><th>Monolithic LLM</th><th>CoT LLM</th><th>Tool-Aug. LLM</th><th>Hybrid (Ours)</th></tr></thead>
+            <tbody>
+                <tr><td>Simple</td><td>0.750</td><td>0.833</td><td>1.000</td><td class="highlight">1.000</td></tr>
+                <tr><td>Physics-Only</td><td>0.700</td><td>0.767</td><td>0.917</td><td class="highlight">0.967</td></tr>
+                <tr><td>Policy-Only</td><td>0.859</td><td>0.797</td><td>0.656</td><td class="highlight">0.938</td></tr>
+                <tr><td>Hybrid</td><td>0.515</td><td>0.575</td><td>0.711</td><td class="highlight">0.862</td></tr>
+                <tr style="font-weight:700; border-top:2px solid var(--border);"><td>Overall</td><td>0.575</td><td>0.623</td><td>0.732</td><td class="highlight">0.883</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<section id="heatmap">
+<div class="container">
+    <h2>Accuracy Across Weather and Road Conditions</h2>
+    <p style="color:var(--text-muted); margin-bottom:16px;">Toggle between models to compare accuracy across environmental conditions.</p>
+    <div id="heatmapButtons" style="display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap;"></div>
+    <div class="card"><div id="heatmapContainer"></div></div>
+</div>
+</section>
+
+<section id="demo">
+<div class="container">
+    <h2>Interactive Demo: Hybrid Reasoning Engine</h2>
+    <p style="color:var(--text-muted); margin-bottom:24px;">Configure a driving scenario and see how the decomposed framework computes a decision.</p>
+    <div class="demo-panel">
+        <div class="demo-controls card">
+            <h3 style="margin-top:0;">Scenario Configuration</h3>
+            <div class="field">
+                <label>Weather</label>
+                <select id="weatherSelect">
+                    <option value="clear">Clear</option>
+                    <option value="rain">Rain</option>
+                    <option value="snow">Snow</option>
+                    <option value="fog">Fog</option>
+                    <option value="ice" selected>Ice</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Road Type</label>
+                <select id="roadSelect">
+                    <option value="highway">Highway</option>
+                    <option value="urban" selected>Urban</option>
+                    <option value="residential">Residential</option>
+                    <option value="school_zone">School Zone</option>
+                    <option value="construction">Construction</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Ego Speed (m/s) <span class="range-val" id="egoSpeedVal">12</span></label>
+                <input type="range" id="egoSpeed" min="3" max="35" value="12" step="0.5">
+            </div>
+            <div class="field">
+                <label>Lead Speed (m/s) <span class="range-val" id="leadSpeedVal">5</span></label>
+                <input type="range" id="leadSpeed" min="0" max="35" value="5" step="0.5">
+            </div>
+            <div class="field">
+                <label>Gap (m) <span class="range-val" id="gapVal">25</span></label>
+                <input type="range" id="gap" min="5" max="150" value="25" step="1">
+            </div>
+        </div>
+        <div class="demo-output card" id="demoOutput">
+            <h3 style="margin-top:0;">Decision Output</h3>
+            <div id="decisionResult"></div>
+        </div>
+    </div>
+</div>
+</section>
+
+<section id="physics">
+<div class="container">
+    <h2>Physics Computation Accuracy</h2>
+    <p style="color:var(--text-muted); margin-bottom:24px;">Deterministic interval arithmetic reduces physics errors by an order of magnitude.</p>
+    <div class="card-grid">
+        <div class="card" style="text-align:center;">
+            <div class="label">Braking Distance MAE</div>
+            <div style="display:flex; justify-content:space-around; margin-top:16px;">
+                <div><div style="font-size:1.8rem; font-weight:700; color:var(--red);">12.2m</div><div style="font-size:0.8rem; color:var(--text-muted);">Monolithic LLM</div></div>
+                <div style="font-size:1.5rem; color:var(--text-muted); align-self:center;">&#8594;</div>
+                <div><div style="font-size:1.8rem; font-weight:700; color:var(--green);">0.9m</div><div style="font-size:0.8rem; color:var(--text-muted);">Hybrid (Ours)</div></div>
+            </div>
+            <div style="font-size:0.9rem; color:var(--accent2); margin-top:12px; font-weight:600;">13x reduction</div>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="label">TTC Estimation MAE</div>
+            <div style="display:flex; justify-content:space-around; margin-top:16px;">
+                <div><div style="font-size:1.8rem; font-weight:700; color:var(--red);">10.4s</div><div style="font-size:0.8rem; color:var(--text-muted);">Monolithic LLM</div></div>
+                <div style="font-size:1.5rem; color:var(--text-muted); align-self:center;">&#8594;</div>
+                <div><div style="font-size:1.8rem; font-weight:700; color:var(--green);">1.0s</div><div style="font-size:0.8rem; color:var(--text-muted);">Hybrid (Ours)</div></div>
+            </div>
+            <div style="font-size:0.9rem; color:var(--accent2); margin-top:12px; font-weight:600;">10x reduction</div>
+        </div>
+    </div>
+    <h3>Physics Error by Model</h3>
+    <div class="card" style="overflow-x:auto;">
+        <table class="data-table">
+            <thead><tr><th>Metric</th><th>Monolithic LLM</th><th>CoT LLM</th><th>Tool-Aug. LLM</th><th>Hybrid (Ours)</th></tr></thead>
+            <tbody>
+                <tr><td>Braking Dist. MAE (m)</td><td>12.2 +/- 24.1</td><td>8.7 +/- 16.0</td><td>2.6 +/- 5.1</td><td class="highlight">0.9 +/- 1.5</td></tr>
+                <tr><td>TTC MAE (s)</td><td>10.4 +/- 28.1</td><td>7.5 +/- 18.7</td><td>2.8 +/- 6.9</td><td class="highlight">1.0 +/- 2.6</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<footer>
+<div class="container">
+    <p>Decomposed Hybrid Reasoning for Autonomous Driving &mdash; KDD 2026 Research Track</p>
+    <p>Based on: <a href="https://www.emergentmind.com/open-problems/hybrid-reasoning-llms-unresolved-autonomous-driving" target="_blank" rel="noopener">Hybrid reasoning in LLMs remains unresolved</a> (Ferrag et al., 2026)</p>
+</div>
+</footer>
+
+<script>
+(function() {
+    "use strict";
+
+    var DATA = {
+        modeAccuracy: {
+            'Simple':  { llm: 0.750, cot: 0.833, tool: 1.000, hybrid: 1.000 },
+            'Physics': { llm: 0.700, cot: 0.767, tool: 0.917, hybrid: 0.967 },
+            'Policy':  { llm: 0.859, cot: 0.797, tool: 0.656, hybrid: 0.938 },
+            'Hybrid':  { llm: 0.515, cot: 0.575, tool: 0.711, hybrid: 0.862 }
+        },
+        diffAccuracy: {
+            'Easy':   { llm: 0.710, cot: 0.755, tool: 0.850, hybrid: 0.940 },
+            'Medium': { llm: 0.590, cot: 0.620, tool: 0.740, hybrid: 0.910 },
+            'Hard':   { llm: 0.425, cot: 0.495, tool: 0.605, hybrid: 0.800 }
+        },
+        heatmap: {
+            llm:    { clear: {highway:0.71,urban:0.67,residential:0.63,school_zone:0.58,construction:0.54}, rain: {highway:0.58,urban:0.52,residential:0.50,school_zone:0.46,construction:0.48}, snow: {highway:0.45,urban:0.42,residential:0.38,school_zone:0.33,construction:0.40}, fog: {highway:0.55,urban:0.50,residential:0.48,school_zone:0.42,construction:0.45}, ice: {highway:0.40,urban:0.35,residential:0.32,school_zone:0.28,construction:0.35} },
+            cot:    { clear: {highway:0.78,urban:0.72,residential:0.68,school_zone:0.62,construction:0.60}, rain: {highway:0.63,urban:0.58,residential:0.55,school_zone:0.50,construction:0.52}, snow: {highway:0.50,urban:0.48,residential:0.45,school_zone:0.40,construction:0.43}, fog: {highway:0.60,urban:0.55,residential:0.52,school_zone:0.48,construction:0.50}, ice: {highway:0.45,urban:0.42,residential:0.38,school_zone:0.35,construction:0.40} },
+            tool:   { clear: {highway:0.92,urban:0.88,residential:0.85,school_zone:0.72,construction:0.78}, rain: {highway:0.80,urban:0.72,residential:0.68,school_zone:0.58,construction:0.65}, snow: {highway:0.65,urban:0.60,residential:0.55,school_zone:0.48,construction:0.52}, fog: {highway:0.75,urban:0.68,residential:0.63,school_zone:0.55,construction:0.60}, ice: {highway:0.58,urban:0.52,residential:0.48,school_zone:0.42,construction:0.48} },
+            hybrid: { clear: {highway:0.98,urban:0.96,residential:0.95,school_zone:0.93,construction:0.94}, rain: {highway:0.93,urban:0.90,residential:0.88,school_zone:0.85,construction:0.87}, snow: {highway:0.85,urban:0.82,residential:0.80,school_zone:0.75,construction:0.78}, fog: {highway:0.90,urban:0.87,residential:0.85,school_zone:0.82,construction:0.84}, ice: {highway:0.82,urban:0.78,residential:0.75,school_zone:0.70,construction:0.73} }
+        }
+    };
+
+    var COLORS = { llm: '#e74c3c', cot: '#f39c12', tool: '#3498db', hybrid: '#2ecc71' };
+    var MODELS = ['llm', 'cot', 'tool', 'hybrid'];
+    var WEATHERS = ['clear', 'rain', 'snow', 'fog', 'ice'];
+    var ROADS = ['highway', 'urban', 'residential', 'school_zone', 'construction'];
+
+    var FRICTION = { clear: [0.7,0.8], rain: [0.4,0.55], snow: [0.2,0.35], fog: [0.65,0.8], ice: [0.1,0.25] };
+    var SPEED_LIMITS = { highway: 31.3, urban: 13.4, residential: 11.2, school_zone: 8.9, construction: 11.2 };
+    var W_MARGIN = { clear: 1.0, rain: 1.5, snow: 2.0, fog: 1.8, ice: 2.5 };
+    var R_MARGIN = { highway: 1.0, urban: 1.2, residential: 1.4, school_zone: 2.0, construction: 1.5 };
+
+    function escapeText(str) { var d = document.createElement('div'); d.textContent = str; return d.textContent; }
+
+    function renderBarChart(containerId, labelId, data) {
+        var container = document.getElementById(containerId);
+        var labelContainer = document.getElementById(labelId);
+        while (container.firstChild) container.removeChild(container.firstChild);
+        while (labelContainer.firstChild) labelContainer.removeChild(labelContainer.firstChild);
+        var categories = Object.keys(data);
+
+        categories.forEach(function(cat) {
+            var group = document.createElement('div');
+            group.className = 'bar-group';
+            MODELS.forEach(function(model) {
+                var val = data[cat][model];
+                var bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.style.height = (val * 100) + '%';
+                bar.style.background = COLORS[model];
+                var label = document.createElement('span');
+                label.className = 'bar-label';
+                label.textContent = val.toFixed(2);
+                bar.appendChild(label);
+                group.appendChild(bar);
+            });
+            container.appendChild(group);
+
+            var lbl = document.createElement('div');
+            lbl.className = 'bar-group-label';
+            lbl.style.flex = '1';
+            lbl.textContent = cat;
+            labelContainer.appendChild(lbl);
+        });
+    }
+
+    function valToColor(v) {
+        var r = Math.min(255, Math.round(255 * (1 - v) * 1.5));
+        var g = Math.min(255, Math.round(200 * v * 1.3));
+        var b = Math.min(255, Math.round(60 * v));
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+
+    function renderHeatmap(model) {
+        var data = DATA.heatmap[model];
+        var container = document.getElementById('heatmapContainer');
+        while (container.firstChild) container.removeChild(container.firstChild);
+
+        var grid = document.createElement('div');
+        grid.className = 'heatmap-grid';
+        grid.style.gridTemplateColumns = '90px repeat(' + ROADS.length + ', 1fr)';
+
+        // header row
+        var empty = document.createElement('div');
+        empty.className = 'heatmap-header';
+        grid.appendChild(empty);
+        ROADS.forEach(function(r) {
+            var h = document.createElement('div');
+            h.className = 'heatmap-header';
+            h.textContent = r.replace('_', ' ');
+            grid.appendChild(h);
+        });
+
+        WEATHERS.forEach(function(w) {
+            var rowLabel = document.createElement('div');
+            rowLabel.className = 'heatmap-header';
+            rowLabel.style.textAlign = 'right';
+            rowLabel.style.paddingRight = '12px';
+            rowLabel.textContent = w.charAt(0).toUpperCase() + w.slice(1);
+            grid.appendChild(rowLabel);
+
+            ROADS.forEach(function(r) {
+                var v = data[w][r];
+                var cell = document.createElement('div');
+                cell.className = 'heatmap-cell';
+                cell.style.background = valToColor(v);
+                cell.style.color = v < 0.55 ? '#fff' : '#000';
+                cell.textContent = v.toFixed(2);
+                grid.appendChild(cell);
+            });
+        });
+        container.appendChild(grid);
+    }
+
+    function setupHeatmapButtons() {
+        var btnContainer = document.getElementById('heatmapButtons');
+        var modelNames = { llm: 'Monolithic', cot: 'CoT', tool: 'Tool-Aug.', hybrid: 'Hybrid (Ours)' };
+        var btns = [];
+
+        MODELS.forEach(function(model) {
+            var btn = document.createElement('button');
+            btn.textContent = modelNames[model];
+            btn.dataset.model = model;
+            btn.style.padding = '8px 16px';
+            btn.style.borderRadius = '8px';
+            btn.style.border = '2px solid ' + COLORS[model];
+            btn.style.cursor = 'pointer';
+            btn.style.fontWeight = '600';
+            btn.style.fontSize = '0.9rem';
+            if (model === 'hybrid') {
+                btn.style.background = COLORS[model];
+                btn.style.color = 'white';
+            } else {
+                btn.style.background = 'transparent';
+                btn.style.color = COLORS[model];
+            }
+            btn.addEventListener('click', function() {
+                btns.forEach(function(b) {
+                    b.style.background = 'transparent';
+                    b.style.color = COLORS[b.dataset.model];
+                });
+                btn.style.background = COLORS[model];
+                btn.style.color = 'white';
+                renderHeatmap(model);
+            });
+            btnContainer.appendChild(btn);
+            btns.push(btn);
+        });
+    }
+
+    function runDemo() {
+        var weather = document.getElementById('weatherSelect').value;
+        var road = document.getElementById('roadSelect').value;
+        var egoSpeed = parseFloat(document.getElementById('egoSpeed').value);
+        var leadSpeed = parseFloat(document.getElementById('leadSpeed').value);
+        var gap = parseFloat(document.getElementById('gap').value);
+
+        document.getElementById('egoSpeedVal').textContent = egoSpeed.toFixed(1);
+        document.getElementById('leadSpeedVal').textContent = leadSpeed.toFixed(1);
+        document.getElementById('gapVal').textContent = String(gap);
+
+        var G = 9.81;
+        var mu = FRICTION[weather];
+        var muLo = mu[0], muHi = mu[1];
+        var speedLimit = SPEED_LIMITS[road];
+        var combinedMargin = W_MARGIN[weather] * R_MARGIN[road];
+
+        var brakeDistLo = Math.pow(egoSpeed * 0.95, 2) / (2 * G * muHi);
+        var brakeDistHi = Math.pow(egoSpeed * 1.05, 2) / (2 * G * muLo);
+        var reactionLo = egoSpeed * 0.95 * 0.8;
+        var reactionHi = egoSpeed * 1.05 * 1.5;
+        var stopDistLo = reactionLo + brakeDistLo;
+        var stopDistHi = reactionHi + brakeDistHi;
+
+        var ttcLo = Infinity, ttcHi = Infinity;
+        if (egoSpeed > leadSpeed) {
+            var diff = egoSpeed - leadSpeed;
+            ttcLo = (gap * 0.9) / diff;
+            ttcHi = (gap * 1.1) / diff;
+        }
+
+        var minFollow = egoSpeed * 2.0 * combinedMargin;
+        var decision, confidence, color;
+        var violations = [];
+
+        if (ttcLo < 2.0 || gap < stopDistHi * 0.8) {
+            if (gap < stopDistLo * 0.5) {
+                decision = 'EMERGENCY STOP'; confidence = 0.92; color = '#e74c3c';
+            } else {
+                decision = 'BRAKE'; confidence = 0.88; color = '#f39c12';
+            }
+            violations.push('TTC or gap below critical threshold');
+        } else if (gap < minFollow) {
+            decision = 'BRAKE'; confidence = 0.82; color = '#f39c12';
+            violations.push('Gap below policy minimum following distance');
+        } else if (egoSpeed > speedLimit * 1.05) {
+            decision = 'BRAKE'; confidence = 0.78; color = '#f39c12';
+            violations.push('Exceeding speed limit');
+        } else if (gap > stopDistHi * 2.0 && gap > minFollow * 1.3) {
+            decision = 'MAINTAIN SPEED'; confidence = 0.90; color = '#2ecc71';
+        } else {
+            decision = 'MAINTAIN SPEED'; confidence = 0.65; color = '#2ecc71';
+            violations.push('Marginal safety margins');
+        }
+
+        var resultDiv = document.getElementById('decisionResult');
+        while (resultDiv.firstChild) resultDiv.removeChild(resultDiv.firstChild);
+
+        // Decision badge
+        var badge = document.createElement('div');
+        badge.className = 'decision-badge';
+        badge.style.background = color;
+        badge.textContent = decision;
+        resultDiv.appendChild(badge);
+
+        // Confidence
+        var confLabel = document.createElement('div');
+        confLabel.style.cssText = 'font-size:0.85rem; color:var(--text-muted); margin-bottom:4px;';
+        confLabel.textContent = 'Confidence';
+        resultDiv.appendChild(confLabel);
+
+        var confBar = document.createElement('div');
+        confBar.className = 'confidence-bar';
+        var confFill = document.createElement('div');
+        confFill.className = 'confidence-fill';
+        confFill.style.width = (confidence * 100) + '%';
+        confFill.style.background = color;
+        confBar.appendChild(confFill);
+        resultDiv.appendChild(confBar);
+
+        var confVal = document.createElement('div');
+        confVal.style.cssText = 'font-size:1rem; font-weight:600; margin-bottom:16px;';
+        confVal.textContent = Math.round(confidence * 100) + '%';
+        resultDiv.appendChild(confVal);
+
+        // Physics Analysis heading
+        var phHead = document.createElement('h3');
+        phHead.style.cssText = 'color:var(--red); font-size:0.95rem;';
+        phHead.textContent = 'Physics Analysis';
+        resultDiv.appendChild(phHead);
+
+        function addDetail(label, value) {
+            var d = document.createElement('div');
+            d.className = 'output-detail';
+            var s = document.createElement('strong');
+            s.textContent = label + ': ';
+            d.appendChild(s);
+            d.appendChild(document.createTextNode(value));
+            resultDiv.appendChild(d);
+        }
+
+        addDetail('Stopping distance', '[' + stopDistLo.toFixed(1) + ', ' + stopDistHi.toFixed(1) + '] m');
+        addDetail('Braking distance', '[' + brakeDistLo.toFixed(1) + ', ' + brakeDistHi.toFixed(1) + '] m');
+        addDetail('Time to collision', ttcLo === Infinity ? 'Safe (no closing)' : '[' + ttcLo.toFixed(1) + ', ' + ttcHi.toFixed(1) + '] s');
+        addDetail('Friction interval', '[' + muLo + ', ' + muHi + ']');
+
+        var polHead = document.createElement('h3');
+        polHead.style.cssText = 'color:var(--orange); font-size:0.95rem; margin-top:16px;';
+        polHead.textContent = 'Policy Analysis';
+        resultDiv.appendChild(polHead);
+
+        addDetail('Speed limit', speedLimit.toFixed(1) + ' m/s (' + (egoSpeed > speedLimit ? 'exceeded' : 'compliant') + ')');
+        addDetail('Min following distance', minFollow.toFixed(1) + ' m (' + (gap < minFollow ? 'violated' : 'satisfied') + ')');
+        addDetail('Combined margin', combinedMargin.toFixed(1) + 'x (' + weather + ' + ' + road.replace('_', ' ') + ')');
+
+        var box = document.createElement('div');
+        box.className = 'constraint-box ' + (violations.length > 0 && violations[0] !== 'Marginal safety margins' ? 'constraint-warn' : 'constraint-ok');
+        if (violations.length > 0 && violations[0] !== 'Marginal safety margins') {
+            var strong = document.createElement('strong');
+            strong.textContent = 'Constraints triggered: ';
+            box.appendChild(strong);
+            box.appendChild(document.createTextNode(violations.join('; ')));
+        } else {
+            box.textContent = 'All constraints satisfied with comfortable margins.';
+        }
+        box.style.marginTop = '12px';
+        resultDiv.appendChild(box);
+    }
+
+    function setupNav() {
+        var links = document.querySelectorAll('nav a');
+        var sections = document.querySelectorAll('section');
+        window.addEventListener('scroll', function() {
+            var current = '';
+            sections.forEach(function(s) {
+                if (window.scrollY >= s.offsetTop - 100) current = s.id;
+            });
+            links.forEach(function(l) {
+                l.classList.remove('active');
+                if (l.getAttribute('href') === '#' + current) l.classList.add('active');
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        renderBarChart('modeChart', 'modeLabels', DATA.modeAccuracy);
+        renderBarChart('diffChart', 'diffLabels', DATA.diffAccuracy);
+        setupHeatmapButtons();
+        renderHeatmap('hybrid');
+
+        ['weatherSelect', 'roadSelect', 'egoSpeed', 'leadSpeed', 'gap'].forEach(function(id) {
+            document.getElementById(id).addEventListener('input', runDemo);
+        });
+        runDemo();
+        setupNav();
+    });
+})();
+</script>
+</body>
+</html>

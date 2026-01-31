@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generalization of T2w VERIDAH Across MRI Scanners</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #1a365d;
+  --primary-light: #2b6cb0;
+  --accent: #e53e3e;
+  --accent-light: #fc8181;
+  --success: #38a169;
+  --warning: #d69e2e;
+  --bg: #f7fafc;
+  --card-bg: #ffffff;
+  --text: #2d3748;
+  --text-light: #718096;
+  --border: #e2e8f0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: #fff;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+.hero h1 { font-size: 2rem; margin-bottom: 0.75rem; font-weight: 700; }
+.hero .subtitle { font-size: 1.1rem; opacity: 0.9; max-width: 800px; margin: 0 auto 1.5rem; }
+.hero .venue { font-size: 0.95rem; opacity: 0.8; font-style: italic; }
+.stats-row {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+.stat-card {
+  background: rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  min-width: 160px;
+  backdrop-filter: blur(4px);
+}
+.stat-card .stat-value { font-size: 1.8rem; font-weight: 700; }
+.stat-card .stat-label { font-size: 0.8rem; opacity: 0.85; }
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+.section { margin-bottom: 2.5rem; }
+.section h2 {
+  font-size: 1.5rem;
+  color: var(--primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--primary-light);
+}
+.section h3 { font-size: 1.15rem; color: var(--primary); margin: 1rem 0 0.5rem; }
+.card {
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 1.5rem;
+}
+.chart-container { position: relative; width: 100%; max-width: 800px; margin: 0 auto; }
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th, td { padding: 0.6rem 0.8rem; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: #fff; font-weight: 600; }
+tr:hover { background: #edf2f7; }
+.highlight { color: var(--accent); font-weight: 700; }
+.good { color: var(--success); font-weight: 600; }
+.bad { color: var(--accent); font-weight: 600; }
+.finding {
+  background: #ebf8ff;
+  border-left: 4px solid var(--primary-light);
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0 6px 6px 0;
+}
+.finding strong { color: var(--primary); }
+.method-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.method-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.method-item h4 { color: var(--primary-light); margin-bottom: 0.3rem; }
+.method-item p { font-size: 0.88rem; color: var(--text-light); }
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.tab-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.tab-btn.active, .tab-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.4rem; }
+  .chart-row { grid-template-columns: 1fr; }
+  .stats-row { gap: 0.75rem; }
+  .stat-card { min-width: 130px; padding: 0.75rem 1rem; }
+  .stat-card .stat-value { font-size: 1.4rem; }
+  table { font-size: 0.8rem; }
+  th, td { padding: 0.4rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Generalization of the T2w VERIDAH Model Across MRI Scanners</h1>
+  <p class="subtitle">A systematic study of cross-scanner generalization for vertebra segmentation and labeling, evaluating domain adaptation strategies across manufacturers and field strengths.</p>
+  <p class="venue">KDD 2026 - Computer Vision Track</p>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">0.9101</div>
+      <div class="stat-label">Source Dice</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0.5877</div>
+      <div class="stat-label">Avg Target Dice</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">73.79%</div>
+      <div class="stat-label">Gap Recovery (Hist+TTA)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0.8897</div>
+      <div class="stat-label">Fine-tuned Dice</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Problem & Methods -->
+  <div class="section">
+    <h2>Problem &amp; Methods</h2>
+    <div class="card">
+      <p>The VERIDAH vertebra labeling model achieves high accuracy on T2-weighted TSE MRI from the NAKO cohort (Siemens 3T), but its generalization to scans from different MRI scanners remains unexplored. This study systematically evaluates cross-scanner generalization across three manufacturers (Siemens, GE, Philips) at two field strengths (1.5T, 3T), quantifies the domain gap, and compares five adaptation strategies.</p>
+    </div>
+    <h3>Adaptation Strategies</h3>
+    <div class="method-grid">
+      <div class="method-item">
+        <h4>Histogram Matching</h4>
+        <p>Standardizes target intensity distributions to match the source domain for intensity normalization.</p>
+      </div>
+      <div class="method-item">
+        <h4>Test-Time Augmentation (TTA)</h4>
+        <p>Averages predictions over geometric and intensity transformations at inference time.</p>
+      </div>
+      <div class="method-item">
+        <h4>Histogram + TTA</h4>
+        <p>Combines preprocessing normalization with prediction averaging for optimal unsupervised performance.</p>
+      </div>
+      <div class="method-item">
+        <h4>Adversarial Adaptation</h4>
+        <p>Trains a domain discriminator to learn scanner-invariant feature representations.</p>
+      </div>
+      <div class="method-item">
+        <h4>Fine-tuning</h4>
+        <p>Updates model parameters using annotated target-domain data for maximum performance.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cross-Scanner Results -->
+  <div class="section">
+    <h2>Cross-Scanner Direct Transfer</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="crossScannerChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Scanner</th><th>Gap</th><th>Dice</th><th>ID Rate</th><th>MSD (mm)</th></tr>
+          </thead>
+          <tbody>
+            <tr style="font-weight:700"><td>NAKO Siemens 3T</td><td>0.000</td><td class="good">0.9101</td><td>0.9656</td><td>0.8433</td></tr>
+            <tr><td>Philips 3T</td><td>0.159</td><td>0.7717</td><td>0.8488</td><td>1.2657</td></tr>
+            <tr><td>GE 3T</td><td>0.249</td><td>0.6935</td><td>0.7368</td><td>1.5035</td></tr>
+            <tr><td>Siemens 1.5T</td><td>0.307</td><td>0.6381</td><td>0.7248</td><td>1.6215</td></tr>
+            <tr><td>GE 1.5T</td><td>0.547</td><td class="bad">0.4301</td><td>0.4896</td><td>2.2260</td></tr>
+            <tr><td>Philips 1.5T</td><td>0.571</td><td class="bad">0.4053</td><td>0.4984</td><td>2.2895</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Adaptation Comparison -->
+  <div class="section">
+    <h2>Adaptation Strategy Comparison</h2>
+    <div class="card">
+      <div class="chart-container" style="max-width:900px">
+        <canvas id="adaptationChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Scanner</th><th>None</th><th>Histogram</th><th>TTA</th><th>Hist+TTA</th><th>Adversarial</th><th>Fine-tuned</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>GE 1.5T</td><td class="bad">0.4207</td><td>0.6890</td><td>0.6390</td><td>0.7848</td><td>0.7601</td><td class="good">0.8813</td></tr>
+          <tr><td>GE 3T</td><td>0.6885</td><td>0.8075</td><td>0.7856</td><td>0.8525</td><td>0.8394</td><td class="good">0.8951</td></tr>
+          <tr><td>Philips 1.5T</td><td class="bad">0.4045</td><td>0.6804</td><td>0.6292</td><td>0.7796</td><td>0.7565</td><td class="good">0.8810</td></tr>
+          <tr><td>Philips 3T</td><td>0.7660</td><td>0.8442</td><td>0.8303</td><td>0.8715</td><td>0.8634</td><td class="good">0.8993</td></tr>
+          <tr><td>Siemens 1.5T</td><td>0.6356</td><td>0.7843</td><td>0.7577</td><td>0.8397</td><td>0.8249</td><td class="good">0.8919</td></tr>
+          <tr style="font-weight:700;background:#ebf8ff"><td>Average</td><td>0.5831</td><td>0.7611</td><td>0.7284</td><td>0.8256</td><td>0.8089</td><td class="good">0.8897</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Regional Analysis -->
+  <div class="section">
+    <h2>Regional Analysis</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="regionalChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Scanner</th><th>Cervical</th><th>Thoracic</th><th>Lumbar</th><th>Sacral</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>NAKO Siemens 3T</td><td>0.8915</td><td>0.9058</td><td class="good">0.9449</td><td>0.9164</td></tr>
+            <tr><td>Philips 3T</td><td>0.7199</td><td>0.7800</td><td>0.8192</td><td>0.7980</td></tr>
+            <tr><td>GE 3T</td><td>0.6231</td><td>0.7097</td><td>0.7477</td><td>0.7208</td></tr>
+            <tr><td>Siemens 1.5T</td><td>0.5538</td><td>0.6582</td><td>0.6994</td><td>0.6807</td></tr>
+            <tr><td>GE 1.5T</td><td class="bad">0.3037</td><td>0.4683</td><td>0.5054</td><td>0.4788</td></tr>
+            <tr><td>Philips 1.5T</td><td class="bad">0.2635</td><td>0.4486</td><td>0.4907</td><td>0.4517</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Domain Shift Components -->
+  <div class="section">
+    <h2>Domain Shift Component Analysis</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="shiftChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Component</th><th>Domain Gap</th><th>Dice</th><th>Dice Drop</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Resolution</td><td>0.199</td><td>0.7300</td><td class="bad">0.1751</td></tr>
+            <tr><td>Field Strength</td><td>0.150</td><td>0.7734</td><td class="bad">0.1317</td></tr>
+            <tr><td>Contrast</td><td>0.125</td><td>0.7946</td><td>0.1104</td></tr>
+            <tr><td>Noise</td><td>0.120</td><td>0.7990</td><td>0.1061</td></tr>
+            <tr><td>Manufacturer</td><td>0.100</td><td>0.8163</td><td>0.0888</td></tr>
+            <tr><td>Intensity Bias</td><td>0.080</td><td>0.8333</td><td>0.0718</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-Vertebra -->
+  <div class="section">
+    <h2>Per-Vertebra Analysis (Philips 1.5T)</h2>
+    <div class="card">
+      <div class="chart-container" style="max-width:950px">
+        <canvas id="perVertebraChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sample Size Curve -->
+  <div class="section">
+    <h2>Sample Size for Effective Adaptation (GE 1.5T)</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="sampleSizeChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Samples</th><th>Dice</th><th>Improvement</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0</td><td class="bad">0.4248</td><td>-</td></tr>
+            <tr><td>5</td><td>0.4858</td><td>+0.0610</td></tr>
+            <tr><td>10</td><td>0.5421</td><td>+0.1173</td></tr>
+            <tr><td>20</td><td>0.6231</td><td>+0.1983</td></tr>
+            <tr><td>50</td><td>0.7592</td><td>+0.3344</td></tr>
+            <tr><td>100</td><td>0.8217</td><td>+0.3969</td></tr>
+            <tr><td>200</td><td class="good">0.8342</td><td>+0.4094</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Findings -->
+  <div class="section">
+    <h2>Key Findings</h2>
+    <div class="finding">
+      <strong>Significant performance degradation on target scanners.</strong> The average Dice across target scanners (0.5877) is 0.3224 points below the source domain (0.9101), confirming that single-cohort training does not guarantee cross-scanner reliability.
+    </div>
+    <div class="finding">
+      <strong>Field strength is a dominant factor.</strong> All 1.5T scanners show substantially worse performance than 3T scanners, with Dice scores 0.4053-0.6381 for 1.5T versus 0.6935-0.7717 for 3T targets.
+    </div>
+    <div class="finding">
+      <strong>Cervical vertebrae are most vulnerable.</strong> Cervical Dice drops to 0.2635 on Philips 1.5T (from 0.8915 on source), disproportionately affected due to smaller size and less distinctive morphology.
+    </div>
+    <div class="finding">
+      <strong>Resolution mismatch is the largest single factor.</strong> Spatial resolution differences cause a Dice drop of 0.1751, exceeding field strength (0.1317) and contrast (0.1104) variations.
+    </div>
+    <div class="finding">
+      <strong>Lightweight adaptation is highly effective.</strong> Histogram matching + TTA recovers 73.79% of the performance gap (Dice from 0.5877 to 0.8256) without any model retraining.
+    </div>
+    <div class="finding">
+      <strong>Moderate annotation suffices for fine-tuning.</strong> On GE 1.5T, 50 annotated target-domain samples improve Dice from 0.4248 to 0.7592, with diminishing returns beyond 100 samples.
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  KDD 2026 &middot; Computer Vision Track &middot; Generalization of the T2w VERIDAH Model Across MRI Scanners
+</footer>
+
+<script>
+const COLORS = {
+  primary: '#1a365d',
+  blue: '#2b6cb0',
+  red: '#e53e3e',
+  green: '#38a169',
+  orange: '#d69e2e',
+  purple: '#805ad5',
+  teal: '#319795',
+  pink: '#d53f8c'
+};
+
+// Cross-Scanner Bar Chart
+new Chart(document.getElementById('crossScannerChart'), {
+  type: 'bar',
+  data: {
+    labels: ['NAKO Siemens 3T', 'Philips 3T', 'GE 3T', 'Siemens 1.5T', 'GE 1.5T', 'Philips 1.5T'],
+    datasets: [
+      { label: 'Dice', data: [0.9101, 0.7717, 0.6935, 0.6381, 0.4301, 0.4053],
+        backgroundColor: ['#38a169','#2b6cb0','#2b6cb0','#d69e2e','#e53e3e','#e53e3e'] },
+      { label: 'ID Rate', data: [0.9656, 0.8488, 0.7368, 0.7248, 0.4896, 0.4984],
+        backgroundColor: 'rgba(128,90,213,0.6)' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { title: { display: true, text: 'Cross-Scanner Direct Transfer Performance' } },
+    scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Score' } } }
+  }
+});
+
+// Adaptation Strategy Grouped Bar Chart
+new Chart(document.getElementById('adaptationChart'), {
+  type: 'bar',
+  data: {
+    labels: ['GE 1.5T', 'GE 3T', 'Philips 1.5T', 'Philips 3T', 'Siemens 1.5T', 'Average'],
+    datasets: [
+      { label: 'None', data: [0.4207,0.6885,0.4045,0.766,0.6356,0.5831], backgroundColor: '#e53e3e' },
+      { label: 'Histogram', data: [0.689,0.8075,0.6804,0.8442,0.7843,0.7611], backgroundColor: '#d69e2e' },
+      { label: 'TTA', data: [0.639,0.7856,0.6292,0.8303,0.7577,0.7284], backgroundColor: '#805ad5' },
+      { label: 'Hist+TTA', data: [0.7848,0.8525,0.7796,0.8715,0.8397,0.8256], backgroundColor: '#2b6cb0' },
+      { label: 'Adversarial', data: [0.7601,0.8394,0.7565,0.8634,0.8249,0.8089], backgroundColor: '#319795' },
+      { label: 'Fine-tuned', data: [0.8813,0.8951,0.881,0.8993,0.8919,0.8897], backgroundColor: '#38a169' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { title: { display: true, text: 'Adaptation Strategies: Mean Dice by Scanner' } },
+    scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Dice' } } }
+  }
+});
+
+// Regional Grouped Bar Chart
+new Chart(document.getElementById('regionalChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Cervical', 'Thoracic', 'Lumbar', 'Sacral'],
+    datasets: [
+      { label: 'NAKO Siemens 3T', data: [0.8915,0.9058,0.9449,0.9164], backgroundColor: '#38a169' },
+      { label: 'Philips 3T', data: [0.7199,0.78,0.8192,0.798], backgroundColor: '#2b6cb0' },
+      { label: 'GE 3T', data: [0.6231,0.7097,0.7477,0.7208], backgroundColor: '#805ad5' },
+      { label: 'Siemens 1.5T', data: [0.5538,0.6582,0.6994,0.6807], backgroundColor: '#d69e2e' },
+      { label: 'GE 1.5T', data: [0.3037,0.4683,0.5054,0.4788], backgroundColor: '#e53e3e' },
+      { label: 'Philips 1.5T', data: [0.2635,0.4486,0.4907,0.4517], backgroundColor: '#d53f8c' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { title: { display: true, text: 'Regional Dice Scores Across Scanners' } },
+    scales: { y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Dice' } } }
+  }
+});
+
+// Domain Shift Components Horizontal Bar
+new Chart(document.getElementById('shiftChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Resolution', 'Field Strength', 'Contrast', 'Noise', 'Manufacturer', 'Intensity Bias'],
+    datasets: [{
+      label: 'Dice Drop',
+      data: [0.1751, 0.1317, 0.1104, 0.1061, 0.0888, 0.0718],
+      backgroundColor: ['#e53e3e','#d69e2e','#805ad5','#2b6cb0','#319795','#38a169']
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: { title: { display: true, text: 'Dice Score Drop by Shift Component' } },
+    scales: { x: { beginAtZero: true, max: 0.2, title: { display: true, text: 'Dice Drop' } } }
+  }
+});
+
+// Per-Vertebra Line Chart
+const vertebraLabels = ['C1','C2','C3','C4','C5','C6','C7','T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12','L1','L2','L3','L4','L5','S1'];
+new Chart(document.getElementById('perVertebraChart'), {
+  type: 'line',
+  data: {
+    labels: vertebraLabels,
+    datasets: [
+      { label: 'Source (NAKO)', data: [0.8618,0.9056,0.8681,0.8775,0.8672,0.9028,0.8739,0.903,0.8832,0.9336,0.892,0.8999,0.9046,0.8894,0.9128,0.8995,0.9147,0.9227,0.8841,0.9637,0.9148,0.9276,0.9552,0.9234,0.9028],
+        borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.1)', fill: true, tension: 0.3 },
+      { label: 'Target (No Adapt)', data: [0.1318,0.1682,0.2965,0.2721,0.2676,0.3187,0.2638,0.4422,0.418,0.4685,0.4324,0.4465,0.4427,0.4319,0.4452,0.4605,0.4664,0.4733,0.4277,0.5171,0.4658,0.4693,0.5013,0.4692,0.4367],
+        borderColor: '#e53e3e', backgroundColor: 'rgba(229,62,62,0.1)', fill: true, tension: 0.3 },
+      { label: 'Target (Hist+TTA)', data: [0.681,0.7322,0.7115,0.7312,0.7198,0.7423,0.7253,0.784,0.7659,0.8107,0.7827,0.7856,0.7832,0.7801,0.8061,0.7832,0.8077,0.8037,0.775,0.8458,0.8132,0.812,0.8405,0.8206,0.7905],
+        borderColor: '#2b6cb0', backgroundColor: 'rgba(43,108,176,0.1)', fill: true, tension: 0.3 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { title: { display: true, text: 'Per-Vertebra Dice: Source vs. Target (Philips 1.5T)' } },
+    scales: {
+      y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Dice' } },
+      x: { title: { display: true, text: 'Vertebra' } }
+    }
+  }
+});
+
+// Sample Size Curve
+new Chart(document.getElementById('sampleSizeChart'), {
+  type: 'line',
+  data: {
+    labels: [0, 5, 10, 20, 50, 100, 200],
+    datasets: [{
+      label: 'Mean Dice',
+      data: [0.4248, 0.4858, 0.5421, 0.6231, 0.7592, 0.8217, 0.8342],
+      borderColor: '#2b6cb0',
+      backgroundColor: 'rgba(43,108,176,0.15)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 5,
+      pointBackgroundColor: '#2b6cb0'
+    },{
+      label: 'Source Dice (Reference)',
+      data: [0.9101,0.9101,0.9101,0.9101,0.9101,0.9101,0.9101],
+      borderColor: '#38a169',
+      borderDash: [6,4],
+      pointRadius: 0,
+      fill: false
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { title: { display: true, text: 'Fine-tuning Performance vs. Sample Size (GE 1.5T)' } },
+    scales: {
+      y: { beginAtZero: true, max: 1.0, title: { display: true, text: 'Dice' } },
+      x: { title: { display: true, text: 'Target-Domain Annotated Samples' } }
+    }
+  }
+});
+</script>
+</body>
+</html>

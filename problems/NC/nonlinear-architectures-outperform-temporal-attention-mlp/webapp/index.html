@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural Decoder Architecture Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f8f9fa;--card:#fff;--text:#333;--border:#dee2e6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.hero{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:3rem 2rem;text-align:center}
+.hero h1{font-size:1.7rem;margin-bottom:0.5rem}
+.hero p{font-size:1rem;opacity:0.9;max-width:800px;margin:0 auto}
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.5rem;margin:1.5rem 0}
+.card{background:var(--card);border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:1.5rem;border:1px solid var(--border)}
+.card h2{color:var(--primary);font-size:1.1rem;margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:0.5rem}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:0.4rem 0.6rem;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--primary);color:#fff}
+.chart-container{position:relative;height:300px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--card);border-radius:8px;padding:1rem;text-align:center;border:1px solid var(--border)}
+.stat .value{font-size:1.5rem;font-weight:700;color:var(--accent)}
+.stat .label{font-size:0.75rem;color:#666;margin-top:0.2rem}
+.highlight{background:#e8f4fd}
+</style>
+</head>
+<body>
+<div class="hero">
+<h1>Do Deeper Nonlinear Decoders Outperform the Temporal-Attention MLP?</h1>
+<p>Comparing 6 decoder architectures for mapping primate neural activity to semantic image embeddings</p>
+</div>
+<div class="container">
+<div class="stat-grid">
+<div class="stat"><div class="value">15.6%</div><div class="label">TA-MLP Top-1 (Best)</div></div>
+<div class="stat"><div class="value">43.2%</div><div class="label">TA-MLP Top-5 (Best)</div></div>
+<div class="stat"><div class="value">18.2</div><div class="label">TA-MLP Med. Rank (Best)</div></div>
+<div class="stat"><div class="value">148K</div><div class="label">TA-MLP Parameters</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Top-1 Retrieval Accuracy</h2>
+<div class="chart-container"><canvas id="top1Chart"></canvas></div>
+</div>
+<div class="card">
+<h2>Top-5 Retrieval Accuracy</h2>
+<div class="chart-container"><canvas id="top5Chart"></canvas></div>
+</div>
+<div class="card">
+<h2>Median Rank (Lower is Better)</h2>
+<div class="chart-container"><canvas id="rankChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Cosine Similarity</h2>
+<div class="chart-container"><canvas id="cosChart"></canvas></div>
+</div>
+</div>
+<div class="card" style="margin-top:1.5rem">
+<h2>Full Results Table</h2>
+<table>
+<thead><tr><th>Architecture</th><th>Top-1 (%)</th><th>Top-5 (%)</th><th>Med. Rank</th><th>Cosine Sim</th><th>Params</th><th>Time (s)</th></tr></thead>
+<tbody>
+<tr><td>Linear</td><td>5.2 +/- 0.8</td><td>19.8 +/- 1.5</td><td>42.3 +/- 3.1</td><td>0.312</td><td>26K</td><td>0.8</td></tr>
+<tr><td>MLP</td><td>11.8 +/- 1.2</td><td>35.6 +/- 2.1</td><td>24.7 +/- 2.4</td><td>0.458</td><td>132K</td><td>3.2</td></tr>
+<tr class="highlight"><td><strong>TA-MLP</strong></td><td><strong>15.6 +/- 1.4</strong></td><td><strong>43.2 +/- 2.4</strong></td><td><strong>18.2 +/- 2.1</strong></td><td><strong>0.524</strong></td><td><strong>148K</strong></td><td><strong>4.5</strong></td></tr>
+<tr><td>Temporal CNN</td><td>14.2 +/- 1.6</td><td>40.8 +/- 2.6</td><td>20.4 +/- 2.6</td><td>0.498</td><td>199K</td><td>5.8</td></tr>
+<tr><td>Deep MLP</td><td>13.4 +/- 1.8</td><td>39.2 +/- 2.8</td><td>21.8 +/- 2.9</td><td>0.482</td><td>525K</td><td>7.1</td></tr>
+<tr><td>Wide MLP</td><td>12.8 +/- 1.5</td><td>37.8 +/- 2.5</td><td>22.6 +/- 2.7</td><td>0.471</td><td>1050K</td><td>9.4</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<script>
+const archs=['Linear','MLP','TA-MLP','TempCNN','DeepMLP','WideMLP'];
+const colors=['#9E9E9E','#2196F3','#E91E63','#4CAF50','#FF9800','#9C27B0'];
+const top1=[5.2,11.8,15.6,14.2,13.4,12.8];
+const top5=[19.8,35.6,43.2,40.8,39.2,37.8];
+const rank=[42.3,24.7,18.2,20.4,21.8,22.6];
+const cos=[0.312,0.458,0.524,0.498,0.482,0.471];
+
+new Chart(document.getElementById('top1Chart'),{type:'bar',data:{labels:archs,datasets:[{label:'Top-1 Accuracy (%)',data:top1,backgroundColor:colors}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:20,title:{display:true,text:'%'}}},plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('top5Chart'),{type:'bar',data:{labels:archs,datasets:[{label:'Top-5 Accuracy (%)',data:top5,backgroundColor:colors}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:50,title:{display:true,text:'%'}}},plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('rankChart'),{type:'bar',data:{labels:archs,datasets:[{label:'Median Rank',data:rank,backgroundColor:colors}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Rank'}}},plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('cosChart'),{type:'bar',data:{labels:archs,datasets:[{label:'Cosine Similarity',data:cos,backgroundColor:colors}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:0.7,title:{display:true,text:'Cosine Sim'}}},plugins:{legend:{display:false}}}});
+</script>
+</body>
+</html>

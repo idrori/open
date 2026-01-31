@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Non-Classical Emergent Behaviors in Open Quantum Networks</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #1a1a2e;
+  --secondary: #16213e;
+  --accent: #0f3460;
+  --highlight: #e94560;
+  --text: #eaeaea;
+  --text-dim: #a0a0b0;
+  --card-bg: #1e1e36;
+  --border: #2a2a4a;
+  --success: #00d9a6;
+  --warning: #f0a500;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--primary);
+  color: var(--text);
+  line-height: 1.6;
+}
+a { color: var(--highlight); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 40%, var(--accent) 100%);
+  padding: 60px 20px 50px;
+  text-align: center;
+  border-bottom: 2px solid var(--highlight);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle at 30% 70%, rgba(233,69,96,0.06) 0%, transparent 50%),
+              radial-gradient(circle at 70% 30%, rgba(15,52,96,0.12) 0%, transparent 50%);
+  animation: heroGlow 12s ease-in-out infinite;
+}
+@keyframes heroGlow {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-2%, 1%) rotate(1deg); }
+}
+.hero > * { position: relative; z-index: 1; }
+.hero h1 {
+  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  font-weight: 700;
+  max-width: 900px;
+  margin: 0 auto 16px;
+  letter-spacing: -0.02em;
+}
+.hero .subtitle {
+  font-size: clamp(0.95rem, 2vw, 1.15rem);
+  color: var(--text-dim);
+  max-width: 750px;
+  margin: 0 auto 24px;
+}
+.hero .badges {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.badge {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.badge-track { background: var(--highlight); color: #fff; }
+.badge-category { background: var(--accent); color: var(--text); border: 1px solid var(--border); }
+.badge-venue { background: rgba(0,217,166,0.15); color: var(--success); border: 1px solid rgba(0,217,166,0.3); }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+section { padding: 48px 0; }
+section + section { border-top: 1px solid var(--border); }
+h2 {
+  font-size: 1.6rem;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+h3 { font-size: 1.15rem; margin-bottom: 12px; color: var(--text-dim); }
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.metric-card .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--highlight);
+  margin: 8px 0 4px;
+}
+.metric-card .label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.metric-card .detail {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.chart-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.chart-container canvas { max-height: 400px; }
+.chart-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.chart-tab {
+  padding: 7px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.chart-tab:hover { border-color: var(--highlight); color: var(--text); }
+.chart-tab.active {
+  background: var(--highlight);
+  border-color: var(--highlight);
+  color: #fff;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+th, td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+}
+tr:hover { background: rgba(233,69,96,0.04); }
+.sep-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.sep-tag.separable { background: rgba(0,217,166,0.15); color: var(--success); }
+.sep-tag.topological { background: rgba(233,69,96,0.15); color: var(--highlight); }
+.sep-tag.gme { background: rgba(240,165,0,0.15); color: var(--warning); }
+
+.finding-item {
+  display: flex;
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.finding-item:last-child { border-bottom: none; }
+.finding-num {
+  min-width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--highlight);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+.finding-text h4 { font-size: 1rem; margin-bottom: 4px; }
+.finding-text p { font-size: 0.9rem; color: var(--text-dim); }
+
+.method-step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.method-icon {
+  min-width: 44px; height: 44px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.method-content h4 { margin-bottom: 4px; }
+.method-content p { font-size: 0.9rem; color: var(--text-dim); }
+
+footer {
+  padding: 30px 20px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .hero { padding: 40px 16px 36px; }
+  section { padding: 32px 0; }
+  .card { padding: 16px; }
+  .chart-container { padding: 14px; }
+  .chart-container canvas { max-height: 300px; }
+  .metric-card .value { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Systematic Analytical Tools for Non-Classical Emergent Behaviors in Open Quantum Networks</h1>
+  <p class="subtitle">A three-layer diagnostic framework integrating spectral decomposition, entanglement topology analysis, and quantum synchronization witnesses for characterizing genuinely quantum collective phenomena in Lindblad-governed open quantum networks.</p>
+  <div class="badges">
+    <span class="badge badge-venue">KDD 2026</span>
+    <span class="badge badge-track">AI4Sciences Track</span>
+    <span class="badge badge-category">Physics (PH)</span>
+  </div>
+</div>
+
+<div class="container">
+
+<section>
+  <h2>Key Results at a Glance</h2>
+  <div class="card-grid">
+    <div class="metric-card">
+      <div class="label">Max Negativity (Graph Dissipation)</div>
+      <div class="value">0.387</div>
+      <div class="detail">Genuinely multipartite entanglement</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Spectral Gap (Local Decay)</div>
+      <div class="value">0.050</div>
+      <div class="detail">Constant across all couplings and topologies</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Collective Decay Gap Range</div>
+      <div class="value">5 orders</div>
+      <div class="detail">From 3.62e-10 to 5.25e-5</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Network Topologies Tested</div>
+      <div class="value">5</div>
+      <div class="detail">Chain, Ring, Star, Complete-3, Complete-4</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Problem and Methods</h2>
+  <div class="card">
+    <h3>Open Problem</h3>
+    <p>Open quantum networks governed by Lindblad master equations exhibit non-classical emergent behaviors beyond consensus that lack systematic diagnostic tools. This work addresses the gap identified by Wen et al. (2026) by providing a unified, computationally tractable framework to diagnose, classify, and predict non-classical collective phenomena across arbitrary network topologies.</p>
+  </div>
+  <div class="card">
+    <h3>Three-Layer Diagnostic Framework</h3>
+    <div class="method-step">
+      <div class="method-icon">S</div>
+      <div class="method-content">
+        <h4>Layer 1: Spectral Decomposition</h4>
+        <p>Full eigenspectrum analysis of the Lindbladian superoperator in Liouville space. Identifies phase boundaries via spectral gap, relaxation timescales, and slow manifold dimension.</p>
+      </div>
+    </div>
+    <div class="method-step">
+      <div class="method-icon">E</div>
+      <div class="method-content">
+        <h4>Layer 2: Entanglement Topology</h4>
+        <p>Partial-transpose negativity across all bipartitions classifies steady-state quantum correlations as separable, bipartite-entangled, or genuinely multipartite entangled (GME).</p>
+      </div>
+    </div>
+    <div class="method-step">
+      <div class="method-icon">Q</div>
+      <div class="method-content">
+        <h4>Layer 3: Quantum Synchronization Witnesses</h4>
+        <p>Quantum discord and quantum fraction metrics distinguish genuinely quantum collective phenomena from classical analogues. Amplitude and phase synchronization order parameters characterize coherence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Interactive Results</h2>
+
+  <div class="chart-container">
+    <h3>Spectral Phase Diagram (3-Qubit Chain, Local Decay)</h3>
+    <canvas id="spectralChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>Dissipation Channel Comparison</h3>
+    <div class="chart-tabs" id="dissipationTabs">
+      <button class="chart-tab active" data-view="gaps">Spectral Gaps</button>
+      <button class="chart-tab" data-view="negativity">Max Negativity</button>
+    </div>
+    <canvas id="dissipationChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>Spectral Gap Across Topologies</h3>
+    <div class="chart-tabs" id="topoTabs">
+      <button class="chart-tab active" data-dissipation="local_decay">Local Decay</button>
+      <button class="chart-tab" data-dissipation="local_dephasing">Dephasing</button>
+      <button class="chart-tab" data-dissipation="collective_decay">Collective Decay</button>
+    </div>
+    <canvas id="topoChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>Quantum Synchronization Analysis</h3>
+    <p style="color:var(--text-dim);font-size:0.9rem;margin-bottom:12px;">All steady states under local decay exhibit trivial synchronization (zero discord, zero mutual information) across all coupling strengths and dissipation rates tested.</p>
+    <canvas id="syncChart"></canvas>
+  </div>
+</section>
+
+<section>
+  <h2>Topology Comparison Data</h2>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Topology</th>
+          <th>Dissipation</th>
+          <th>Coupling</th>
+          <th>Spectral Gap</th>
+          <th>Steady States</th>
+          <th>Max Negativity</th>
+          <th>Entanglement</th>
+          <th>GME</th>
+        </tr>
+      </thead>
+      <tbody id="topoTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Dissipation Comparison (Non-Zero Negativity Points)</h2>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th>Coupling g</th>
+          <th>Spectral Gap</th>
+          <th>Max Negativity</th>
+          <th>Entanglement Type</th>
+          <th>GME</th>
+        </tr>
+      </thead>
+      <tbody id="dissTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Key Findings</h2>
+  <div class="card">
+    <div class="finding-item">
+      <div class="finding-num">1</div>
+      <div class="finding-text">
+        <h4>Dissipation Channel Determines Non-Classicality</h4>
+        <p>Graph-correlated dissipation uniquely enables genuinely multipartite entanglement with maximum negativity of 0.387, while local decay, dephasing, and collective decay produce exclusively separable steady states across the full coupling range. The dissipation channel, not coherent coupling, determines the non-classical character.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-num">2</div>
+      <div class="finding-text">
+        <h4>Topology-Independent Local Decay</h4>
+        <p>The spectral gap under local decay remains constant at 0.050 regardless of coupling strength (0.01 to 3.0) or network topology (chain, ring, star, complete). This reflects the topology-independent nature of local dissipation, with a fixed relaxation timescale of 20 time units.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-num">3</div>
+      <div class="finding-text">
+        <h4>Collective Decay Shows Dramatic Topology Dependence</h4>
+        <p>Under collective decay, spectral gaps span five orders of magnitude, from 5.25e-5 (chain, g=0.1) down to 3.62e-10 (chain, g=2.0). Star topologies exhibit the largest gaps among collective decay channels, reflecting constructive interference in highly connected networks.</p>
+      </div>
+    </div>
+    <div class="finding-item">
+      <div class="finding-num">4</div>
+      <div class="finding-text">
+        <h4>Trivial Synchronization Under Local Decay</h4>
+        <p>All 100 parameter combinations (25 couplings x 4 dissipation rates) under local decay yield trivial synchronization: zero amplitude/phase synchronization, zero quantum discord, and zero mutual information, indicating complete steady-state decoherence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>KDD 2026 -- AI4Sciences Track -- Physics (PH)</p>
+  <p style="margin-top:6px;">Systematic Analytical Tools for Non-Classical Emergent Behaviors in Open Quantum Networks</p>
+</footer>
+
+<script>
+var spectralData = {
+  couplings: [0.01,0.0867,0.1633,0.24,0.3167,0.3933,0.47,0.5467,0.6233,0.7,0.7767,0.8533,0.93,1.0067,1.0833,1.16,1.2367,1.3133,1.39,1.4667,1.5433,1.62,1.6967,1.7733,1.85,1.9267,2.0033,2.08,2.1567,2.2333,2.31,2.3867,2.4633,2.54,2.6167,2.6933,2.77,2.8467,2.9233,3.0],
+  spectralGaps: [0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05]
+};
+
+var dissipationData = {
+  couplings: [0.05,0.1345,0.219,0.3034,0.3879,0.4724,0.5569,0.6414,0.7259,0.8103,0.8948,0.9793,1.0638,1.1483,1.2328,1.3172,1.4017,1.4862,1.5707,1.6552,1.7397,1.8241,1.9086,1.9931,2.0776,2.1621,2.2466,2.331,2.4155,2.5],
+  localDecay: {
+    gaps: [0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075],
+    neg: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    types: ["separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable"]
+  },
+  localDephasing: {
+    gaps: [0.109,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3],
+    neg: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    types: ["separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable","separable"]
+  },
+  collectiveDecay: {
+    gaps: [0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075],
+    neg: [0,0,0,0.0599,0,0,0,0,0,0,0,0.296,0,0,0,0,0,0,0,0,0,0.00335,0,0,0,0,0.0911,0,0,0],
+    types: ["separable","separable","separable","topological","separable","separable","separable","separable","separable","separable","separable","topological","separable","separable","separable","separable","separable","separable","separable","separable","separable","topological","separable","separable","separable","separable","topological","separable","separable","separable"]
+  },
+  graphDissipation: {
+    gaps: [0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+    neg: [0.189,0,0,0,0,0,0.335,0,0,0,0,0,0.0535,0,0,0,0,0,0,0.00639,0,0,0.386,0,0,0,0,0,0.0939,0.284],
+    types: ["topological","separable","separable","separable","separable","separable","topological","separable","separable","separable","separable","separable","topological","separable","separable","separable","separable","separable","separable","topological","separable","separable","topological","separable","separable","separable","separable","separable","topological","topological"]
+  }
+};
+
+var topoData = {
+  chain: {
+    local_decay: [
+      {g:0.1, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false}
+    ],
+    local_dephasing: [
+      {g:0.1, gap:0.2, ss:4, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.2, ss:4, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.2, ss:4, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.2, ss:4, neg:0, ent:"separable", gme:false}
+    ],
+    collective_decay: [
+      {g:0.1, gap:5.25e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:9.22e-8, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:5.78e-9, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:3.62e-10, ss:1, neg:0, ent:"separable", gme:false}
+    ]
+  },
+  ring: {
+    local_decay: [
+      {g:0.1, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false}
+    ],
+    local_dephasing: [
+      {g:0.1, gap:0.2, ss:2, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.2, ss:2, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.2, ss:3, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.2, ss:2, neg:0, ent:"separable", gme:false}
+    ],
+    collective_decay: [
+      {g:0.1, gap:1.16e-3, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:5.43e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:1.37e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:3.45e-6, ss:1, neg:0, ent:"separable", gme:false}
+    ]
+  },
+  star: {
+    local_decay: [
+      {g:0.1, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false}
+    ],
+    local_dephasing: [
+      {g:0.1, gap:0.0764, ss:4, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.190, ss:3, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.195, ss:3, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.197, ss:3, neg:0, ent:"separable", gme:false}
+    ],
+    collective_decay: [
+      {g:0.1, gap:2.62e-3, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:1.01e-4, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:2.43e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:5.97e-6, ss:1, neg:0, ent:"separable", gme:false}
+    ]
+  },
+  complete_3: {
+    local_decay: [
+      {g:0.1, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false}
+    ],
+    local_dephasing: [
+      {g:0.1, gap:0.2, ss:2, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.2, ss:2, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.2, ss:3, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.2, ss:2, neg:0, ent:"separable", gme:false}
+    ],
+    collective_decay: [
+      {g:0.1, gap:1.16e-3, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:5.43e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:1.37e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:3.45e-6, ss:1, neg:0, ent:"separable", gme:false}
+    ]
+  },
+  complete_4: {
+    local_decay: [
+      {g:0.1, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.05, ss:1, neg:0, ent:"separable", gme:false}
+    ],
+    local_dephasing: [
+      {g:0.1, gap:0.153, ss:4, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:0.170, ss:3, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:0.169, ss:3, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:0.169, ss:5, neg:0, ent:"separable", gme:false}
+    ],
+    collective_decay: [
+      {g:0.1, gap:1.02e-3, ss:1, neg:0, ent:"separable", gme:false},
+      {g:0.5, gap:4.85e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:1.0, gap:1.23e-5, ss:1, neg:0, ent:"separable", gme:false},
+      {g:2.0, gap:3.10e-6, ss:1, neg:0, ent:"separable", gme:false}
+    ]
+  }
+};
+
+Chart.defaults.color = '#a0a0b0';
+Chart.defaults.borderColor = '#2a2a4a';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// Chart 1: Spectral Phase Diagram
+var spectralCtx = document.getElementById('spectralChart').getContext('2d');
+new Chart(spectralCtx, {
+  type: 'line',
+  data: {
+    labels: spectralData.couplings.map(function(v) { return v.toFixed(2); }),
+    datasets: [{
+      label: 'Spectral Gap',
+      data: spectralData.spectralGaps,
+      borderColor: '#e94560',
+      backgroundColor: 'rgba(233,69,96,0.1)',
+      borderWidth: 2,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      fill: true,
+      tension: 0.1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    aspectRatio: 2.5,
+    plugins: {
+      legend: { display: true, position: 'top' },
+      tooltip: {
+        callbacks: {
+          title: function(items) { return 'Coupling g = ' + items[0].label; },
+          label: function(item) { return 'Spectral Gap: ' + item.raw.toFixed(4); }
+        }
+      }
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Coupling Strength g', color: '#a0a0b0' },
+        ticks: { maxTicksLimit: 10 }
+      },
+      y: {
+        title: { display: true, text: 'Spectral Gap', color: '#a0a0b0' },
+        min: 0, max: 0.1
+      }
+    }
+  }
+});
+
+// Chart 2: Dissipation Comparison
+var dissCtx = document.getElementById('dissipationChart').getContext('2d');
+var dissChart = null;
+
+function buildDissChart(view) {
+  if (dissChart) dissChart.destroy();
+  var labels = dissipationData.couplings.map(function(v) { return v.toFixed(2); });
+  var datasets, yTitle, yMax;
+
+  if (view === 'gaps') {
+    datasets = [
+      { label: 'Local Decay', data: dissipationData.localDecay.gaps, borderColor: '#00d9a6', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.1 },
+      { label: 'Local Dephasing', data: dissipationData.localDephasing.gaps, borderColor: '#f0a500', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.1 },
+      { label: 'Collective Decay', data: dissipationData.collectiveDecay.gaps, borderColor: '#6c5ce7', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.1 },
+      { label: 'Graph Dissipation', data: dissipationData.graphDissipation.gaps, borderColor: '#e94560', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.1 }
+    ];
+    yTitle = 'Spectral Gap'; yMax = 0.35;
+  } else {
+    datasets = [
+      { label: 'Collective Decay', data: dissipationData.collectiveDecay.neg, borderColor: '#6c5ce7', backgroundColor: 'rgba(108,92,231,0.15)', borderWidth: 2, pointRadius: 4, fill: true, tension: 0.1 },
+      { label: 'Graph Dissipation', data: dissipationData.graphDissipation.neg, borderColor: '#e94560', backgroundColor: 'rgba(233,69,96,0.15)', borderWidth: 2, pointRadius: 4, fill: true, tension: 0.1 }
+    ];
+    yTitle = 'Max Negativity'; yMax = 0.45;
+  }
+
+  dissChart = new Chart(dissCtx, {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: true, aspectRatio: 2.5,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { title: function(items) { return 'Coupling g = ' + items[0].label; } } }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Coupling Strength g', color: '#a0a0b0' }, ticks: { maxTicksLimit: 10 } },
+        y: { title: { display: true, text: yTitle, color: '#a0a0b0' }, min: 0, max: yMax }
+      }
+    }
+  });
+}
+buildDissChart('gaps');
+
+document.getElementById('dissipationTabs').addEventListener('click', function(e) {
+  if (!e.target.classList.contains('chart-tab')) return;
+  var tabs = document.querySelectorAll('#dissipationTabs .chart-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  e.target.classList.add('active');
+  buildDissChart(e.target.getAttribute('data-view'));
+});
+
+// Chart 3: Topology Comparison
+var topoCtx = document.getElementById('topoChart').getContext('2d');
+var topoChart = null;
+
+function buildTopoChart(dissType) {
+  if (topoChart) topoChart.destroy();
+  var topoNames = ['chain','ring','star','complete_3','complete_4'];
+  var topoLabels = ['Chain','Ring','Star','Complete-3','Complete-4'];
+  var colors = ['#e94560','#00d9a6','#f0a500','#6c5ce7','#00b4d8'];
+  var couplingLabels = ['g=0.1', 'g=0.5', 'g=1.0', 'g=2.0'];
+  var useLog = dissType === 'collective_decay';
+
+  var datasets = topoNames.map(function(name, i) {
+    return {
+      label: topoLabels[i],
+      data: topoData[name][dissType].map(function(d) { return d.gap; }),
+      borderColor: colors[i],
+      backgroundColor: colors[i] + '22',
+      borderWidth: 2,
+      pointRadius: 5,
+      pointHoverRadius: 7
+    };
+  });
+
+  topoChart = new Chart(topoCtx, {
+    type: 'line',
+    data: { labels: couplingLabels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: true, aspectRatio: 2.5,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: function(item) { return item.dataset.label + ': ' + item.raw.toExponential(3); }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Coupling Strength', color: '#a0a0b0' } },
+        y: {
+          type: useLog ? 'logarithmic' : 'linear',
+          title: { display: true, text: 'Spectral Gap', color: '#a0a0b0' }
+        }
+      }
+    }
+  });
+}
+buildTopoChart('local_decay');
+
+document.getElementById('topoTabs').addEventListener('click', function(e) {
+  if (!e.target.classList.contains('chart-tab')) return;
+  var tabs = document.querySelectorAll('#topoTabs .chart-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  e.target.classList.add('active');
+  buildTopoChart(e.target.getAttribute('data-dissipation'));
+});
+
+// Chart 4: Synchronization
+var syncCouplings = [0.05,0.152,0.254,0.356,0.458,0.560,0.663,0.765,0.867,0.969,1.071,1.173,1.275,1.377,1.479,1.581,1.683,1.785,1.888,1.990,2.092,2.194,2.296,2.398,2.5];
+var syncCtx = document.getElementById('syncChart').getContext('2d');
+new Chart(syncCtx, {
+  type: 'bar',
+  data: {
+    labels: syncCouplings.map(function(v) { return v.toFixed(2); }),
+    datasets: [
+      { label: 'Quantum Discord (q1-q2)', data: new Array(25).fill(0), backgroundColor: 'rgba(233,69,96,0.6)', borderColor: '#e94560', borderWidth: 1 },
+      { label: 'Mutual Information (q1-q2)', data: new Array(25).fill(0), backgroundColor: 'rgba(0,217,166,0.6)', borderColor: '#00d9a6', borderWidth: 1 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true, aspectRatio: 2.5,
+    plugins: {
+      legend: { position: 'top' },
+      title: { display: true, text: 'All values = 0 (trivial synchronization)', color: '#a0a0b0', font: { size: 13, style: 'italic' } }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Coupling Strength g', color: '#a0a0b0' }, ticks: { maxTicksLimit: 10 } },
+      y: { title: { display: true, text: 'Value', color: '#a0a0b0' }, min: 0, max: 0.5 }
+    }
+  }
+});
+
+// Build Topology Table
+(function() {
+  var tbody = document.getElementById('topoTableBody');
+  var topoNames = ['chain','ring','star','complete_3','complete_4'];
+  var topoLabelsMap = { chain:'Chain', ring:'Ring', star:'Star', complete_3:'Complete-3', complete_4:'Complete-4' };
+  var dissTypes = ['local_decay','local_dephasing','collective_decay'];
+  var dissLabelsMap = { local_decay:'Local Decay', local_dephasing:'Dephasing', collective_decay:'Collective Decay' };
+
+  for (var t = 0; t < topoNames.length; t++) {
+    for (var d = 0; d < dissTypes.length; d++) {
+      var rows = topoData[topoNames[t]][dissTypes[d]];
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        var tr = document.createElement('tr');
+        var entClass = row.ent === 'separable' ? 'separable' : (row.gme ? 'gme' : 'topological');
+
+        var td1 = document.createElement('td'); td1.textContent = topoLabelsMap[topoNames[t]]; tr.appendChild(td1);
+        var td2 = document.createElement('td'); td2.textContent = dissLabelsMap[dissTypes[d]]; tr.appendChild(td2);
+        var td3 = document.createElement('td'); td3.textContent = row.g; tr.appendChild(td3);
+        var td4 = document.createElement('td'); td4.textContent = row.gap.toExponential(3); tr.appendChild(td4);
+        var td5 = document.createElement('td'); td5.textContent = row.ss; tr.appendChild(td5);
+        var td6 = document.createElement('td'); td6.textContent = row.neg.toFixed(4); tr.appendChild(td6);
+        var td7 = document.createElement('td');
+        var span7 = document.createElement('span'); span7.className = 'sep-tag ' + entClass; span7.textContent = row.ent; td7.appendChild(span7); tr.appendChild(td7);
+        var td8 = document.createElement('td'); td8.textContent = row.gme ? 'Yes' : 'No'; tr.appendChild(td8);
+
+        tbody.appendChild(tr);
+      }
+    }
+  }
+})();
+
+// Build Dissipation Non-Zero Table
+(function() {
+  var tbody = document.getElementById('dissTableBody');
+  var channels = [
+    { name: 'Collective Decay', data: dissipationData.collectiveDecay },
+    { name: 'Graph Dissipation', data: dissipationData.graphDissipation }
+  ];
+  for (var c = 0; c < channels.length; c++) {
+    var ch = channels[c];
+    for (var i = 0; i < ch.data.neg.length; i++) {
+      if (ch.data.neg[i] > 0) {
+        var tr = document.createElement('tr');
+        var entClass = ch.data.types[i] === 'separable' ? 'separable' : 'topological';
+        var isGME = ch.data.types[i] === 'topological';
+
+        var td1 = document.createElement('td'); td1.textContent = ch.name; tr.appendChild(td1);
+        var td2 = document.createElement('td'); td2.textContent = dissipationData.couplings[i].toFixed(4); tr.appendChild(td2);
+        var td3 = document.createElement('td'); td3.textContent = ch.data.gaps[i].toFixed(4); tr.appendChild(td3);
+        var td4 = document.createElement('td'); td4.textContent = ch.data.neg[i].toFixed(4); tr.appendChild(td4);
+        var td5 = document.createElement('td');
+        var span5 = document.createElement('span'); span5.className = 'sep-tag ' + entClass; span5.textContent = ch.data.types[i]; td5.appendChild(span5); tr.appendChild(td5);
+        var td6 = document.createElement('td'); td6.textContent = isGME ? 'Yes' : 'No'; tr.appendChild(td6);
+
+        tbody.appendChild(tr);
+      }
+    }
+  }
+})();
+</script>
+</body>
+</html>

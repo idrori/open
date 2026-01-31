@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score Range Adjustment for Bias Mitigation in LLM-as-a-Judge</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+header{text-align:center;padding:40px 20px;border-bottom:1px solid #1e293b;margin-bottom:30px}
+h1{font-size:1.8rem;color:#f1f5f9;margin-bottom:10px}
+h2{font-size:1.3rem;color:#94a3b8;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid #1e293b}
+h3{font-size:1.1rem;color:#cbd5e1;margin-bottom:12px}
+.subtitle{color:#64748b;font-size:1rem;max-width:900px;margin:0 auto}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;margin:4px}
+.badge-cl{background:#7c3aed;color:#f5f3ff}
+.badge-kdd{background:#0891b2;color:#ecfeff}
+.grid{display:grid;gap:24px;margin-bottom:30px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(500px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(350px,1fr))}
+.grid-4{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.grid-5{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{background:#1e293b;border-radius:12px;padding:24px;border:1px solid #334155}
+.stat-card{text-align:center;padding:20px}
+.stat-value{font-size:2.2rem;font-weight:700;color:#c084fc}
+.stat-label{font-size:0.85rem;color:#94a3b8;margin-top:4px}
+.stat-delta{font-size:0.8rem;margin-top:2px}
+.chart-container{position:relative;height:380px;width:100%}
+.chart-sm{height:300px}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600;background:#0f172a}
+td{color:#cbd5e1}
+.problem-box{background:linear-gradient(135deg,#2e1065,#4c1d95);border:1px solid #7c3aed;border-radius:12px;padding:24px;margin-bottom:30px}
+.problem-box p{color:#ddd6fe}
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:0.85rem;background:#334155;color:#94a3b8;border:none;transition:all 0.2s}
+.tab.active{background:#7c3aed;color:#fff}
+.tab:hover{background:#475569;color:#fff}
+.finding{background:#1e293b;border-left:4px solid #c084fc;padding:16px 20px;margin-bottom:12px;border-radius:0 8px 8px 0}
+.finding h4{color:#c084fc;margin-bottom:4px;font-size:0.95rem}
+.finding p{color:#94a3b8;font-size:0.88rem}
+.good{color:#4ade80;font-weight:600}
+@media(max-width:768px){.grid-2,.grid-3,.grid-4,.grid-5{grid-template-columns:1fr}h1{font-size:1.4rem}.chart-container{height:300px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<div><span class="badge badge-cl">CL</span><span class="badge badge-kdd">KDD 2026</span></div>
+<h1>When Does Widening the Scale Help?</h1>
+<p class="subtitle">A systematic study of score range adjustment for bias mitigation in LLM-as-a-Judge evaluations across tasks, alignment methods, and scoring configurations</p>
+</header>
+
+<div class="problem-box">
+<h3>Open Problem</h3>
+<p>Score range adjustment -- widening the discrete scale offered to an LLM judge -- has been proposed as a bias mitigation strategy, but its generalizability across tasks, alignment methods, and scoring configurations remains an open question (Sato et al., 2026). This work provides a systematic generalizability audit across 5 task types, 4 alignment profiles, and 7 scale granularities (175 conditions).</p>
+</div>
+
+<div class="grid grid-4">
+<div class="card stat-card"><div class="stat-value">84%</div><div class="stat-label">Conditions Where Range Helps</div><div class="stat-delta" style="color:#4ade80">Spearman rho improves</div></div>
+<div class="card stat-card"><div class="stat-value">+0.374</div><div class="stat-label">Largest Spearman Gain</div><div class="stat-delta" style="color:#94a3b8">Essay + Asymmetric DPO</div></div>
+<div class="card stat-card"><div class="stat-value">175</div><div class="stat-label">Experimental Conditions</div><div class="stat-delta" style="color:#94a3b8">5 tasks x 5 alignments x 7 K</div></div>
+<div class="card stat-card"><div class="stat-value">r=-0.477</div><div class="stat-label">Task Variance Correlation</div><div class="stat-delta" style="color:#94a3b8">p=0.016, lower var = more benefit</div></div>
+</div>
+
+<div class="grid grid-3" style="margin-bottom:30px">
+<div class="finding">
+<h4>Finding 1: Range adjustment broadly helps ordinal accuracy</h4>
+<p>Widening K=5 to K=50 improves Spearman rank correlation in 84% of conditions. The improvement is monotonically increasing with K.</p>
+</div>
+<div class="finding">
+<h4>Finding 2: Kurtosis reduction is inconsistent</h4>
+<p>EMD systematically increases with K, while Spearman improves. The distributional gap is rescaled rather than resolved.</p>
+</div>
+<div class="finding">
+<h4>Finding 3: Range adjustment complements calibration</h4>
+<p>Wider ranges encode more information in raw scores. At narrow K, isotonic calibration can actually reduce rank correlation.</p>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Spearman Rank Correlation vs Scale Granularity (K)</h2>
+<p style="color:#64748b;font-size:0.85rem;margin-bottom:12px">Select a task to see how Spearman rho changes with K across alignment profiles. Rank correlation improves monotonically in nearly all conditions.</p>
+<div class="tabs" id="taskTabs">
+<button class="tab active" onclick="switchTask('Summarization')">Summarization</button>
+<button class="tab" onclick="switchTask('Translation')">Translation</button>
+<button class="tab" onclick="switchTask('Open Generation')">Open Gen.</button>
+<button class="tab" onclick="switchTask('Code Review')">Code Review</button>
+<button class="tab" onclick="switchTask('Essay Scoring')">Essay Scoring</button>
+</div>
+<div class="chart-container"><canvas id="spearmanChart"></canvas></div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Adaptive Two-Pass Protocol: Spearman</h2>
+<div class="chart-container"><canvas id="adaptiveChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Predictive Factors: Task Variance vs Improvement</h2>
+<div class="chart-container"><canvas id="predictiveChart"></canvas></div>
+</div>
+</div>
+
+<div class="grid grid-2">
+<div class="card">
+<h2>Task Quality Distributions</h2>
+<div class="chart-container"><canvas id="taskDistChart"></canvas></div>
+</div>
+<div class="card">
+<h2>Compression Functions</h2>
+<div class="chart-container"><canvas id="compressionChart"></canvas></div>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:30px">
+<h2>Adaptive Protocol Results</h2>
+<table>
+<thead><tr><th>Task</th><th>Alignment</th><th>K base</th><th>K adapted</th><th>Base Spearman</th><th>Adapted Spearman</th><th>Change</th></tr></thead>
+<tbody id="adaptiveTable"></tbody>
+</table>
+</div>
+
+<div class="grid grid-2" style="margin-bottom:30px">
+<div class="card">
+<h2>Task Profiles</h2>
+<table>
+<thead><tr><th>Task</th><th>Distribution</th><th>Mean</th><th>Variance</th></tr></thead>
+<tbody>
+<tr><td>Summarization</td><td>Beta(4,4)</td><td>0.498</td><td>0.028</td></tr>
+<tr><td>Translation</td><td>Beta(2,2)</td><td>0.500</td><td>0.050</td></tr>
+<tr><td>Open Generation</td><td>Uniform(0,1)</td><td>0.499</td><td>0.084</td></tr>
+<tr><td>Code Review</td><td>Bimodal Beta</td><td>0.560</td><td>0.101</td></tr>
+<tr><td>Essay Scoring</td><td>Beta(5,2)</td><td>0.713</td><td>0.025</td></tr>
+</tbody>
+</table>
+</div>
+<div class="card">
+<h2>Predictive Summary</h2>
+<table>
+<thead><tr><th>Metric</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Task variance correlation with improvement</td><td>r = -0.477 (p = 0.016)</td></tr>
+<tr><td>Conditions where range adjustment helps</td><td>21 / 25 (84%)</td></tr>
+<tr><td>Conditions that never worsen all metrics</td><td>25 / 25 (100%)</td></tr>
+<tr><td>Largest Spearman gain (K5 to K50)</td><td>+0.374 (Essay + Asym. DPO)</td></tr>
+<tr><td>Recommended default for strong compression</td><td>K >= 20</td></tr>
+<tr><td>Recommended default for mild compression</td><td>K = 5-10</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<script>
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+
+// Spearman vs K data (extracted from audit_results.csv)
+const kValues = [3,5,7,10,20,50,100];
+const spearmanData = {
+  'Summarization': {
+    'No Alignment': [1.000,1.000,1.000,1.000,1.000,1.000,1.000],
+    'Mild RLHF': [0.797,0.920,0.952,0.981,0.995,0.999,1.000],
+    'Strong RLHF': [0.714,0.910,0.956,0.984,0.996,0.999,1.000],
+    'Asymmetric DPO': [0.657,0.870,0.948,0.970,0.991,0.999,1.000],
+    'Power Compression': [0.488,0.626,0.764,0.940,0.968,0.990,0.996]
+  },
+  'Translation': {
+    'No Alignment': [1.000,1.000,1.000,1.000,1.000,1.000,1.000],
+    'Mild RLHF': [0.886,0.941,0.970,0.989,0.997,0.999,1.000],
+    'Strong RLHF': [0.830,0.937,0.969,0.988,0.997,0.999,1.000],
+    'Asymmetric DPO': [0.770,0.907,0.962,0.982,0.995,0.999,1.000],
+    'Power Compression': [0.699,0.819,0.910,0.970,0.986,0.996,0.999]
+  },
+  'Open Generation': {
+    'No Alignment': [1.000,1.000,1.000,1.000,1.000,1.000,1.000],
+    'Mild RLHF': [0.929,0.955,0.970,0.985,0.995,0.999,1.000],
+    'Strong RLHF': [0.892,0.943,0.966,0.984,0.995,0.999,1.000],
+    'Asymmetric DPO': [0.851,0.925,0.957,0.977,0.993,0.998,1.000],
+    'Power Compression': [0.844,0.916,0.954,0.976,0.991,0.998,0.999]
+  },
+  'Code Review': {
+    'No Alignment': [1.000,1.000,1.000,1.000,1.000,1.000,1.000],
+    'Mild RLHF': [0.924,0.932,0.960,0.983,0.995,0.999,1.000],
+    'Strong RLHF': [0.890,0.914,0.950,0.979,0.994,0.999,1.000],
+    'Asymmetric DPO': [0.858,0.899,0.940,0.971,0.991,0.998,1.000],
+    'Power Compression': [0.870,0.924,0.960,0.981,0.993,0.999,1.000]
+  },
+  'Essay Scoring': {
+    'No Alignment': [1.000,1.000,1.000,1.000,1.000,1.000,1.000],
+    'Mild RLHF': [0.691,0.826,0.920,0.965,0.991,0.999,1.000],
+    'Strong RLHF': [0.601,0.779,0.895,0.953,0.988,0.998,1.000],
+    'Asymmetric DPO': [0.393,0.553,0.782,0.908,0.974,0.997,1.000],
+    'Power Compression': [0.621,0.798,0.912,0.960,0.988,0.998,1.000]
+  }
+};
+
+const alignColors = {
+  'No Alignment':'#64748b',
+  'Mild RLHF':'#38bdf8',
+  'Strong RLHF':'#ef4444',
+  'Asymmetric DPO':'#f59e0b',
+  'Power Compression':'#a78bfa'
+};
+
+let spearmanChart;
+function buildSpearmanChart(task) {
+  if(spearmanChart) spearmanChart.destroy();
+  const td = spearmanData[task];
+  spearmanChart = new Chart(document.getElementById('spearmanChart'),{
+    type:'line',
+    data:{labels:kValues.map(String),datasets:Object.entries(td).map(([align,vals])=>({
+      label:align,data:vals,borderColor:alignColors[align],backgroundColor:alignColors[align]+'22',
+      borderWidth:2,pointRadius:5,tension:0.3,borderDash:align==='No Alignment'?[6,3]:[]
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:`${task}: Spearman rho vs Scale K`}},
+      scales:{x:{title:{display:true,text:'Score Range K'}},y:{min:0.3,max:1.05,title:{display:true,text:'Spearman Rank Correlation'}}}}
+  });
+}
+buildSpearmanChart('Summarization');
+function switchTask(t){
+  document.querySelectorAll('#taskTabs .tab').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  buildSpearmanChart(t);
+}
+
+// Adaptive Protocol
+const adaptiveData = [
+  {task:'Summarization',align:'Mild RLHF',kb:5,ka:7,sb:0.920,sa:0.952},
+  {task:'Summarization',align:'Strong RLHF',kb:5,ka:5,sb:0.910,sa:0.910},
+  {task:'Summarization',align:'Asymmetric DPO',kb:5,ka:7,sb:0.870,sa:0.948},
+  {task:'Summarization',align:'Power Compr.',kb:5,ka:50,sb:0.626,sa:0.990},
+  {task:'Translation',align:'Mild RLHF',kb:5,ka:5,sb:0.941,sa:0.941},
+  {task:'Translation',align:'Strong RLHF',kb:5,ka:5,sb:0.937,sa:0.937},
+  {task:'Translation',align:'Asymmetric DPO',kb:5,ka:5,sb:0.907,sa:0.907},
+  {task:'Translation',align:'Power Compr.',kb:5,ka:20,sb:0.819,sa:0.986},
+  {task:'Essay Scoring',align:'Mild RLHF',kb:5,ka:10,sb:0.826,sa:0.972},
+  {task:'Essay Scoring',align:'Strong RLHF',kb:5,ka:20,sb:0.779,sa:0.960},
+  {task:'Essay Scoring',align:'Asymmetric DPO',kb:5,ka:50,sb:0.553,sa:0.927},
+  {task:'Essay Scoring',align:'Power Compr.',kb:5,ka:20,sb:0.798,sa:0.984}
+];
+
+const tasks5 = ['Summarization','Translation','Open Gen.','Code Review','Essay Scoring'];
+const baseMeans = [0.831,0.901,0.934,0.917,0.739];
+const adaptMeans = [0.950,0.943,0.911,0.947,0.961];
+
+new Chart(document.getElementById('adaptiveChart'),{
+  type:'bar',
+  data:{labels:tasks5,datasets:[
+    {label:'Baseline (K=5)',data:baseMeans,backgroundColor:'#64748bcc',borderColor:'#64748b',borderWidth:1},
+    {label:'Adapted K',data:adaptMeans,backgroundColor:'#c084fccc',borderColor:'#c084fc',borderWidth:1}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:'Mean Spearman (across alignment methods)'}},
+    scales:{y:{min:0.6,max:1.05,title:{display:true,text:'Mean Spearman rho'}}}}
+});
+
+// Predictive Scatter
+const predData = [
+  {task:'Summarization',align:'Mild RLHF',var:0.028,delta:0.079,helps:true},
+  {task:'Summarization',align:'Strong RLHF',var:0.028,delta:0.089,helps:true},
+  {task:'Summarization',align:'Asymmetric DPO',var:0.028,delta:0.129,helps:true},
+  {task:'Summarization',align:'Power Compr.',var:0.028,delta:0.363,helps:true},
+  {task:'Translation',align:'Mild RLHF',var:0.050,delta:0.058,helps:true},
+  {task:'Translation',align:'Strong RLHF',var:0.050,delta:0.062,helps:true},
+  {task:'Translation',align:'Asymmetric DPO',var:0.050,delta:0.090,helps:true},
+  {task:'Translation',align:'Power Compr.',var:0.050,delta:0.177,helps:true},
+  {task:'Open Gen.',align:'Mild RLHF',var:0.083,delta:0.044,helps:true},
+  {task:'Open Gen.',align:'Strong RLHF',var:0.083,delta:0.051,helps:true},
+  {task:'Open Gen.',align:'Asymmetric DPO',var:0.083,delta:0.063,helps:true},
+  {task:'Open Gen.',align:'Power Compr.',var:0.083,delta:0.083,helps:true},
+  {task:'Code Review',align:'Mild RLHF',var:0.101,delta:0.066,helps:true},
+  {task:'Code Review',align:'Strong RLHF',var:0.101,delta:0.070,helps:true},
+  {task:'Code Review',align:'Asymmetric DPO',var:0.101,delta:0.053,helps:true},
+  {task:'Code Review',align:'Power Compr.',var:0.101,delta:0.075,helps:true},
+  {task:'Essay',align:'Mild RLHF',var:0.025,delta:0.173,helps:true},
+  {task:'Essay',align:'Strong RLHF',var:0.025,delta:0.209,helps:true},
+  {task:'Essay',align:'Asymmetric DPO',var:0.025,delta:0.374,helps:true},
+  {task:'Essay',align:'Power Compr.',var:0.025,delta:0.200,helps:true}
+];
+
+const taskColors = {'Summarization':'#38bdf8','Translation':'#4ade80','Open Gen.':'#f59e0b','Code Review':'#ef4444','Essay':'#c084fc'};
+const datasets = {};
+predData.forEach(d=>{
+  const t = d.task;
+  if(!datasets[t]) datasets[t] = [];
+  datasets[t].push({x:d.var,y:d.delta});
+});
+
+new Chart(document.getElementById('predictiveChart'),{
+  type:'scatter',
+  data:{datasets:Object.entries(datasets).map(([t,pts])=>({
+    label:t,data:pts,backgroundColor:taskColors[t]+'cc',borderColor:taskColors[t],pointRadius:7,pointHoverRadius:10
+  }))},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:'r = -0.477, p = 0.016: Lower variance tasks benefit more'}},
+    scales:{x:{title:{display:true,text:'Task Ground-Truth Variance'}},y:{title:{display:true,text:'Spearman Improvement (K5 to K50)'}}}}
+});
+
+// Task Distribution
+function betaPDF(x,a,b){
+  const lnB = lgamma(a)+lgamma(b)-lgamma(a+b);
+  return Math.exp((a-1)*Math.log(x)+(b-1)*Math.log(1-x)-lnB);
+}
+function lgamma(z){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.001208650973866179,-0.000005395239384953];
+  let x=z,y=z,t=x+5.5;t-=(x+0.5)*Math.log(t);let s=1.000000000190015;
+  for(let j=0;j<6;j++)s+=c[j]/++y;return-t+Math.log(2.5066282746310005*s/x);
+}
+const xVals = Array.from({length:50},(_, i)=>(i+0.5)/50);
+const taskDists = {
+  'Summarization':xVals.map(x=>betaPDF(x,4,4)),
+  'Translation':xVals.map(x=>betaPDF(x,2,2)),
+  'Open Gen.':xVals.map(x=>1.0),
+  'Essay Scoring':xVals.map(x=>betaPDF(x,5,2))
+};
+const taskDistColors = {'Summarization':'#38bdf8','Translation':'#4ade80','Open Gen.':'#f59e0b','Essay Scoring':'#c084fc'};
+
+new Chart(document.getElementById('taskDistChart'),{
+  type:'line',
+  data:{labels:xVals.map(x=>x.toFixed(2)),datasets:Object.entries(taskDists).map(([t,ys])=>({
+    label:t,data:ys,borderColor:taskDistColors[t],backgroundColor:taskDistColors[t]+'22',
+    borderWidth:2,pointRadius:0,fill:true,tension:0.3
+  }))},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:'Ground-Truth Quality Distributions'}},
+    scales:{x:{title:{display:true,text:'Quality Score q'},ticks:{maxTicksLimit:10}},y:{title:{display:true,text:'Density'}}}}
+});
+
+// Compression Functions
+const qVals = Array.from({length:100},(_, i)=>i/99);
+function betaCDF(x,a,b){
+  if(x<=0) return 0;if(x>=1) return 1;
+  let sum=0;const n=200;
+  for(let i=0;i<n;i++){const t=(i+0.5)/n;if(t<x) sum+=betaPDF(t,a,b)/n;}
+  return sum;
+}
+function powerCompress(q,g){return 0.5+Math.sign(2*q-1)*Math.pow(Math.abs(2*q-1),g)/2;}
+
+const comprFuncs = {
+  'Identity':qVals.map(q=>q),
+  'Mild RLHF (a=b=2)':qVals.map(q=>betaCDF(q,2,2)),
+  'Strong RLHF (a=b=4)':qVals.map(q=>betaCDF(q,4,4)),
+  'Asymmetric DPO (a=3,b=5)':qVals.map(q=>betaCDF(q,3,5)),
+  'Power (gamma=2)':qVals.map(q=>powerCompress(q,2))
+};
+const comprColors = {'Identity':'#64748b','Mild RLHF (a=b=2)':'#38bdf8','Strong RLHF (a=b=4)':'#ef4444','Asymmetric DPO (a=3,b=5)':'#f59e0b','Power (gamma=2)':'#a78bfa'};
+
+new Chart(document.getElementById('compressionChart'),{
+  type:'line',
+  data:{labels:qVals.map(q=>q.toFixed(2)),datasets:Object.entries(comprFuncs).map(([n,ys])=>({
+    label:n,data:ys,borderColor:comprColors[n],borderWidth:2,pointRadius:0,tension:0.1,
+    borderDash:n==='Identity'?[4,4]:n.includes('Asymmetric')?[8,4]:n.includes('Power')?[2,4]:[]
+  }))},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},title:{display:true,text:'g(q): Alignment Compression Functions'}},
+    scales:{x:{title:{display:true,text:'Latent Quality q'},ticks:{maxTicksLimit:10}},y:{title:{display:true,text:'Compressed Score g(q)'}}}}
+});
+
+// Adaptive Table
+const tbody = document.getElementById('adaptiveTable');
+adaptiveData.forEach(d=>{
+  const delta = d.sa - d.sb;
+  const cls = delta > 0.001 ? 'good' : '';
+  tbody.innerHTML += `<tr><td>${d.task}</td><td>${d.align}</td><td>${d.kb}</td><td>${d.ka}</td><td>${d.sb.toFixed(3)}</td><td class="${cls}">${d.sa.toFixed(3)}</td><td class="${cls}">${delta>0?'+':''}${delta.toFixed(3)}</td></tr>`;
+});
+</script>
+</body>
+</html>

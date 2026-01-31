@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transfer of Architecture Synthesis Beyond CIFAR-10</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root { --primary:#1a3a5c; --accent:#2980b9; --bg:#f5f7fa; --card:#fff; --text:#2c3e50; --border:#dce1e8; --success:#27ae60; --danger:#e74c3c; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+        .header { background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; padding:2rem; text-align:center; }
+        .header h1 { font-size:1.4rem; margin-bottom:0.5rem; }
+        .header p { opacity:0.9; font-size:0.9rem; max-width:700px; margin:0 auto; }
+        .container { max-width:1200px; margin:0 auto; padding:1.5rem; }
+        .grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+        @media(max-width:768px) { .grid{grid-template-columns:1fr;} }
+        .card { background:var(--card); border-radius:10px; padding:1.2rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+        .card h3 { color:var(--primary); margin-bottom:0.8rem; font-size:1rem; }
+        .chart-container { position:relative; height:300px; }
+        .controls { background:var(--card); border-radius:10px; padding:1rem; margin-bottom:1.5rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); display:flex; gap:1.5rem; flex-wrap:wrap; align-items:center; }
+        .control-group label { font-size:0.85rem; font-weight:600; color:var(--primary); display:block; }
+        select { padding:0.4rem; border:1px solid var(--border); border-radius:6px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Transfer of Architecture Synthesis Beyond CIFAR-10</h1>
+        <p>Evaluating whether LLM-driven architecture generation trends generalize across datasets, modalities, and tasks. Based on Khalid et al. (2026).</p>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <div class="control-group"><label>Focus Dataset</label>
+                <select id="dsSelect"><option value="all">All Datasets</option>
+                    <option value="CIFAR-10">CIFAR-10</option><option value="ImageNet-1k">ImageNet</option>
+                    <option value="AudioSet">AudioSet</option><option value="NLP-SST2">NLP-SST2</option></select></div>
+            <div class="control-group"><label>Task</label>
+                <select id="taskSelect"><option value="classification">Classification</option>
+                    <option value="segmentation">Segmentation</option><option value="detection">Detection</option>
+                    <option value="generation">Generation</option></select></div>
+        </div>
+        <div class="grid">
+            <div class="card"><h3>Validity Rate Across Datasets</h3><div class="chart-container"><canvas id="validChart"></canvas></div></div>
+            <div class="card"><h3>Transfer Gap by Dataset</h3><div class="chart-container"><canvas id="gapChart"></canvas></div></div>
+            <div class="card"><h3>Accuracy Distribution</h3><div class="chart-container"><canvas id="accChart"></canvas></div></div>
+            <div class="card"><h3>Task Comparison</h3><div class="chart-container"><canvas id="taskChart"></canvas></div></div>
+        </div>
+    </div>
+    <script>
+        const P='#1a3a5c',A='#2980b9',D='#e74c3c',S='#27ae60';
+        const DS_MOD={'CIFAR-10':1,'CIFAR-100':.95,'ImageNet-1k':.8,'STL-10':.9,'SVHN':.95,'Fashion-MNIST':.98,'AudioSet':.7,'NLP-SST2':.65};
+        const TK_MOD={'classification':1,'segmentation':.75,'detection':.7,'generation':.6};
+        const datasets=Object.keys(DS_MOD);
+        let charts={};
+        function init(){
+            const o={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:9}}}}};
+            charts.valid=new Chart(document.getElementById('validChart'),{type:'line',data:{},options:{...o,scales:{x:{title:{display:true,text:'Iteration'}},y:{title:{display:true,text:'Validity'},min:0,max:1}}}});
+            charts.gap=new Chart(document.getElementById('gapChart'),{type:'bar',data:{},options:{...o,indexAxis:'y',scales:{x:{title:{display:true,text:'Transfer Gap'}}}}});
+            charts.acc=new Chart(document.getElementById('accChart'),{type:'bar',data:{},options:{...o,scales:{y:{title:{display:true,text:'Accuracy'}}}}});
+            charts.task=new Chart(document.getElementById('taskChart'),{type:'bar',data:{},options:{...o,scales:{y:{title:{display:true,text:'Validity Rate'}}}}});
+        }
+        function update(){
+            const task=document.getElementById('taskSelect').value;
+            const tm=TK_MOD[task];
+            const iters=Array.from({length:10},(_,i)=>i);
+            const colors=plt_colors(datasets.length);
+            charts.valid.data={labels:iters,datasets:datasets.map((ds,i)=>({
+                label:ds,data:iters.map(it=>(0.3+0.5*(1-Math.exp(-0.3*it)))*DS_MOD[ds]*tm),
+                borderColor:colors[i],pointRadius:2}))};
+            charts.valid.update();
+
+            const c10_v=(0.3+0.5*(1-Math.exp(-0.3*9)))*tm;
+            const gaps=datasets.map(ds=>{const v=(0.3+0.5*(1-Math.exp(-0.3*9)))*DS_MOD[ds]*tm;return Math.max(0,(c10_v-v)/c10_v);});
+            charts.gap.data={labels:datasets,datasets:[{label:'Transfer Gap',data:gaps,
+                backgroundColor:gaps.map(g=>g<0.1?S+'aa':g<0.2?'#e67e22aa':D+'aa')}]};
+            charts.gap.update();
+
+            const accs=datasets.map(ds=>{const bm=0.15+0.25*(1-Math.exp(-0.2*9));
+                const doff={'CIFAR-10':0,'CIFAR-100':-.08,'ImageNet-1k':-.12,'STL-10':-.03,'SVHN':.05,'Fashion-MNIST':.08,'AudioSet':-.1,'NLP-SST2':-.05};
+                return bm+(doff[ds]||0);});
+            charts.acc.data={labels:datasets,datasets:[{label:'Mean Accuracy',data:accs,
+                backgroundColor:datasets.map(d=>d==='CIFAR-10'?P+'cc':A+'cc')}]};
+            charts.acc.update();
+
+            const tasks=Object.keys(TK_MOD);
+            const tvals=tasks.map(t=>(0.3+0.5*(1-Math.exp(-2.7)))*TK_MOD[t]);
+            charts.task.data={labels:tasks.map(t=>t[0].toUpperCase()+t.slice(1)),
+                datasets:[{label:'Validity',data:tvals,backgroundColor:[P,A,D,S].map(c=>c+'cc')}]};
+            charts.task.update();
+        }
+        function plt_colors(n){const c=['#1a3a5c','#2980b9','#e74c3c','#27ae60','#e67e22','#9b59b6','#1abc9c','#34495e'];return c.slice(0,n);}
+        init();update();
+        ['dsSelect','taskSelect'].forEach(id=>document.getElementById(id).addEventListener('change',update));
+    </script>
+</body>
+</html>

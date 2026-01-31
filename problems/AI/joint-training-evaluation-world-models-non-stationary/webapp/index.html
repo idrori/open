@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JANUS: Joint Adaptive Non-stationary Updating and Scoring for World Models</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #2980b9;
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --text: #2c3e50;
+  --text-light: #6c7a89;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --border: #e1e8ef;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: white; padding: 3rem 2rem; text-align: center;
+}
+.hero h1 { font-size: 2.2rem; margin-bottom: 0.5rem; font-weight: 700; }
+.hero .subtitle { font-size: 1.1rem; opacity: 0.9; max-width: 800px; margin: 0 auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+.metrics-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.2rem; margin-bottom: 2rem;
+}
+.metric-card {
+  background: var(--card); border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center;
+  border-top: 4px solid var(--accent);
+}
+.metric-card .value { font-size: 2rem; font-weight: 700; color: var(--primary); }
+.metric-card .label { font-size: 0.85rem; color: var(--text-light); margin-top: 0.3rem; }
+.charts-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem; margin-bottom: 2rem;
+}
+.chart-card {
+  background: var(--card); border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.chart-card h3 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; }
+.table-card {
+  background: var(--card); border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 2rem; overflow-x: auto;
+}
+.table-card h3 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.7rem 1rem; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: white; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+tr:hover { background: #f0f4f8; }
+td { font-size: 0.9rem; }
+.tag { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+.tag-success { background: #e8f8f0; color: var(--success); }
+.tag-warning { background: #fef5e7; color: var(--warning); }
+.section-title { font-size: 1.5rem; color: var(--primary); margin-bottom: 1rem; font-weight: 700; }
+footer { text-align: center; padding: 2rem; color: var(--text-light); font-size: 0.85rem; border-top: 1px solid var(--border); }
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.5rem; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>JANUS</h1>
+  <p class="subtitle">Joint Adaptive Non-stationary Updating and Scoring for World Models &mdash; A framework for joint training, continual adaptation, and causal evaluation of world models in non-stationary environments.</p>
+</div>
+
+<div class="container">
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="value">5.09%</div>
+      <div class="label">Improvement over Naive Baseline</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">95.6%</div>
+      <div class="label">Forgetting Reduction (EWC)</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">0.6015</div>
+      <div class="label">Normalized Causal Strength</div>
+    </div>
+    <div class="metric-card">
+      <div class="value">597</div>
+      <div class="label">Drift Events Detected</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Per-Regime Performance</h2>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Mean Episodic Return by Regime</h3>
+      <canvas id="returnChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Causal Evaluation: ACE by Regime</h3>
+      <canvas id="aceChart"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Normalized Causal Strength (NCS) by Regime</h3>
+      <canvas id="ncsChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Forgetting Analysis</h3>
+      <canvas id="forgettingChart"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Detailed Results</h2>
+  <div class="table-card">
+    <h3>Mean Episodic Return per Regime</h3>
+    <table>
+      <thead>
+        <tr><th>Regime</th><th>JANUS</th><th>Naive</th><th>Oracle</th><th>Random</th><th>Drifts</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0</td><td>-1.489 &pm; 1.145</td><td>-1.334 &pm; 0.801</td><td>-0.712 &pm; 0.498</td><td>-8.920 &pm; 2.145</td><td>206</td></tr>
+        <tr><td>1</td><td>-6.661 &pm; 3.253</td><td>-7.688 &pm; 3.518</td><td>-0.562 &pm; 0.429</td><td>-9.210 &pm; 2.058</td><td>138</td></tr>
+        <tr><td>2</td><td>-4.943 &pm; 3.327</td><td>-4.704 &pm; 3.171</td><td>-0.555 &pm; 0.730</td><td>-9.471 &pm; 2.344</td><td>146</td></tr>
+        <tr><td>3</td><td>-2.498 &pm; 2.052</td><td>-2.700 &pm; 2.185</td><td>-0.590 &pm; 0.447</td><td>-6.909 &pm; 3.272</td><td>107</td></tr>
+        <tr style="font-weight:700;background:#f0f4f8"><td>Avg</td><td>-3.898</td><td>-4.107</td><td>-0.605</td><td>-8.627</td><td>597</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <h3>Causal Evaluation Metrics</h3>
+    <table>
+      <thead>
+        <tr><th>Regime</th><th>ACE (JANUS)</th><th>ACE (Naive)</th><th>ACE (Oracle)</th><th>NCS (JANUS)</th><th>NCS (Naive)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0</td><td>7.431</td><td>7.585</td><td>8.208</td><td><span class="tag tag-success">0.905</span></td><td><span class="tag tag-success">0.924</span></td></tr>
+        <tr><td>1</td><td>2.549</td><td>1.522</td><td>8.648</td><td><span class="tag tag-warning">0.295</span></td><td><span class="tag tag-warning">0.176</span></td></tr>
+        <tr><td>2</td><td>4.528</td><td>4.767</td><td>8.916</td><td><span class="tag tag-warning">0.508</span></td><td><span class="tag tag-warning">0.535</span></td></tr>
+        <tr><td>3</td><td>4.412</td><td>4.209</td><td>6.320</td><td><span class="tag tag-success">0.698</span></td><td><span class="tag tag-success">0.666</span></td></tr>
+        <tr style="font-weight:700;background:#f0f4f8"><td>Avg</td><td>4.730</td><td>4.521</td><td>8.023</td><td>0.602</td><td>0.575</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-card">
+    <h3>Catastrophic Forgetting (Regime 0 Performance)</h3>
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Initial Return</th><th>Final Return</th><th>Forgetting Score</th><th>Reduction</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>JANUS (EWC)</td><td>-1.489</td><td>-1.499 &pm; 0.866</td><td><span class="tag tag-success">0.010</span></td><td rowspan="2">95.6%</td></tr>
+        <tr><td>Naive</td><td>-1.334</td><td>-1.568 &pm; 0.844</td><td><span class="tag tag-warning">0.233</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer>JANUS: Joint Adaptive Non-stationary Updating and Scoring &mdash; KDD 2026</footer>
+
+<script>
+const regimes = ['Regime 0','Regime 1','Regime 2','Regime 3'];
+const colors = {
+  janus: '#2980b9', naive: '#e74c3c', oracle: '#27ae60', random: '#95a5a6',
+  janusBg: 'rgba(41,128,185,0.15)', naiveBg: 'rgba(231,76,60,0.15)',
+  oracleBg: 'rgba(39,174,96,0.15)', randomBg: 'rgba(149,165,166,0.15)'
+};
+
+new Chart(document.getElementById('returnChart'), {
+  type: 'bar',
+  data: {
+    labels: regimes,
+    datasets: [
+      {label:'JANUS', data:[-1.4886,-6.6611,-4.9429,-2.4976], backgroundColor:colors.janus},
+      {label:'Naive', data:[-1.3343,-7.6879,-4.7035,-2.7003], backgroundColor:colors.naive},
+      {label:'Oracle', data:[-0.7115,-0.5624,-0.5548,-0.5898], backgroundColor:colors.oracle},
+      {label:'Random', data:[-8.9195,-9.2104,-9.4705,-6.9093], backgroundColor:colors.random}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { title: { display: true, text: 'Mean Return' } } }
+  }
+});
+
+new Chart(document.getElementById('aceChart'), {
+  type: 'bar',
+  data: {
+    labels: regimes,
+    datasets: [
+      {label:'ACE (JANUS)', data:[7.4309,2.5493,4.5276,4.4117], backgroundColor:colors.janus},
+      {label:'ACE (Naive)', data:[7.5852,1.5224,4.7669,4.209], backgroundColor:colors.naive},
+      {label:'ACE (Oracle)', data:[8.208,8.648,8.9157,6.3195], backgroundColor:colors.oracle}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { title: { display: true, text: 'Average Causal Effect' } } }
+  }
+});
+
+new Chart(document.getElementById('ncsChart'), {
+  type: 'line',
+  data: {
+    labels: regimes,
+    datasets: [
+      {label:'NCS (JANUS)', data:[0.9053,0.2948,0.5078,0.6981], borderColor:colors.janus, backgroundColor:colors.janusBg, fill:true, tension:0.3, pointRadius:5},
+      {label:'NCS (Naive)', data:[0.9241,0.176,0.5347,0.666], borderColor:colors.naive, backgroundColor:colors.naiveBg, fill:true, tension:0.3, pointRadius:5}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { min: 0, max: 1, title: { display: true, text: 'Normalized Causal Strength' } } }
+  }
+});
+
+new Chart(document.getElementById('forgettingChart'), {
+  type: 'bar',
+  data: {
+    labels: ['JANUS (EWC)', 'Naive'],
+    datasets: [
+      {label: 'Initial Return', data: [-1.4886, -1.3343], backgroundColor: '#3498db'},
+      {label: 'Final Return', data: [-1.4988, -1.5676], backgroundColor: '#e67e22'},
+      {label: 'Forgetting Score', data: [0.0102, 0.2333], backgroundColor: '#e74c3c'}
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { title: { display: true, text: 'Value' } } }
+  }
+});
+</script>
+</body>
+</html>

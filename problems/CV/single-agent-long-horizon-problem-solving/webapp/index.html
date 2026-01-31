@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Single-Agent Long-Horizon Problem Solving</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f4f7fa;--card:#fff;--text:#222;--muted:#666;--border:#dde3ea}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;padding:2rem;text-align:center}
+header h1{font-size:1.5rem;max-width:900px;margin:0 auto}
+header p{opacity:.85;margin-top:.5rem;font-size:.95rem}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+.card{background:var(--card);border-radius:10px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07);border:1px solid var(--border)}
+.card h2{font-size:1.1rem;color:var(--primary);margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+.stat-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.stat{background:var(--bg);border-radius:8px;padding:1rem 1.25rem;flex:1;min-width:130px;text-align:center}
+.stat .val{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat .lbl{font-size:.78rem;color:var(--muted);margin-top:.25rem}
+canvas{max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:.5rem .75rem;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--primary);color:#fff;font-weight:600}
+tr:hover{background:#f0f4f8}
+</style>
+</head>
+<body>
+<header>
+<h1>Single-Agent Long-Horizon Problem Solving</h1>
+<p>Visual-Grounding Decomposition (VGD) for extended multi-step tasks</p>
+</header>
+<div class="container">
+<div class="stat-row">
+<div class="stat"><div class="val">47.8%</div><div class="lbl">VGD Success (H=3)</div></div>
+<div class="stat"><div class="val">6</div><div class="lbl">Strategies Compared</div></div>
+<div class="stat"><div class="val">500</div><div class="lbl">Tasks per Horizon</div></div>
+<div class="stat"><div class="val">3-20</div><div class="lbl">Horizon Range</div></div>
+</div>
+<div class="grid">
+<div class="card">
+<h2>Success Rate vs Task Horizon</h2>
+<canvas id="successChart"></canvas>
+</div>
+<div class="card">
+<h2>Average Compute Cost vs Horizon</h2>
+<canvas id="computeChart"></canvas>
+</div>
+<div class="card">
+<h2>Success Rate at Horizon = 3</h2>
+<canvas id="h3Chart"></canvas>
+</div>
+<div class="card">
+<h2>Strategy Capabilities</h2>
+<canvas id="capChart"></canvas>
+</div>
+</div>
+<div class="card">
+<h2>Full Results Table</h2>
+<table>
+<thead><tr><th>Strategy</th><th>H=3</th><th>H=5</th><th>H=8</th><th>H=12</th><th>H=16</th><th>H=20</th></tr></thead>
+<tbody>
+<tr><td>Flat</td><td>22.2%</td><td>6.8%</td><td>1.2%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+<tr><td>Fixed Decomp.</td><td>4.0%</td><td>0.8%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+<tr><td>Adaptive Decomp.</td><td>3.4%</td><td>0.2%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+<tr><td>Verify & Backtrack</td><td>18.0%</td><td>5.4%</td><td>0.6%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+<tr><td>Curriculum-Guided</td><td>21.4%</td><td>9.6%</td><td>1.8%</td><td>0.4%</td><td>0.0%</td><td>0.0%</td></tr>
+<tr style="font-weight:700"><td>VGD (ours)</td><td>47.8%</td><td>28.4%</td><td>12.6%</td><td>3.6%</td><td>1.2%</td><td>0.4%</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<script>
+const horizons=[3,5,8,12,16,20];
+const data={flat:[22.2,6.8,1.2,0,0,0],fixed:[4.0,0.8,0,0,0,0],adaptive:[3.4,0.2,0,0,0,0],verify:[18.0,5.4,0.6,0,0,0],curriculum:[21.4,9.6,1.8,0.4,0,0],vgd:[47.8,28.4,12.6,3.6,1.2,0.4]};
+new Chart(document.getElementById('successChart'),{type:'line',data:{labels:horizons,datasets:[
+{label:'VGD (ours)',data:data.vgd,borderColor:'#2980b9',borderWidth:3,fill:false,tension:.3,pointRadius:5},
+{label:'Flat',data:data.flat,borderColor:'#95a5a6',fill:false,tension:.3,pointRadius:4},
+{label:'Curriculum',data:data.curriculum,borderColor:'#27ae60',fill:false,tension:.3,pointRadius:4},
+{label:'Verify & Backtrack',data:data.verify,borderColor:'#e67e22',fill:false,tension:.3,pointRadius:4},
+{label:'Fixed Decomp.',data:data.fixed,borderColor:'#e74c3c',fill:false,tension:.3,pointRadius:4},
+{label:'Adaptive Decomp.',data:data.adaptive,borderColor:'#9b59b6',fill:false,tension:.3,pointRadius:4}
+]},options:{responsive:true,scales:{x:{title:{display:true,text:'Task Horizon (steps)'}},y:{title:{display:true,text:'Success Rate (%)'}}}}});
+const comp={flat:[3,5,8,12,16,20],fixed:[1.8,2.1,2.4,2.4,2.6,2.7],adaptive:[1.9,2.1,2.4,2.5,2.6,2.6],verify:[8.1,10.1,11.6,13.1,14.5,14.9],curriculum:[2.9,3.3,3.2,3.0,3.0,3.1],vgd:[11.1,15.4,20.3,24.3,27.8,30.6]};
+new Chart(document.getElementById('computeChart'),{type:'line',data:{labels:horizons,datasets:[
+{label:'VGD',data:comp.vgd,borderColor:'#2980b9',fill:false,tension:.3},{label:'Flat',data:comp.flat,borderColor:'#95a5a6',fill:false,tension:.3},{label:'Verify',data:comp.verify,borderColor:'#e67e22',fill:false,tension:.3},{label:'Curriculum',data:comp.curriculum,borderColor:'#27ae60',fill:false,tension:.3}
+]},options:{responsive:true,scales:{x:{title:{display:true,text:'Horizon'}},y:{title:{display:true,text:'Avg Compute (units)'}}}}});
+const strats=['Flat','Fixed','Adaptive','Verify','Curriculum','VGD'];
+const h3=[22.2,4.0,3.4,18.0,21.4,47.8];
+new Chart(document.getElementById('h3Chart'),{type:'bar',data:{labels:strats,datasets:[{label:'Success %',data:h3,backgroundColor:['#95a5a6','#e74c3c','#9b59b6','#e67e22','#27ae60','#2980b9'],borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Success Rate (%)'}}}}});
+new Chart(document.getElementById('capChart'),{type:'radar',data:{labels:['Decomposition','Verification','Grounding'],datasets:[
+{label:'VGD',data:[1,1,1],borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.2)',pointRadius:5},
+{label:'Curriculum',data:[1,0,0],borderColor:'#27ae60',backgroundColor:'rgba(39,174,96,0.1)',pointRadius:5},
+{label:'Verify & Backtrack',data:[1,1,0],borderColor:'#e67e22',backgroundColor:'rgba(230,126,34,0.1)',pointRadius:5},
+{label:'Flat',data:[0,0,0],borderColor:'#95a5a6',backgroundColor:'rgba(149,165,166,0.1)',pointRadius:5}
+]},options:{responsive:true,scales:{r:{min:0,max:1,ticks:{stepSize:1}}}}});
+</script>
+</body>
+</html>

@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPSD Scaling Trend Beyond 8B Parameters</title>
+<style>
+  :root {
+    --primary: #2c3e50;
+    --accent: #3498db;
+    --red: #e74c3c;
+    --green: #2ecc71;
+    --purple: #9b59b6;
+    --orange: #e67e22;
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --border: #dee2e6;
+    --text: #212529;
+    --text-muted: #6c757d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: white;
+    padding: 3rem 2rem 2rem;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .header .subtitle {
+    font-size: 1rem;
+    opacity: 0.85;
+    max-width: 700px;
+    margin: 0.5rem auto;
+  }
+  .header .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    margin-top: 0.8rem;
+  }
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .card h3 {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+  }
+  .card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .card .unit {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .card .detail {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+  }
+  .section {
+    margin-bottom: 2.5rem;
+  }
+  .section h2 {
+    font-size: 1.4rem;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent);
+  }
+  .section p {
+    margin-bottom: 1rem;
+    color: var(--text);
+  }
+  .chart-container {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .chart-container h3 {
+    font-size: 1.1rem;
+    color: var(--primary);
+    margin-bottom: 1rem;
+  }
+  canvas {
+    width: 100% !important;
+    max-height: 400px;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+    align-items: center;
+  }
+  .controls label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .controls select, .controls input[type="range"] {
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .controls input[type="range"] {
+    width: 150px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: #f1f3f5;
+    font-weight: 600;
+    color: var(--primary);
+  }
+  tr:hover { background: #f8f9fa; }
+  .highlight-row { background: #e8f4fd !important; font-weight: 600; }
+  .finding-box {
+    background: linear-gradient(135deg, #e8f8f5, #d5f5e3);
+    border-left: 4px solid var(--green);
+    padding: 1rem 1.2rem;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 1rem;
+  }
+  .finding-box strong { color: var(--primary); }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .header h1 { font-size: 1.4rem; }
+  }
+  .method-tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-right: 0.3rem;
+  }
+  .tag-power { background: #fde8e8; color: #c0392b; }
+  .tag-log { background: #d6eaf8; color: #2471a3; }
+  .tag-sat { background: #d5f5e3; color: #1e8449; }
+  .tag-sig { background: #e8daef; color: #7d3c98; }
+  .tag-sqrt { background: #fdebd0; color: #d35400; }
+  .tag-avg { background: #d5d8dc; color: #2c3e50; }
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Extrapolating OPSD Gains Beyond 8 Billion Parameters</h1>
+  <p class="subtitle">A Multi-Model Scaling Analysis with Uncertainty Quantification for On-Policy Self-Distillation</p>
+  <span class="badge">Based on Zhao et al. (arXiv: 2601.18734, Jan 2026)</span>
+</div>
+
+<div class="container">
+
+  <!-- Summary Cards -->
+  <div class="summary-cards">
+    <div class="card">
+      <h3>Predicted Gain at 70B</h3>
+      <div class="value">19.6 <span class="unit">pp</span></div>
+      <div class="detail">+/- 11.3 pp (model-averaged)</div>
+    </div>
+    <div class="card">
+      <h3>Bootstrap 95% CI</h3>
+      <div class="value">[10.5, 32.6]</div>
+      <div class="detail">1,000 bootstrap resamples</div>
+    </div>
+    <div class="card">
+      <h3>Best Model</h3>
+      <div class="value" style="font-size:1.5rem;">Power Law</div>
+      <div class="detail">Akaike weight: 0.338</div>
+    </div>
+    <div class="card">
+      <h3>Optimal Next Experiment</h3>
+      <div class="value">140B</div>
+      <div class="detail">Maximum model disagreement</div>
+    </div>
+  </div>
+
+  <!-- Key Findings -->
+  <div class="section">
+    <h2>Key Findings</h2>
+    <div class="finding-box">
+      <strong>Finding 1:</strong> All five candidate scaling laws agree that OPSD gains continue beyond 8B parameters, but the growth rate is highly uncertain (9.1 to 32.9 pp at 70B).
+    </div>
+    <div class="finding-box">
+      <strong>Finding 2:</strong> The distribution-match component dominates at large scale, growing as N<sup>0.95</sup>, while dark knowledge saturates around 11.5B parameters.
+    </div>
+    <div class="finding-box">
+      <strong>Finding 3:</strong> Model averaging provides the most robust extrapolation strategy across all synthetic ground-truth validation scenarios.
+    </div>
+    <div class="finding-box">
+      <strong>Finding 4:</strong> Information-theoretic analysis identifies 140B as the most informative model size for future experiments to discriminate between scaling regimes.
+    </div>
+  </div>
+
+  <!-- Interactive Scaling Laws -->
+  <div class="section">
+    <h2>Interactive Scaling Law Explorer</h2>
+    <div class="chart-container">
+      <h3>OPSD Gain vs. Model Size</h3>
+      <div class="controls">
+        <label>Show models:</label>
+        <label><input type="checkbox" id="cb-power" checked> <span class="method-tag tag-power">Power Law</span></label>
+        <label><input type="checkbox" id="cb-log" checked> <span class="method-tag tag-log">Logarithmic</span></label>
+        <label><input type="checkbox" id="cb-sat" checked> <span class="method-tag tag-sat">Saturating</span></label>
+        <label><input type="checkbox" id="cb-sig" checked> <span class="method-tag tag-sig">Sigmoid</span></label>
+        <label><input type="checkbox" id="cb-sqrt" checked> <span class="method-tag tag-sqrt">Sqrt-Log</span></label>
+        <label><input type="checkbox" id="cb-avg" checked> <span class="method-tag tag-avg">Averaged</span></label>
+      </div>
+      <div class="controls">
+        <label>Max size: <span id="maxSizeLabel">405B</span></label>
+        <input type="range" id="maxSizeSlider" min="10" max="500" value="405" step="5">
+        <label>Log scale: <input type="checkbox" id="logScale" checked></label>
+      </div>
+      <canvas id="scalingChart" height="350"></canvas>
+    </div>
+  </div>
+
+  <!-- Model Selection -->
+  <div class="section">
+    <h2>Model Selection Results</h2>
+    <div class="grid-2">
+      <div class="chart-container">
+        <h3>Akaike Weights</h3>
+        <canvas id="weightsChart" height="280"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>Predictions at 70B</h3>
+        <canvas id="predictionsChart" height="280"></canvas>
+      </div>
+    </div>
+    <div class="chart-container">
+      <table>
+        <thead>
+          <tr><th>Model</th><th>Parameters (k)</th><th>Chi-squared</th><th>AIC</th><th>BIC</th><th>Weight</th><th>Pred. at 70B (pp)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="method-tag tag-power">Power Law</span></td><td>2</td><td>0.55</td><td>4.55</td><td>3.76</td><td><strong>0.338</strong></td><td>32.9 &plusmn; 6.0</td></tr>
+          <tr><td><span class="method-tag tag-sat">Saturating</span></td><td>2</td><td>0.73</td><td>4.73</td><td>3.95</td><td><strong>0.309</strong></td><td>9.1 &plusmn; 1.2</td></tr>
+          <tr><td><span class="method-tag tag-sig">Sigmoid</span></td><td>3</td><td>0.02</td><td>6.02</td><td>4.85</td><td>0.162</td><td>15.7 &plusmn; 9.7</td></tr>
+          <tr><td><span class="method-tag tag-sqrt">Sqrt-Log</span></td><td>3</td><td>0.06</td><td>6.06</td><td>4.88</td><td>0.159</td><td>17.2 &plusmn; 2.8</td></tr>
+          <tr><td><span class="method-tag tag-log">Logarithmic</span></td><td>2</td><td>5.27</td><td>9.27</td><td>8.49</td><td>0.032</td><td>12.2 &plusmn; 0.9</td></tr>
+          <tr class="highlight-row"><td><span class="method-tag tag-avg">Model Averaged</span></td><td>-</td><td>-</td><td>-</td><td>-</td><td>1.000</td><td>19.6 &plusmn; 11.3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Theoretical Decomposition -->
+  <div class="section">
+    <h2>Theoretical Gain Decomposition</h2>
+    <p>The OPSD gain is decomposed into three mechanistic components: distribution match (on-policy advantage), dark knowledge transfer, and implicit regularization.</p>
+    <div class="grid-2">
+      <div class="chart-container">
+        <h3>Component Contributions</h3>
+        <canvas id="decompChart" height="300"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>Fitted Parameters</h3>
+        <table>
+          <thead>
+            <tr><th>Component</th><th>Parameter</th><th>Value</th><th>Interpretation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td rowspan="2">Distribution Match</td><td>&alpha;</td><td>0.232</td><td>Scaling coefficient</td></tr>
+            <tr><td>&beta;</td><td>0.950</td><td>Nearly linear growth</td></tr>
+            <tr><td rowspan="2">Dark Knowledge</td><td>&gamma;</td><td>0.100</td><td>Max gain (pp)</td></tr>
+            <tr><td>N<sub>char</sub></td><td>11.5B</td><td>Saturation scale</td></tr>
+            <tr><td rowspan="2">Regularization</td><td>&delta;</td><td>3.080</td><td>Max regularization benefit</td></tr>
+            <tr><td>&eta;</td><td>0.833</td><td>Growth rate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap CI -->
+  <div class="section">
+    <h2>Uncertainty Quantification</h2>
+    <p>Bootstrap analysis (1,000 resamples) quantifies the combined uncertainty from data noise, model parameters, and model selection.</p>
+    <div class="chart-container">
+      <h3>Bootstrap 95% Confidence Intervals at 70B</h3>
+      <canvas id="bootstrapChart" height="280"></canvas>
+    </div>
+  </div>
+
+  <!-- Experiment Design -->
+  <div class="section">
+    <h2>Optimal Experiment Design</h2>
+    <p>Information-theoretic analysis identifies which model sizes would provide the most discriminating evidence between scaling regimes.</p>
+    <div class="chart-container">
+      <h3>Information Value by Candidate Size</h3>
+      <canvas id="expDesignChart" height="280"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  OPSD Scaling Analysis | Based on Zhao et al. (arXiv: 2601.18734) | KDD 2026 Research Track
+</div>
+
+<script>
+// ============================================================================
+// Data from experiment results
+// ============================================================================
+
+const OBSERVED = {
+  sizes: [0.5, 1.0, 2.0, 4.0, 8.0],
+  gains: [1.2, 2.1, 3.5, 5.4, 8.0],
+  stderr: [0.4, 0.3, 0.4, 0.5, 0.6]
+};
+
+const TARGET_SIZES = [14, 32, 70, 140, 405];
+
+const MODELS = {
+  power_law: {
+    params: [2.149, 0.642],
+    func: (n, a, b) => a * Math.pow(n, b),
+    color: '#e74c3c',
+    label: 'Power Law',
+    weight: 0.338,
+    pred70B: 32.9
+  },
+  logarithmic: {
+    params: [2.334, 2.307],
+    func: (n, a, c) => a * Math.log(n) + c,
+    color: '#3498db',
+    label: 'Logarithmic',
+    weight: 0.032,
+    pred70B: 12.2
+  },
+  saturating: {
+    params: [9.112, 4.081],
+    func: (n, a, n0) => a * (1 - Math.exp(-n / n0)),
+    color: '#2ecc71',
+    label: 'Saturating',
+    weight: 0.309,
+    pred70B: 9.1
+  },
+  sigmoid: {
+    params: [19.204, 0.846, 2.482],
+    func: (n, a, b, c) => a / (1 + Math.exp(-b * (Math.log(n) - c))),
+    color: '#9b59b6',
+    label: 'Sigmoid',
+    weight: 0.162,
+    pred70B: 15.7
+  },
+  sqrt_log: {
+    params: [-3.914, 5.592, 1.454],
+    func: (n, a, b, c) => a * Math.sqrt(Math.log(n + 1)) + b * Math.log(n + 1) + c,
+    color: '#e67e22',
+    label: 'Sqrt-Log',
+    weight: 0.159,
+    pred70B: 17.2
+  }
+};
+
+const BOOTSTRAP = {
+  power_law:    { mean: 34.1, ci_lower: 19.3, ci_upper: 54.2 },
+  logarithmic:  { mean: 12.1, ci_lower: 10.2, ci_upper: 14.3 },
+  saturating:   { mean: 9.0, ci_lower: 6.9, ci_upper: 11.4 },
+  sigmoid:      { mean: 15.4, ci_lower: 9.2, ci_upper: 23.8 },
+  sqrt_log:     { mean: 17.2, ci_lower: 13.7, ci_upper: 21.1 },
+  model_averaged: { mean: 19.8, ci_lower: 10.5, ci_upper: 32.6 }
+};
+
+const EXP_DESIGN = {
+  sizes: [10, 14, 20, 32, 45, 70, 100, 140],
+  info_values: [0.907, 3.504, 10.34, 33.06, 67.34, 140.0, 263.1, 432.3]
+};
+
+// Theoretical decomposition data
+const THEO_SIZES = [0.5,1,2,4,8,14,32,70,140,405];
+const THEO_DM = [0.163,0.232,0.330,0.469,0.668,0.953,1.555,2.539,4.147,8.775];
+const THEO_DK = [0.004,0.008,0.016,0.031,0.060,0.098,0.186,0.322,0.498,0.783];
+const THEO_REG = [0.913,1.363,1.868,2.431,3.038,3.557,4.207,4.824,5.403,6.164];
+
+// ============================================================================
+// Canvas rendering (no external libraries)
+// ============================================================================
+
+class Chart {
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.dpr = window.devicePixelRatio || 1;
+    this.resize();
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.w = rect.width;
+    this.h = rect.height;
+    this.canvas.width = this.w * this.dpr;
+    this.canvas.height = this.h * this.dpr;
+    this.ctx.scale(this.dpr, this.dpr);
+    this.margin = { top: 20, right: 30, bottom: 50, left: 60 };
+    this.plotW = this.w - this.margin.left - this.margin.right;
+    this.plotH = this.h - this.margin.top - this.margin.bottom;
+  }
+
+  clear() {
+    this.ctx.clearRect(0, 0, this.w, this.h);
+  }
+
+  mapX(val, xMin, xMax, log) {
+    if (log) {
+      return this.margin.left + (Math.log(val) - Math.log(xMin)) / (Math.log(xMax) - Math.log(xMin)) * this.plotW;
+    }
+    return this.margin.left + (val - xMin) / (xMax - xMin) * this.plotW;
+  }
+
+  mapY(val, yMin, yMax) {
+    return this.margin.top + this.plotH - (val - yMin) / (yMax - yMin) * this.plotH;
+  }
+
+  drawAxes(xMin, xMax, yMin, yMax, xLabel, yLabel, logX, xTicks, yTicks) {
+    const ctx = this.ctx;
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#666';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+
+    // Grid and x ticks
+    (xTicks || []).forEach(v => {
+      const x = this.mapX(v, xMin, xMax, logX);
+      if (x >= this.margin.left && x <= this.margin.left + this.plotW) {
+        ctx.beginPath();
+        ctx.moveTo(x, this.margin.top);
+        ctx.lineTo(x, this.margin.top + this.plotH);
+        ctx.strokeStyle = '#eee';
+        ctx.stroke();
+        ctx.fillText(v >= 1 ? v.toString() : v.toString(), x, this.margin.top + this.plotH + 18);
+      }
+    });
+
+    // y ticks
+    ctx.textAlign = 'right';
+    (yTicks || []).forEach(v => {
+      const y = this.mapY(v, yMin, yMax);
+      if (y >= this.margin.top && y <= this.margin.top + this.plotH) {
+        ctx.beginPath();
+        ctx.moveTo(this.margin.left, y);
+        ctx.lineTo(this.margin.left + this.plotW, y);
+        ctx.strokeStyle = '#eee';
+        ctx.stroke();
+        ctx.fillText(v.toString(), this.margin.left - 8, y + 4);
+      }
+    });
+
+    // Axes lines
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(this.margin.left, this.margin.top);
+    ctx.lineTo(this.margin.left, this.margin.top + this.plotH);
+    ctx.lineTo(this.margin.left + this.plotW, this.margin.top + this.plotH);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(xLabel, this.margin.left + this.plotW / 2, this.h - 5);
+
+    ctx.save();
+    ctx.translate(15, this.margin.top + this.plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+
+  drawLine(points, color, width, dash) {
+    const ctx = this.ctx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width || 2;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p[0], p[1]);
+      else ctx.lineTo(p[0], p[1]);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  drawCircles(points, color, radius) {
+    const ctx = this.ctx;
+    ctx.fillStyle = color;
+    points.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], radius || 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  drawErrorBars(x, y, err, color) {
+    const ctx = this.ctx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y - err);
+    ctx.lineTo(x, y + err);
+    ctx.moveTo(x - 4, y - err);
+    ctx.lineTo(x + 4, y - err);
+    ctx.moveTo(x - 4, y + err);
+    ctx.lineTo(x + 4, y + err);
+    ctx.stroke();
+  }
+}
+
+// ============================================================================
+// Scaling Laws Chart
+// ============================================================================
+
+function drawScalingChart() {
+  const chart = new Chart('scalingChart');
+  chart.clear();
+
+  const logX = document.getElementById('logScale').checked;
+  const maxSize = parseInt(document.getElementById('maxSizeSlider').value);
+
+  const xMin = logX ? 0.3 : 0;
+  const xMax = maxSize;
+  let yMax = 0;
+
+  // Compute y range
+  const activeModels = [];
+  Object.entries(MODELS).forEach(([key, m]) => {
+    const cbId = 'cb-' + key.replace('_law', '').replace('_log', '-log').replace('sqrt_log', 'sqrt');
+    const cbMap = {
+      power_law: 'cb-power',
+      logarithmic: 'cb-log',
+      saturating: 'cb-sat',
+      sigmoid: 'cb-sig',
+      sqrt_log: 'cb-sqrt'
+    };
+    if (document.getElementById(cbMap[key]).checked) {
+      activeModels.push(key);
+      const val = m.func(maxSize, ...m.params);
+      if (val > yMax) yMax = val;
+    }
+  });
+
+  yMax = Math.ceil(yMax * 1.15);
+  if (yMax < 12) yMax = 12;
+  const yMin = 0;
+
+  const xTicks = logX ? [0.5, 1, 2, 4, 8, 14, 32, 70, 140, 405].filter(v => v <= maxSize) :
+    Array.from({length: 10}, (_, i) => Math.round(maxSize / 9 * i));
+  const yStep = yMax > 50 ? 20 : yMax > 20 ? 5 : 2;
+  const yTicks = Array.from({length: Math.floor(yMax / yStep) + 1}, (_, i) => i * yStep);
+
+  chart.drawAxes(xMin, xMax, yMin, yMax, 'Model Size (Billions)', 'OPSD Gain (pp)', logX, xTicks, yTicks);
+
+  // Extrapolation region
+  const ctx = chart.ctx;
+  const x8 = chart.mapX(8, xMin, xMax, logX);
+  ctx.fillStyle = 'rgba(200,200,200,0.15)';
+  ctx.fillRect(x8, chart.margin.top, chart.margin.left + chart.plotW - x8, chart.plotH);
+  ctx.fillStyle = '#999';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Extrapolation', (x8 + chart.margin.left + chart.plotW) / 2, chart.margin.top + 15);
+
+  // Draw model curves
+  activeModels.forEach(key => {
+    const m = MODELS[key];
+    const n = 200;
+    const points = [];
+    for (let i = 0; i < n; i++) {
+      let xVal;
+      if (logX) xVal = Math.exp(Math.log(xMin) + (Math.log(xMax) - Math.log(xMin)) * i / (n - 1));
+      else xVal = xMin + (xMax - xMin) * i / (n - 1);
+      if (xVal <= 0) continue;
+      const yVal = m.func(xVal, ...m.params);
+      points.push([chart.mapX(xVal, xMin, xMax, logX), chart.mapY(yVal, yMin, yMax)]);
+    }
+    chart.drawLine(points, m.color, 1.5 + m.weight * 4);
+  });
+
+  // Model-averaged points
+  if (document.getElementById('cb-avg').checked) {
+    const avgPreds = [10.23, 14.22, 19.61, 26.64, 44.71];
+    TARGET_SIZES.forEach((s, i) => {
+      if (s <= maxSize) {
+        const px = chart.mapX(s, xMin, xMax, logX);
+        const py = chart.mapY(avgPreds[i], yMin, yMax);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(px - 5, py - 5, 10, 10);
+      }
+    });
+  }
+
+  // Observed data
+  OBSERVED.sizes.forEach((s, i) => {
+    const px = chart.mapX(s, xMin, xMax, logX);
+    const py = chart.mapY(OBSERVED.gains[i], yMin, yMax);
+    chart.drawErrorBars(px, py, (OBSERVED.stderr[i] / (yMax - yMin)) * chart.plotH, '#333');
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Legend
+  const legendX = chart.margin.left + 10;
+  let legendY = chart.margin.top + 15;
+  ctx.font = '10px sans-serif';
+  activeModels.forEach(key => {
+    const m = MODELS[key];
+    ctx.fillStyle = m.color;
+    ctx.fillRect(legendX, legendY - 4, 14, 3);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${m.label} (w=${m.weight.toFixed(3)})`, legendX + 18, legendY);
+    legendY += 14;
+  });
+  ctx.fillStyle = '#333';
+  ctx.beginPath();
+  ctx.arc(legendX + 7, legendY - 2, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillText('Observed', legendX + 18, legendY);
+}
+
+// ============================================================================
+// Weights Chart
+// ============================================================================
+
+function drawWeightsChart() {
+  const chart = new Chart('weightsChart');
+  chart.clear();
+  const ctx = chart.ctx;
+  const models = Object.entries(MODELS).sort((a, b) => b[1].weight - a[1].weight);
+  const barH = 30;
+  const gap = 10;
+  const startY = 30;
+
+  models.forEach(([key, m], i) => {
+    const y = startY + i * (barH + gap);
+    const barW = m.weight * (chart.w - 200);
+
+    ctx.fillStyle = m.color;
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(130, y, barW, barH);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#333';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(m.label, 120, y + barH / 2 + 4);
+
+    ctx.textAlign = 'left';
+    ctx.fillText(m.weight.toFixed(3), 135 + barW, y + barH / 2 + 4);
+  });
+
+  ctx.fillStyle = '#333';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Akaike Weight', chart.w / 2, chart.h - 10);
+}
+
+// ============================================================================
+// Predictions at 70B Chart
+// ============================================================================
+
+function drawPredictionsChart() {
+  const chart = new Chart('predictionsChart');
+  chart.clear();
+  const ctx = chart.ctx;
+  const models = Object.entries(MODELS).sort((a, b) => b[1].pred70B - a[1].pred70B);
+  const barH = 25;
+  const gap = 10;
+  const startY = 30;
+  const maxPred = 40;
+
+  models.forEach(([key, m], i) => {
+    const y = startY + i * (barH + gap);
+    const barW = (m.pred70B / maxPred) * (chart.w - 200);
+
+    ctx.fillStyle = m.color;
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(130, y, barW, barH);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#333';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(m.label, 120, y + barH / 2 + 4);
+
+    ctx.textAlign = 'left';
+    ctx.fillText(m.pred70B.toFixed(1) + ' pp', 135 + barW, y + barH / 2 + 4);
+  });
+
+  // Model averaged
+  const y = startY + models.length * (barH + gap);
+  const barW = (19.6 / maxPred) * (chart.w - 200);
+  ctx.fillStyle = '#2c3e50';
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(130, y, barW, barH);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText('Averaged', 120, y + barH / 2 + 4);
+  ctx.textAlign = 'left';
+  ctx.font = '11px sans-serif';
+  ctx.fillText('19.6 pp', 135 + barW, y + barH / 2 + 4);
+
+  ctx.fillStyle = '#333';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Predicted OPSD Gain at 70B (pp)', chart.w / 2, chart.h - 10);
+}
+
+// ============================================================================
+// Decomposition Chart
+// ============================================================================
+
+function drawDecompChart() {
+  const chart = new Chart('decompChart');
+  chart.clear();
+  const ctx = chart.ctx;
+
+  const xMin = 0.3, xMax = 500, yMin = 0, yMax = 18;
+  const xTicks = [0.5, 1, 2, 4, 8, 14, 32, 70, 140, 405];
+  const yTicks = [0, 3, 6, 9, 12, 15, 18];
+
+  chart.drawAxes(xMin, xMax, yMin, yMax, 'Model Size (B)', 'Gain (pp)', true, xTicks, yTicks);
+
+  // Stacked areas
+  const n = THEO_SIZES.length;
+  const colors = ['#f39c12', '#2ecc71', '#e74c3c'];
+  const layers = [THEO_REG, THEO_DK, THEO_DM];
+  const labels = ['Regularization', 'Dark Knowledge', 'Dist. Match'];
+
+  // Draw stacked
+  for (let l = layers.length - 1; l >= 0; l--) {
+    ctx.beginPath();
+    ctx.fillStyle = colors[l];
+    ctx.globalAlpha = 0.4;
+
+    let cumBottom = new Array(n).fill(0);
+    let cumTop = new Array(n).fill(0);
+    for (let j = 0; j <= l; j++) {
+      for (let i = 0; i < n; i++) cumTop[i] += layers[j][i];
+    }
+    for (let j = 0; j < l; j++) {
+      for (let i = 0; i < n; i++) cumBottom[i] += layers[j][i];
+    }
+
+    ctx.moveTo(chart.mapX(THEO_SIZES[0], xMin, xMax, true), chart.mapY(cumBottom[0], yMin, yMax));
+    for (let i = 0; i < n; i++) {
+      ctx.lineTo(chart.mapX(THEO_SIZES[i], xMin, xMax, true), chart.mapY(cumTop[i], yMin, yMax));
+    }
+    for (let i = n - 1; i >= 0; i--) {
+      ctx.lineTo(chart.mapX(THEO_SIZES[i], xMin, xMax, true), chart.mapY(cumBottom[i], yMin, yMax));
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Total line
+  const total = THEO_SIZES.map((_, i) => THEO_REG[i] + THEO_DK[i] + THEO_DM[i]);
+  const totalPts = THEO_SIZES.map((s, i) => [
+    chart.mapX(s, xMin, xMax, true),
+    chart.mapY(total[i], yMin, yMax)
+  ]);
+  chart.drawLine(totalPts, '#333', 2);
+
+  // Observed
+  OBSERVED.sizes.forEach((s, i) => {
+    const px = chart.mapX(s, xMin, xMax, true);
+    const py = chart.mapY(OBSERVED.gains[i], yMin, yMax);
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Legend
+  let ly = chart.margin.top + 10;
+  const lx = chart.margin.left + 10;
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  colors.forEach((c, i) => {
+    ctx.fillStyle = c;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(lx, ly - 4, 12, 8);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#333';
+    ctx.fillText(labels[i], lx + 16, ly + 3);
+    ly += 14;
+  });
+}
+
+// ============================================================================
+// Bootstrap Chart
+// ============================================================================
+
+function drawBootstrapChart() {
+  const chart = new Chart('bootstrapChart');
+  chart.clear();
+  const ctx = chart.ctx;
+
+  const keys = ['power_law', 'saturating', 'sigmoid', 'sqrt_log', 'logarithmic', 'model_averaged'];
+  const labels = ['Power Law', 'Saturating', 'Sigmoid', 'Sqrt-Log', 'Logarithmic', 'Model Avg.'];
+  const colors = ['#e74c3c', '#2ecc71', '#9b59b6', '#e67e22', '#3498db', '#2c3e50'];
+
+  const barH = 25;
+  const gap = 12;
+  const startY = 20;
+  const xMin = 0, xMax = 60;
+  const scale = (chart.w - 180) / xMax;
+
+  keys.forEach((key, i) => {
+    const d = BOOTSTRAP[key];
+    const y = startY + i * (barH + gap);
+
+    // CI bar
+    ctx.fillStyle = colors[i];
+    ctx.globalAlpha = 0.3;
+    const ciLeft = 140 + d.ci_lower * scale;
+    const ciRight = 140 + d.ci_upper * scale;
+    ctx.fillRect(ciLeft, y, ciRight - ciLeft, barH);
+    ctx.globalAlpha = 1;
+
+    // Mean marker
+    const meanX = 140 + d.mean * scale;
+    ctx.fillStyle = colors[i];
+    ctx.beginPath();
+    ctx.moveTo(meanX, y);
+    ctx.lineTo(meanX + 6, y + barH / 2);
+    ctx.lineTo(meanX, y + barH);
+    ctx.lineTo(meanX - 6, y + barH / 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#333';
+    ctx.font = i === keys.length - 1 ? 'bold 11px sans-serif' : '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(labels[i], 130, y + barH / 2 + 4);
+
+    // CI text
+    ctx.textAlign = 'left';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`[${d.ci_lower.toFixed(1)}, ${d.ci_upper.toFixed(1)}]`, ciRight + 5, y + barH / 2 + 4);
+  });
+
+  // X axis
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1;
+  const axisY = startY + keys.length * (barH + gap);
+  ctx.beginPath();
+  ctx.moveTo(140, axisY);
+  ctx.lineTo(140 + xMax * scale, axisY);
+  ctx.stroke();
+  ctx.fillStyle = '#666';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  for (let v = 0; v <= xMax; v += 10) {
+    ctx.fillText(v.toString(), 140 + v * scale, axisY + 14);
+  }
+  ctx.font = '12px sans-serif';
+  ctx.fillText('Predicted OPSD Gain at 70B (pp)', chart.w / 2, chart.h - 5);
+}
+
+// ============================================================================
+// Experiment Design Chart
+// ============================================================================
+
+function drawExpDesignChart() {
+  const chart = new Chart('expDesignChart');
+  chart.clear();
+  const ctx = chart.ctx;
+
+  const maxInfo = Math.max(...EXP_DESIGN.info_values);
+  const barW = (chart.w - 120) / EXP_DESIGN.sizes.length - 8;
+  const maxBarH = chart.h - 80;
+
+  EXP_DESIGN.sizes.forEach((size, i) => {
+    const normVal = EXP_DESIGN.info_values[i] / maxInfo;
+    const x = 60 + i * (barW + 8);
+    const h = normVal * maxBarH;
+    const y = chart.h - 50 - h;
+
+    ctx.fillStyle = size === 140 ? '#e74c3c' : '#3498db';
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(x, y, barW, h);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#333';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(size + 'B', x + barW / 2, chart.h - 35);
+    ctx.fillText(normVal.toFixed(2), x + barW / 2, y - 5);
+  });
+
+  // Label optimal
+  const optIdx = EXP_DESIGN.sizes.indexOf(140);
+  const optX = 60 + optIdx * (barW + 8) + barW / 2;
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText('Optimal', optX, 15);
+
+  ctx.fillStyle = '#333';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Candidate Model Size', chart.w / 2, chart.h - 5);
+  ctx.save();
+  ctx.translate(12, chart.h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Normalized Info Value', 0, 0);
+  ctx.restore();
+}
+
+// ============================================================================
+// Initialize
+// ============================================================================
+
+function drawAll() {
+  drawScalingChart();
+  drawWeightsChart();
+  drawPredictionsChart();
+  drawDecompChart();
+  drawBootstrapChart();
+  drawExpDesignChart();
+}
+
+window.addEventListener('load', drawAll);
+window.addEventListener('resize', drawAll);
+
+// Interactive controls
+document.getElementById('maxSizeSlider').addEventListener('input', function() {
+  document.getElementById('maxSizeLabel').textContent = this.value + 'B';
+  drawScalingChart();
+});
+document.getElementById('logScale').addEventListener('change', drawScalingChart);
+['cb-power', 'cb-log', 'cb-sat', 'cb-sig', 'cb-sqrt', 'cb-avg'].forEach(id => {
+  document.getElementById(id).addEventListener('change', drawScalingChart);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Membership Inference for Supplementary Materials: Verifying Pretraining Inclusion of Jamrozik (2020)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #1a237e;
+  --primary-light: #3949ab;
+  --accent: #ff6f00;
+  --accent-light: #ffa726;
+  --bg: #fafafa;
+  --card: #ffffff;
+  --text: #212121;
+  --text-secondary: #616161;
+  --border: #e0e0e0;
+  --seen: #2e7d32;
+  --unseen: #c62828;
+  --uncertain: #f57f17;
+  --shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+.hero h1 {
+  font-size: 1.9rem;
+  font-weight: 700;
+  max-width: 900px;
+  margin: 0 auto 1rem;
+  line-height: 1.3;
+}
+.hero .subtitle {
+  font-size: 1.05rem;
+  opacity: 0.9;
+  max-width: 800px;
+  margin: 0 auto 1.5rem;
+}
+.hero .meta {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+.hero .meta span {
+  background: rgba(255,255,255,0.15);
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+.section-title {
+  font-size: 1.4rem;
+  color: var(--primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--primary);
+}
+.card {
+  background: var(--card);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+}
+.card h3 {
+  color: var(--primary);
+  margin-bottom: 0.8rem;
+  font-size: 1.1rem;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5rem;
+}
+.stat-card {
+  background: var(--card);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1.2rem;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.stat-card .stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.stat-card .stat-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.3rem;
+}
+.verdict-badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.verdict-seen { background: #e8f5e9; color: var(--seen); }
+.verdict-unseen { background: #ffebee; color: var(--unseen); }
+.verdict-uncertain { background: #fff8e1; color: var(--uncertain); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th, td {
+  padding: 0.6rem 0.8rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: #e8eaf6;
+  color: var(--primary);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+tr:hover { background: #f5f5f5; }
+.chart-container {
+  position: relative;
+  height: 350px;
+  width: 100%;
+}
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.method-card {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.method-card .method-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.method-card h4 {
+  color: var(--primary);
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+}
+.method-card p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.formula {
+  background: #f5f5f5;
+  padding: 0.8rem 1rem;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  margin: 0.8rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+.findings-list {
+  list-style: none;
+  padding: 0;
+}
+.findings-list li {
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.5rem;
+  border-left: 4px solid var(--primary);
+  background: #f5f5f5;
+  border-radius: 0 6px 6px 0;
+}
+.findings-list li strong {
+  color: var(--primary);
+}
+.tab-container {
+  margin-bottom: 1.5rem;
+}
+.tab-buttons {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1rem;
+}
+.tab-btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+.tab-btn:hover { color: var(--primary-light); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.highlight-row { background: #fff3e0 !important; }
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+}
+@media (max-width: 900px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .method-grid { grid-template-columns: 1fr 1fr; }
+  .hero h1 { font-size: 1.4rem; }
+}
+@media (max-width: 600px) {
+  .method-grid { grid-template-columns: 1fr; }
+  .hero .meta { flex-direction: column; gap: 0.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Membership Inference for Supplementary Materials: Verifying Pretraining Inclusion of Jamrozik (2020)</h1>
+  <p class="subtitle">A four-technique computational framework for assessing whether specific documents were included in an LLM's pretraining data, applied to the Jamrozik et al. (2020) supplementary case raised by Lupyan et al. (2026).</p>
+  <div class="meta">
+    <span>KDD 2026</span>
+    <span>Category: CL (Computation and Language)</span>
+    <span>Track: Research</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Problem Statement -->
+  <section class="card">
+    <h2 class="section-title">Problem Statement</h2>
+    <p>Lupyan et al. (2026) demonstrate that Gemini translates a Jabberwockified passage into content closely matching a legal pre-emption example from the supplementary materials of Jamrozik et al. (2020). This raises the question: does the model output reflect genuine pattern-based reconstruction, or retrieval of memorized pretraining text? We develop a multi-technique membership inference framework to quantify the evidence for or against pretraining inclusion.</p>
+  </section>
+
+  <!-- Methods Overview -->
+  <section>
+    <h2 class="section-title">Methods</h2>
+    <div class="method-grid">
+      <div class="method-card">
+        <div class="method-num">1</div>
+        <h4>N-gram Overlap</h4>
+        <p>Precision, recall, F1, and Jaccard similarity for n=1..8. Decay profile distinguishes memorization from reconstruction.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-num">2</div>
+        <h4>Perplexity &amp; Min-K%</h4>
+        <p>Compare model perplexity on target vs. controls. Min-K% amplifies memorization signal via low-probability tokens.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-num">3</div>
+        <h4>Perturbation Detection</h4>
+        <p>Generate 25 paraphrases; z-score measures if model prefers exact original wording over perturbations.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-num">4</div>
+        <h4>Reconstruction Fidelity</h4>
+        <p>Token accuracy, LCS ratio, edit distance, and semantic preservation between target and output.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Aggregate Scoring</h3>
+      <div class="formula">S = 0.20 &middot; S<sub>ngram</sub> + 0.25 &middot; S<sub>ppl</sub> + 0.30 &middot; S<sub>pert</sub> + 0.25 &middot; S<sub>fid</sub></div>
+      <p style="text-align:center;margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">
+        Thresholds: S &gt; 0.65 = <span class="verdict-badge verdict-seen">LIKELY_SEEN</span> &nbsp;
+        0.35 &lt; S &le; 0.65 = <span class="verdict-badge verdict-uncertain">UNCERTAIN</span> &nbsp;
+        S &le; 0.35 = <span class="verdict-badge verdict-unseen">LIKELY_UNSEEN</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- Key Statistics -->
+  <section>
+    <h2 class="section-title">Key Statistics</h2>
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="stat-value">0.667</div>
+        <div class="stat-label">Bigram F1 (n=2)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0.824</div>
+        <div class="stat-label">LCS Ratio</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0.773</div>
+        <div class="stat-label">Semantic Preservation</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0.353</div>
+        <div class="stat-label">Token Accuracy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--unseen)">-11.71</div>
+        <div class="stat-label">z-score (Strong Memorization)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--uncertain)">-1.11</div>
+        <div class="stat-label">z-score (No Memorization)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Charts -->
+  <section>
+    <h2 class="section-title">Interactive Charts</h2>
+
+    <div class="tab-container">
+      <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab(event,'tab-ngram')">N-gram Overlap</button>
+        <button class="tab-btn" onclick="switchTab(event,'tab-sensitivity')">Sensitivity Analysis</button>
+        <button class="tab-btn" onclick="switchTab(event,'tab-perplexity')">Perplexity</button>
+        <button class="tab-btn" onclick="switchTab(event,'tab-perturbation')">Perturbation z-scores</button>
+        <button class="tab-btn" onclick="switchTab(event,'tab-mink')">Min-K% Sensitivity</button>
+      </div>
+
+      <!-- N-gram Chart -->
+      <div id="tab-ngram" class="tab-content active">
+        <div class="card">
+          <h3>N-gram F1 Decay Profile</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;">F1 score between Jamrozik target and model output vs. controls across n-gram lengths. Rapid decay indicates non-verbatim reproduction; slow decay would indicate memorization.</p>
+          <div class="chart-container">
+            <canvas id="ngramChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sensitivity Chart -->
+      <div id="tab-sensitivity" class="tab-content">
+        <div class="card">
+          <h3>Aggregate Score vs. Memorization Boost</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;">The membership score transitions sharply from LIKELY_UNSEEN (0.349) to LIKELY_SEEN (0.735) as memorization strength increases.</p>
+          <div class="chart-container">
+            <canvas id="sensitivityChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Perplexity Chart -->
+      <div id="tab-perplexity" class="tab-content">
+        <div class="card">
+          <h3>Perplexity: Target vs. Controls</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;">Perplexity of the target passage under varying memorization boost compared with control passages.</p>
+          <div class="chart-container">
+            <canvas id="perplexityChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Perturbation Chart -->
+      <div id="tab-perturbation" class="tab-content">
+        <div class="card">
+          <h3>Perturbation z-scores by Scenario</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;">z-scores for original text vs. paraphrases. Values below -2 strongly indicate memorization.</p>
+          <div class="chart-container">
+            <canvas id="perturbationChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Min-K% Chart -->
+      <div id="tab-mink" class="tab-content">
+        <div class="card">
+          <h3>Min-K% Sensitivity Across Thresholds</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;">Seen vs. unseen Min-K% scores across different K thresholds, showing consistent separation.</p>
+          <div class="chart-container">
+            <canvas id="minkChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data Tables -->
+  <section>
+    <h2 class="section-title">Data Tables</h2>
+
+    <div class="card">
+      <h3>N-gram Overlap: Target vs. Model Output</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>n</th><th>Target N-grams</th><th>Output N-grams</th><th>Shared</th><th>Precision</th><th>Recall</th><th>F1</th><th>Jaccard</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>38</td><td>37</td><td>31</td><td>0.838</td><td>0.816</td><td>0.827</td><td>0.705</td></tr>
+            <tr><td>2</td><td>47</td><td>46</td><td>31</td><td>0.674</td><td>0.660</td><td>0.667</td><td>0.500</td></tr>
+            <tr><td>3</td><td>48</td><td>47</td><td>25</td><td>0.532</td><td>0.521</td><td>0.526</td><td>0.357</td></tr>
+            <tr><td>4</td><td>48</td><td>47</td><td>18</td><td>0.383</td><td>0.375</td><td>0.379</td><td>0.234</td></tr>
+            <tr><td>5</td><td>47</td><td>46</td><td>12</td><td>0.261</td><td>0.255</td><td>0.258</td><td>0.148</td></tr>
+            <tr><td>6</td><td>46</td><td>45</td><td>8</td><td>0.178</td><td>0.174</td><td>0.176</td><td>0.096</td></tr>
+            <tr><td>7</td><td>45</td><td>44</td><td>4</td><td>0.091</td><td>0.089</td><td>0.090</td><td>0.047</td></tr>
+            <tr><td>8</td><td>44</td><td>43</td><td>2</td><td>0.047</td><td>0.045</td><td>0.046</td><td>0.024</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Perplexity &amp; Min-K% Scores</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Passage / Boost</th><th>PPL</th><th>Mean LogP</th><th>Min-K%</th></tr></thead>
+            <tbody>
+              <tr class="highlight-row"><td>Target (0.0)</td><td>6.551</td><td>-1.880</td><td>-2.704</td></tr>
+              <tr><td>Target (0.4)</td><td>4.795</td><td>-1.567</td><td>-2.453</td></tr>
+              <tr><td>Target (0.8)</td><td>3.293</td><td>-1.192</td><td>-1.970</td></tr>
+              <tr><td>Target (1.0)</td><td>2.568</td><td>-0.943</td><td>-1.625</td></tr>
+              <tr><td>Target (1.5)</td><td>1.670</td><td>-0.513</td><td>-1.377</td></tr>
+              <tr><td>Legal Control 1</td><td>9.614</td><td>-2.263</td><td>-2.994</td></tr>
+              <tr><td>Legal Control 2</td><td>9.286</td><td>-2.228</td><td>-2.860</td></tr>
+              <tr><td>Legal Control 3</td><td>9.276</td><td>-2.227</td><td>-3.053</td></tr>
+              <tr><td>Unrelated Ctrl 1</td><td>10.321</td><td>-2.334</td><td>-3.055</td></tr>
+              <tr><td>Unrelated Ctrl 2</td><td>9.768</td><td>-2.279</td><td>-3.001</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Perturbation-Based Detection</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Scenario</th><th>Orig PPL</th><th>Mean Pert PPL</th><th>Ratio</th><th>z-score</th></tr></thead>
+            <tbody>
+              <tr><td>Seen Strong (1.0)</td><td>2.445</td><td>6.960</td><td>0.351</td><td>-11.71</td></tr>
+              <tr><td>Seen Moderate (0.6)</td><td>4.122</td><td>6.945</td><td>0.593</td><td>-5.44</td></tr>
+              <tr><td>Seen Weak (0.3)</td><td>5.102</td><td>6.943</td><td>0.735</td><td>-4.36</td></tr>
+              <tr class="highlight-row"><td>Unseen (0.0)</td><td>6.373</td><td>6.931</td><td>0.919</td><td>-1.11</td></tr>
+              <tr><td>Control: Legal 1</td><td>--</td><td>--</td><td>--</td><td>-0.28</td></tr>
+              <tr><td>Control: Legal 2</td><td>--</td><td>--</td><td>--</td><td>+0.43</td></tr>
+              <tr><td>Control: Legal 3</td><td>--</td><td>--</td><td>--</td><td>+0.77</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Reconstruction Fidelity</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Metric</th><th>Target vs. Output</th><th>Best Control</th></tr></thead>
+            <tbody>
+              <tr><td>Token Accuracy</td><td><strong>0.353</strong></td><td>0.059</td></tr>
+              <tr><td>LCS Ratio</td><td><strong>0.824</strong></td><td>0.235</td></tr>
+              <tr><td>Norm. Edit Distance</td><td><strong>0.176</strong></td><td>0.880</td></tr>
+              <tr><td>Semantic Preservation</td><td><strong>0.773</strong></td><td>0.190</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Min-K% Threshold Sensitivity</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>K (%)</th><th>Seen</th><th>Unseen</th><th>Control</th><th>Gap</th></tr></thead>
+            <tbody>
+              <tr><td>5</td><td>-2.168</td><td>-3.031</td><td>-3.078</td><td>0.862</td></tr>
+              <tr><td>10</td><td>-2.128</td><td>-2.900</td><td>-3.165</td><td>0.772</td></tr>
+              <tr><td>20</td><td>-1.961</td><td>-2.593</td><td>-3.088</td><td>0.631</td></tr>
+              <tr><td>30</td><td>-1.867</td><td>-2.686</td><td>-2.895</td><td>0.819</td></tr>
+              <tr><td>40</td><td>-1.614</td><td>-2.581</td><td>-2.709</td><td>0.967</td></tr>
+              <tr><td>50</td><td>-1.593</td><td>-2.307</td><td>-2.623</td><td>0.714</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Verdict Sensitivity: Aggregate Score by Memorization Boost</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Boost</th><th>N-gram</th><th>Perplexity</th><th>Perturbation</th><th>Fidelity</th><th>Aggregate</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr class="highlight-row"><td>0.0</td><td>0.190</td><td>0.656</td><td>0.000</td><td>0.588</td><td>0.349</td><td><span class="verdict-badge verdict-unseen">LIKELY_UNSEEN</span></td></tr>
+            <tr><td>0.1</td><td>0.190</td><td>0.695</td><td>0.349</td><td>0.588</td><td>0.463</td><td><span class="verdict-badge verdict-uncertain">UNCERTAIN</span></td></tr>
+            <tr><td>0.2</td><td>0.190</td><td>0.885</td><td>1.000</td><td>0.588</td><td>0.706</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>0.3</td><td>0.190</td><td>0.986</td><td>1.000</td><td>0.588</td><td>0.732</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>0.4</td><td>0.190</td><td>1.000</td><td>1.000</td><td>0.588</td><td>0.735</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>0.5</td><td>0.190</td><td>1.000</td><td>1.000</td><td>0.588</td><td>0.735</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>0.6</td><td>0.190</td><td>1.000</td><td>1.000</td><td>0.588</td><td>0.735</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>0.8</td><td>0.190</td><td>1.000</td><td>1.000</td><td>0.588</td><td>0.735</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>1.0</td><td>0.190</td><td>1.000</td><td>1.000</td><td>0.588</td><td>0.735</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+            <tr><td>1.5</td><td>0.190</td><td>1.000</td><td>1.000</td><td>0.588</td><td>0.735</td><td><span class="verdict-badge verdict-seen">LIKELY_SEEN</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key Findings -->
+  <section>
+    <h2 class="section-title">Key Findings</h2>
+    <ul class="findings-list">
+      <li><strong>Ambiguous evidence:</strong> The aggregate membership inference score transitions from 0.349 (LIKELY_UNSEEN) at zero memorization boost to 0.735 (LIKELY_SEEN) at moderate boost, placing the Jamrozik case in the ambiguous region.</li>
+      <li><strong>Non-verbatim reproduction:</strong> N-gram F1 decays from 0.827 (unigrams) to 0.046 (8-grams), indicating partial but not verbatim reproduction. All control passages achieve F1 = 0 at n &ge; 2.</li>
+      <li><strong>Perturbation analysis is diagnostic but needs ground truth:</strong> The z-score ranges from -11.71 (strong memorization) to -1.11 (no memorization). The method is highly sensitive when memorization is present but ambiguous without it.</li>
+      <li><strong>Structural preservation with lexical variation:</strong> The LCS ratio of 0.824 with token accuracy of only 0.353 indicates the model preserves passage structure while substituting synonyms at many positions.</li>
+      <li><strong>Consistent Min-K% separation:</strong> The gap between seen and unseen scores is robust across K thresholds (0.631 to 0.967), with the largest separation at K = 40%.</li>
+      <li><strong>Sharp transition regime:</strong> The framework reliably detects memorization once the boost exceeds 0.2, but the observed output falls in the zone where both explanations are plausible.</li>
+    </ul>
+  </section>
+
+</div>
+
+<footer>
+  <p>KDD 2026 | Membership Inference for Supplementary Materials: Verifying Pretraining Inclusion of Jamrozik (2020)</p>
+  <p style="margin-top:0.3rem;">Computational Linguistics (CL) | Research Track</p>
+</footer>
+
+<script>
+// Tab switching
+function switchTab(event, tabId) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Embedded Data
+const ngramData = {
+  n: [1, 2, 3, 4, 5, 6, 7, 8],
+  targetF1: [0.827, 0.667, 0.526, 0.379, 0.258, 0.176, 0.090, 0.046],
+  targetJaccard: [0.705, 0.500, 0.357, 0.234, 0.148, 0.096, 0.047, 0.024],
+  legalCtrl1F1: [0.169, 0, 0, 0, 0, 0, 0, 0],
+  legalCtrl2F1: [0.235, 0, 0, 0, 0, 0, 0, 0],
+  legalCtrl3F1: [0.265, 0, 0, 0, 0, 0, 0, 0]
+};
+
+const sensitivityData = {
+  boost: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5],
+  aggregate: [0.349, 0.463, 0.706, 0.732, 0.735, 0.735, 0.735, 0.735, 0.735, 0.735, 0.735, 0.735, 0.735],
+  ngram: [0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190, 0.190],
+  ppl: [0.656, 0.695, 0.885, 0.986, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000],
+  pert: [0.000, 0.349, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000, 1.000],
+  fid: [0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588, 0.588]
+};
+
+const perplexityData = {
+  boost: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5],
+  targetPPL: [6.551, 5.977, 4.795, 3.564, 3.293, 2.568, 1.974, 1.670],
+  controls: {
+    'Legal Ctrl 1': 9.614,
+    'Legal Ctrl 2': 9.286,
+    'Legal Ctrl 3': 9.276,
+    'Unrelated Ctrl 1': 10.321,
+    'Unrelated Ctrl 2': 9.768
+  }
+};
+
+const perturbationData = {
+  labels: ['Seen Strong\n(1.0)', 'Seen Moderate\n(0.6)', 'Seen Weak\n(0.3)', 'Unseen\n(0.0)', 'Legal Ctrl 1', 'Legal Ctrl 2', 'Legal Ctrl 3'],
+  zScores: [-11.71, -5.44, -4.36, -1.11, -0.28, 0.43, 0.77]
+};
+
+const minkData = {
+  k: ['5%', '10%', '20%', '30%', '40%', '50%'],
+  seen: [-2.168, -2.128, -1.961, -1.867, -1.614, -1.593],
+  unseen: [-3.031, -2.900, -2.593, -2.686, -2.581, -2.307],
+  control: [-3.078, -3.165, -3.088, -2.895, -2.709, -2.623]
+};
+
+// Chart 1: N-gram F1
+new Chart(document.getElementById('ngramChart'), {
+  type: 'line',
+  data: {
+    labels: ngramData.n,
+    datasets: [
+      {
+        label: 'Target vs. Output (F1)',
+        data: ngramData.targetF1,
+        borderColor: '#1a237e',
+        backgroundColor: 'rgba(26,35,126,0.1)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#1a237e'
+      },
+      {
+        label: 'Target vs. Output (Jaccard)',
+        data: ngramData.targetJaccard,
+        borderColor: '#ff6f00',
+        borderWidth: 2,
+        borderDash: [5,5],
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: '#ff6f00',
+        fill: false
+      },
+      {
+        label: 'Legal Control 1 (F1)',
+        data: ngramData.legalCtrl1F1,
+        borderColor: '#c62828',
+        borderWidth: 1.5,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#c62828',
+        fill: false
+      },
+      {
+        label: 'Legal Control 2 (F1)',
+        data: ngramData.legalCtrl2F1,
+        borderColor: '#ad1457',
+        borderWidth: 1.5,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#ad1457',
+        fill: false
+      },
+      {
+        label: 'Legal Control 3 (F1)',
+        data: ngramData.legalCtrl3F1,
+        borderColor: '#6a1b9a',
+        borderWidth: 1.5,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#6a1b9a',
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x: { title: { display: true, text: 'N-gram Size (n)' } },
+      y: { title: { display: true, text: 'Score' }, min: 0, max: 1 }
+    }
+  }
+});
+
+// Chart 2: Sensitivity
+new Chart(document.getElementById('sensitivityChart'), {
+  type: 'line',
+  data: {
+    labels: sensitivityData.boost,
+    datasets: [
+      {
+        label: 'Aggregate Score',
+        data: sensitivityData.aggregate,
+        borderColor: '#1a237e',
+        backgroundColor: 'rgba(26,35,126,0.1)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#1a237e'
+      },
+      {
+        label: 'Perturbation Evidence',
+        data: sensitivityData.pert,
+        borderColor: '#ff6f00',
+        borderWidth: 2,
+        borderDash: [5,5],
+        tension: 0.3,
+        pointRadius: 3,
+        fill: false
+      },
+      {
+        label: 'Perplexity Evidence',
+        data: sensitivityData.ppl,
+        borderColor: '#2e7d32',
+        borderWidth: 2,
+        borderDash: [3,3],
+        tension: 0.3,
+        pointRadius: 3,
+        fill: false
+      },
+      {
+        label: 'N-gram Evidence',
+        data: sensitivityData.ngram,
+        borderColor: '#c62828',
+        borderWidth: 1.5,
+        borderDash: [8,4],
+        tension: 0.3,
+        pointRadius: 3,
+        fill: false
+      },
+      {
+        label: 'Fidelity Evidence',
+        data: sensitivityData.fid,
+        borderColor: '#6a1b9a',
+        borderWidth: 1.5,
+        borderDash: [2,2],
+        tension: 0.3,
+        pointRadius: 3,
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+      annotation: {}
+    },
+    scales: {
+      x: { title: { display: true, text: 'Memorization Boost' } },
+      y: {
+        title: { display: true, text: 'Evidence Score' },
+        min: 0, max: 1.05
+      }
+    }
+  }
+});
+
+// Chart 3: Perplexity
+new Chart(document.getElementById('perplexityChart'), {
+  type: 'line',
+  data: {
+    labels: perplexityData.boost,
+    datasets: [
+      {
+        label: 'Target Passage',
+        data: perplexityData.targetPPL,
+        borderColor: '#1a237e',
+        backgroundColor: 'rgba(26,35,126,0.1)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#1a237e'
+      },
+      ...Object.entries(perplexityData.controls).map(([name, val], i) => ({
+        label: name,
+        data: perplexityData.boost.map(() => val),
+        borderColor: ['#c62828','#ad1457','#6a1b9a','#00695c','#e65100'][i],
+        borderWidth: 1.5,
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false
+      }))
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x: { title: { display: true, text: 'Memorization Boost' } },
+      y: { title: { display: true, text: 'Perplexity' }, min: 0 }
+    }
+  }
+});
+
+// Chart 4: Perturbation z-scores
+new Chart(document.getElementById('perturbationChart'), {
+  type: 'bar',
+  data: {
+    labels: perturbationData.labels,
+    datasets: [{
+      label: 'z-score',
+      data: perturbationData.zScores,
+      backgroundColor: perturbationData.zScores.map(z =>
+        z < -2 ? 'rgba(198,40,40,0.7)' :
+        z < 0 ? 'rgba(255,111,0,0.7)' : 'rgba(46,125,50,0.7)'
+      ),
+      borderColor: perturbationData.zScores.map(z =>
+        z < -2 ? '#c62828' : z < 0 ? '#ff6f00' : '#2e7d32'
+      ),
+      borderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          afterLabel: function(ctx) {
+            const z = ctx.raw;
+            if (z < -2) return 'Strong memorization signal';
+            if (z < -1) return 'Weak signal (inconclusive)';
+            return 'No memorization signal';
+          }
+        }
+      }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Scenario' } },
+      y: {
+        title: { display: true, text: 'z-score' },
+        grid: {
+          color: function(ctx) {
+            if (ctx.tick.value === -2) return '#c62828';
+            return 'rgba(0,0,0,0.1)';
+          }
+        }
+      }
+    }
+  }
+});
+
+// Chart 5: Min-K% Sensitivity
+new Chart(document.getElementById('minkChart'), {
+  type: 'bar',
+  data: {
+    labels: minkData.k,
+    datasets: [
+      {
+        label: 'Seen (boost=0.8)',
+        data: minkData.seen,
+        backgroundColor: 'rgba(46,125,50,0.7)',
+        borderColor: '#2e7d32',
+        borderWidth: 1
+      },
+      {
+        label: 'Unseen (boost=0.0)',
+        data: minkData.unseen,
+        backgroundColor: 'rgba(255,111,0,0.7)',
+        borderColor: '#ff6f00',
+        borderWidth: 1
+      },
+      {
+        label: 'Control Avg',
+        data: minkData.control,
+        backgroundColor: 'rgba(198,40,40,0.7)',
+        borderColor: '#c62828',
+        borderWidth: 1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x: { title: { display: true, text: 'K Threshold (%)' } },
+      y: { title: { display: true, text: 'Min-K% Score' } }
+    }
+  }
+});
+</script>
+</body>
+</html>

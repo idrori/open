@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Epoch Separation Under Composition</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f5f7fa;--card:#fff;--text:#333;--border:#d0d7de}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+  header{background:var(--primary);color:#fff;padding:2rem;text-align:center}
+  header h1{font-size:1.5rem;margin-bottom:.5rem}
+  header p{opacity:.85;font-size:.95rem;max-width:800px;margin:0 auto}
+  .container{max-width:1200px;margin:0 auto;padding:1.5rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(560px,1fr));gap:1.5rem;margin-bottom:1.5rem}
+  .card{background:var(--card);border-radius:8px;padding:1.5rem;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid var(--border)}
+  .card h2{color:var(--primary);font-size:1.1rem;margin-bottom:1rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem}
+  .chart-container{position:relative;height:340px}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{padding:.5rem .75rem;text-align:right;border-bottom:1px solid var(--border)}
+  th{background:var(--primary);color:#fff;font-weight:600}
+  td:first-child,th:first-child{text-align:left}
+  tr:hover{background:#eef3f8}
+  .metric-row{display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .metric{flex:1;min-width:140px;background:var(--primary);color:#fff;border-radius:8px;padding:1rem;text-align:center}
+  .metric .val{font-size:1.8rem;font-weight:700}
+  .metric .label{font-size:.8rem;opacity:.85}
+</style>
+</head>
+<body>
+<header>
+  <h1>Multi-Epoch Separation Under Composition</h1>
+  <p>Investigating whether function composition creates optimization barriers that separate learning epochs for component vs. composed functions.</p>
+</header>
+<div class="container">
+  <div class="metric-row">
+    <div class="metric"><div class="val">~1.0</div><div class="label">Separation Ratio (all classes)</div></div>
+    <div class="metric"><div class="val">99.3%</div><div class="label">MSE Increase (relu_2layer)</div></div>
+    <div class="metric"><div class="val">5</div><div class="label">Function Families Tested</div></div>
+    <div class="metric"><div class="val">4</div><div class="label">Curriculum Strategies</div></div>
+    <div class="metric"><div class="val">6</div><div class="label">Composition Depths</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Component vs. Composed MSE by Function Family</h2>
+      <div class="chart-container"><canvas id="chartMSE"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Composition Depth Scaling (Final MSE)</h2>
+      <div class="chart-container"><canvas id="chartDepth"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Curriculum Strategy Comparison (poly_deg2)</h2>
+      <div class="chart-container"><canvas id="chartCurrPoly"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Curriculum Strategy Comparison (relu_2layer)</h2>
+      <div class="chart-container"><canvas id="chartCurrRelu"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Curvature Sensitivity: Separation Ratio vs Scale</h2>
+      <div class="chart-container"><canvas id="chartCurv"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Training Curves: Component f vs Composed (poly_deg2)</h2>
+      <div class="chart-container"><canvas id="chartCurves"></canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:1.5rem">
+    <h2>Function Family Summary (Exp 1)</h2>
+    <table>
+      <thead><tr><th>Function Family</th><th>Mean f MSE</th><th>Mean g MSE</th><th>Mean Comp MSE</th><th>MSE Gap</th><th>Sep. Ratio</th></tr></thead>
+      <tbody>
+        <tr><td>Polynomial deg2</td><td>0.0784</td><td>0.0871</td><td>0.0950</td><td>21.3%</td><td>1.000</td></tr>
+        <tr><td>Polynomial deg3</td><td>0.1576</td><td>0.1723</td><td>0.1825</td><td>15.9%</td><td>1.000</td></tr>
+        <tr><td>ReLU 2-layer</td><td>0.0940</td><td>0.0966</td><td><strong>0.1874</strong></td><td><strong>99.3%</strong></td><td>1.000</td></tr>
+        <tr><td>ReLU 3-layer</td><td>0.1461</td><td>0.1398</td><td>0.2420</td><td>65.6%</td><td>1.000</td></tr>
+        <tr><td>Piecewise linear</td><td>0.6739</td><td>0.6258</td><td>0.8694</td><td>29.0%</td><td>1.000</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Curriculum Strategy Results</h2>
+    <table>
+      <thead><tr><th>Strategy</th><th>poly_deg2 MSE</th><th>relu_2layer MSE</th><th>poly_deg2 Epochs</th><th>relu_2layer Epochs</th></tr></thead>
+      <tbody>
+        <tr><td>Direct</td><td>0.0988</td><td>0.1691</td><td>60.0</td><td>60.0</td></tr>
+        <tr><td>Sequential</td><td>0.1465</td><td>0.2590</td><td>60.0</td><td>60.0</td></tr>
+        <tr><td>Warmstart</td><td><strong>0.0707</strong></td><td><strong>0.1341</strong></td><td>57.6</td><td>60.0</td></tr>
+        <tr><td>Progressive</td><td>0.1188</td><td>0.1889</td><td>60.0</td><td>60.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+var C={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11}}}}};
+var cols=['rgba(26,58,92,0.8)','rgba(41,128,185,0.8)','rgba(142,68,173,0.8)','rgba(39,174,96,0.8)','rgba(231,76,60,0.8)'];
+
+new Chart(document.getElementById('chartMSE'),{type:'bar',data:{labels:['poly_deg2','poly_deg3','relu_2layer','relu_3layer','piecewise'],datasets:[{label:'Component f MSE',data:[0.0784,0.1576,0.0940,0.1461,0.6739],backgroundColor:'rgba(26,58,92,0.7)'},{label:'Component g MSE',data:[0.0871,0.1723,0.0966,0.1398,0.6258],backgroundColor:'rgba(41,128,185,0.7)'},{label:'Composed MSE',data:[0.0950,0.1825,0.1874,0.2420,0.8694],backgroundColor:'rgba(231,76,60,0.7)'}]},options:{...C,scales:{y:{title:{display:true,text:'Mean Squared Error'}}}}});
+
+new Chart(document.getElementById('chartDepth'),{type:'line',data:{labels:['1','2','3','4','5','6'],datasets:[{label:'poly_deg2',data:[0.0737,0.0832,0.1101,0.1103,0.0846,0.0840],borderColor:'#1a3a5c',pointRadius:5,tension:.2},{label:'relu_2layer',data:[0.1005,0.2016,0.2144,0.2328,0.2085,0.1602],borderColor:'#2980b9',pointRadius:5,tension:.2}]},options:{...C,scales:{y:{title:{display:true,text:'Final MSE'}},x:{title:{display:true,text:'Composition Depth'}}}}});
+
+new Chart(document.getElementById('chartCurrPoly'),{type:'bar',data:{labels:['Direct','Sequential','Warmstart','Progressive'],datasets:[{label:'Mean MSE',data:[0.0988,0.1465,0.0707,0.1188],backgroundColor:['rgba(26,58,92,0.7)','rgba(41,128,185,0.7)','rgba(39,174,96,0.7)','rgba(142,68,173,0.7)']}]},options:{...C,scales:{y:{title:{display:true,text:'Mean MSE'},min:0}}}});
+
+new Chart(document.getElementById('chartCurrRelu'),{type:'bar',data:{labels:['Direct','Sequential','Warmstart','Progressive'],datasets:[{label:'Mean MSE',data:[0.1691,0.2590,0.1341,0.1889],backgroundColor:['rgba(26,58,92,0.7)','rgba(41,128,185,0.7)','rgba(39,174,96,0.7)','rgba(142,68,173,0.7)']}]},options:{...C,scales:{y:{title:{display:true,text:'Mean MSE'},min:0}}}});
+
+new Chart(document.getElementById('chartCurv'),{type:'line',data:{labels:['0.2','0.3','0.4','0.5','0.6','0.8'],datasets:[{label:'Degree 2',data:[1.014,1.014,1.007,1.0,1.0,1.0],borderColor:'#1a3a5c',pointRadius:5,tension:.2},{label:'Degree 3',data:[1.0,1.0,1.0,1.0,1.0,1.0],borderColor:'#2980b9',pointRadius:5,tension:.2}]},options:{...C,scales:{y:{min:0.99,max:1.02,title:{display:true,text:'Separation Ratio'}},x:{title:{display:true,text:'Curvature Scale'}}}}});
+
+var fCurve=[2.259,1.623,1.181,0.865,0.644,0.504,0.412,0.349,0.305,0.272,0.249,0.230,0.215,0.203,0.193,0.184,0.177,0.170,0.164,0.159,0.154,0.149,0.145,0.141,0.137,0.133,0.130,0.127,0.123,0.121,0.118,0.115,0.112,0.110,0.107,0.105,0.103,0.101,0.099,0.097,0.095,0.093,0.092,0.090,0.088,0.087,0.085,0.084,0.082,0.081,0.080,0.077,0.076,0.075,0.074,0.073,0.072,0.071,0.071,0.070];
+var compCurve=[1.893,1.471,1.150,0.917,0.758,0.642,0.557,0.492,0.441,0.400,0.366,0.337,0.313,0.292,0.274,0.258,0.244,0.232,0.221,0.211,0.201,0.193,0.185,0.178,0.172,0.166,0.160,0.155,0.150,0.146,0.142,0.138,0.134,0.131,0.127,0.124,0.121,0.119,0.116,0.114,0.111,0.109,0.107,0.105,0.103,0.101,0.099,0.097,0.096,0.094,0.093,0.092,0.090,0.089,0.088,0.086,0.085,0.084,0.083,0.082];
+var epochs=Array.from({length:60},function(_,i){return i+1;});
+new Chart(document.getElementById('chartCurves'),{type:'line',data:{labels:epochs,datasets:[{label:'Component f',data:fCurve,borderColor:'#1a3a5c',pointRadius:0,tension:.2},{label:'Composed f(g(x))',data:compCurve,borderColor:'#e74c3c',pointRadius:0,tension:.2}]},options:{...C,scales:{y:{title:{display:true,text:'MSE'}},x:{title:{display:true,text:'Epoch'}}}}});
+</script>
+</body>
+</html>

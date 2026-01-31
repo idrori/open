@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robo-Dopamine RoboRewardBench Evaluation</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0e1a; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 30px; text-align: center; }
+.header h1 { font-size: 1.8em; color: #fff; margin-bottom: 8px; }
+.header p { color: #b0d4f1; font-size: 0.95em; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.card { background: #1a1f2e; border-radius: 12px; padding: 20px; border: 1px solid #2a3040; }
+.card h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.1em; }
+.full-width { grid-column: 1 / -1; }
+.stats-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+.stat-box { background: #1a1f2e; border-radius: 10px; padding: 20px 30px; text-align: center; border: 1px solid #2a3040; min-width: 160px; }
+.stat-box .value { font-size: 1.8em; font-weight: bold; color: var(--accent); }
+.stat-box .label { font-size: 0.85em; color: #90a4ae; margin-top: 5px; }
+canvas { max-height: 350px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid #2a3040; }
+th { color: var(--accent); font-weight: 600; }
+td { color: #cfd8dc; }
+.controls { margin-bottom: 15px; }
+.controls label { margin-right: 10px; color: #90a4ae; }
+.controls select { padding: 5px 10px; background: #2a3040; color: #e0e0e0; border: 1px solid #3a4050; border-radius: 5px; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .stats-row { flex-direction: column; align-items: center; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Evaluation of Robo-Dopamine on RoboRewardBench</h1>
+<p>Simulation-Based Benchmarking of Vision-Language Reward Models | Lee et al., arXiv:2601.00675</p>
+</div>
+<div class="container">
+<div class="stats-row">
+<div class="stat-box"><div class="value">97.8%</div><div class="label">Best Accuracy (Fine-tuned VLM)</div></div>
+<div class="stat-box"><div class="value">96.3%</div><div class="label">Process RM Accuracy</div></div>
+<div class="stat-box"><div class="value">0.995</div><div class="label">Process RM Consistency</div></div>
+<div class="stat-box"><div class="value">+1.2%</div><div class="label">Process vs Outcome (Assembly)</div></div>
+<div class="stat-box"><div class="value">p<0.001</div><div class="label">All Pairwise Tests</div></div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h3>Overall Benchmark Accuracy by Model</h3>
+<canvas id="overallChart"></canvas>
+</div>
+<div class="card">
+<h3>Task-Specific Accuracy</h3>
+<div class="controls">
+<label>Model:</label>
+<select id="modelSelect" onchange="updateTaskChart()">
+<option value="0">General VLM</option>
+<option value="1">Fine-tuned VLM (RoboReward)</option>
+<option value="2">Outcome RM</option>
+<option value="3" selected>Process RM (Robo-Dopamine)</option>
+</select>
+</div>
+<canvas id="taskChart"></canvas>
+</div>
+<div class="card">
+<h3>Process vs Outcome by Task</h3>
+<canvas id="deltaChart"></canvas>
+</div>
+<div class="card">
+<h3>Temporal Consistency</h3>
+<canvas id="consistencyChart"></canvas>
+</div>
+<div class="card">
+<h3>Backbone Scaling</h3>
+<canvas id="scalingChart"></canvas>
+</div>
+<div class="card full-width">
+<h3>Pairwise Statistical Comparisons</h3>
+<table>
+<thead><tr><th>Comparison</th><th>p-value</th><th>Effect Size (d)</th><th>Significant</th></tr></thead>
+<tbody>
+<tr><td>General VLM vs Fine-tuned VLM</td><td>&lt;1e-100</td><td>1.04</td><td>Yes</td></tr>
+<tr><td>General VLM vs Outcome RM</td><td>&lt;1e-29</td><td>0.52</td><td>Yes</td></tr>
+<tr><td>General VLM vs Process RM</td><td>&lt;1e-54</td><td>0.72</td><td>Yes</td></tr>
+<tr><td>Fine-tuned VLM vs Outcome RM</td><td>&lt;1e-34</td><td>0.56</td><td>Yes</td></tr>
+<tr><td>Fine-tuned VLM vs Process RM</td><td>&lt;1e-20</td><td>0.42</td><td>Yes</td></tr>
+<tr><td>Outcome RM vs Process RM</td><td>&lt;1e-4</td><td>0.19</td><td>Yes</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<script>
+const chartDefaults = { color: '#e0e0e0', borderColor: '#2a3040' };
+Chart.defaults.color = '#b0bec5';
+Chart.defaults.borderColor = '#2a3040';
+
+const models = ['General VLM', 'Fine-tuned VLM', 'Outcome RM', 'Process RM'];
+const tasks = ['Pick Place', 'Insertion', 'Wiping', 'Stacking', 'Assembly'];
+const colors = ['#7f8c8d', '#2980b9', '#e67e22', '#1a3a5c'];
+
+const overallAcc = [0.941, 0.978, 0.962, 0.963];
+const taskAccData = [
+  [0.955, 0.717, 0.935, 0.920, 0.877],
+  [0.988, 0.895, 0.978, 0.972, 0.959],
+  [0.977, 0.792, 0.960, 0.944, 0.916],
+  [0.965, 0.840, 0.960, 0.940, 0.933]
+];
+const consistency = [0.955, 0.986, 0.971, 0.995];
+const processAcc = [0.965, 0.840, 0.960, 0.940, 0.933];
+const outcomeAcc = [0.977, 0.792, 0.960, 0.944, 0.916];
+const delta = processAcc.map((v,i) => (v - outcomeAcc[i]) * 100);
+const backboneSizes = [7, 13, 34, 72];
+const backboneAcc = [
+  [0.620, 0.670, 0.720, 0.755],
+  [0.780, 0.830, 0.870, 0.900],
+  [0.710, 0.760, 0.810, 0.845],
+  [0.740, 0.790, 0.840, 0.870]
+];
+
+new Chart(document.getElementById('overallChart'), {
+  type: 'bar',
+  data: { labels: models, datasets: [{ label: 'Accuracy', data: overallAcc, backgroundColor: colors, borderRadius: 6 }] },
+  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0.9, max: 1.0, title: { display: true, text: 'Accuracy' } } } }
+});
+
+let taskChart;
+function updateTaskChart() {
+  const idx = parseInt(document.getElementById('modelSelect').value);
+  if (taskChart) taskChart.destroy();
+  taskChart = new Chart(document.getElementById('taskChart'), {
+    type: 'bar',
+    data: { labels: tasks, datasets: [{ label: models[idx], data: taskAccData[idx], backgroundColor: colors[idx], borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0.6, max: 1.0, title: { display: true, text: 'Accuracy' } } } }
+  });
+}
+updateTaskChart();
+
+new Chart(document.getElementById('deltaChart'), {
+  type: 'bar',
+  data: { labels: tasks, datasets: [{ label: 'Process - Outcome (%)', data: delta, backgroundColor: delta.map(d => d >= 0 ? '#1a3a5c' : '#e67e22'), borderRadius: 6 }] },
+  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { title: { display: true, text: 'Accuracy Delta (%)' } } } }
+});
+
+new Chart(document.getElementById('consistencyChart'), {
+  type: 'bar',
+  data: { labels: models, datasets: [{ label: 'Temporal Consistency', data: consistency, backgroundColor: colors, borderRadius: 6 }] },
+  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0.94, max: 1.0, title: { display: true, text: 'Consistency' } } } }
+});
+
+new Chart(document.getElementById('scalingChart'), {
+  type: 'line',
+  data: { labels: backboneSizes.map(s => s + 'M'), datasets: models.map((m, i) => ({
+    label: m, data: backboneAcc[i], borderColor: colors[i], backgroundColor: colors[i] + '33', tension: 0.3, pointRadius: 5
+  })) },
+  options: { responsive: true, scales: { y: { min: 0.5, max: 1.0, title: { display: true, text: 'Accuracy' } }, x: { title: { display: true, text: 'Backbone Size' } } } }
+});
+</script>
+</body>
+</html>

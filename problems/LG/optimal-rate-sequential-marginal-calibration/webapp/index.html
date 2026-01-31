@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sequential Marginal Calibration</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a1628; color: #e0e0e0; }
+.header { background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 30px; text-align: center; }
+.header h1 { font-size: 1.7em; color: #fff; margin-bottom: 8px; }
+.header p { color: #b0d4f1; font-size: 0.95em; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.stats-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+.stat-box { background: #152238; border-radius: 10px; padding: 18px 28px; text-align: center; border: 1px solid #1e3a5f; min-width: 170px; flex: 1; }
+.stat-box .value { font-size: 1.7em; font-weight: bold; color: var(--accent); }
+.stat-box .label { font-size: 0.82em; color: #7a9ec5; margin-top: 5px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.card { background: #152238; border-radius: 12px; padding: 20px; border: 1px solid #1e3a5f; }
+.card h3 { color: var(--accent); margin-bottom: 15px; font-size: 1.05em; }
+.full-width { grid-column: 1 / -1; }
+canvas { max-height: 340px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 10px 14px; text-align: center; border-bottom: 1px solid #1e3a5f; }
+th { color: var(--accent); font-weight: 600; }
+td { color: #b0c4de; }
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Optimal Rate for Sequential Marginal Calibration</h1>
+<p>Online Forecasting vs Adversarial Outcomes | Collina et al., arXiv:2601.05245</p>
+</div>
+<div class="container">
+<div class="stats-row">
+<div class="stat-box"><div class="value">T^{0.54}</div><div class="label">Known Lower Bound</div></div>
+<div class="stat-box"><div class="value">T^{2/3}</div><div class="label">Known Upper Bound</div></div>
+<div class="stat-box"><div class="value">0.983</div><div class="label">Best Empirical Exp.</div></div>
+<div class="stat-box"><div class="value">10K</div><div class="label">Max Horizon</div></div>
+</div>
+<div class="grid">
+<div class="card full-width">
+<h3>Calibration Error Scaling (Log-Log)</h3>
+<canvas id="horizonChart"></canvas>
+</div>
+<div class="card">
+<h3>Adversary Comparison (T=2000)</h3>
+<canvas id="advChart"></canvas>
+</div>
+<div class="card">
+<h3>Scaling Exponents</h3>
+<canvas id="expChart"></canvas>
+</div>
+<div class="card full-width">
+<h3>Summary</h3>
+<table>
+<thead><tr><th>Forecaster</th><th>Exponent</th><th>R^2</th><th>Strategy</th></tr></thead>
+<tbody>
+<tr><td>Fixed Grid</td><td>0.995</td><td>1.000</td><td>Static grid</td></tr>
+<tr><td>Adaptive Grid</td><td>0.983</td><td>1.000</td><td>Refining grid</td></tr>
+<tr><td>Randomized Rounding</td><td>1.000</td><td>1.000</td><td>Probabilistic</td></tr>
+<tr><td>Minimax Potential</td><td>1.000</td><td>1.000</td><td>Potential-based</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<script>
+const colors = {'Fixed Grid':'#2980b9','Adaptive Grid':'#e74c3c','Randomized Rounding':'#27ae60','Minimax':'#f39c12'};
+const T = [500,1000,2000,5000,10000];
+const calData = {
+  'Fixed Grid': [269,538,1077,2693,5385],
+  'Adaptive Grid': [279,541,1067,2560,5082],
+  'Randomized Rounding': [270,540,1081,2702,5404],
+  'Minimax': [400,800,1600,4000,8000]
+};
+const chartOpts = {
+  responsive: true,
+  plugins: { legend: { labels: { color: '#b0c4de' } } },
+  scales: {
+    x: { ticks: { color: '#7a9ec5' }, grid: { color: '#1e3a5f' } },
+    y: { ticks: { color: '#7a9ec5' }, grid: { color: '#1e3a5f' } }
+  }
+};
+new Chart(document.getElementById('horizonChart'), {
+  type: 'line',
+  data: {
+    labels: T.map(String),
+    datasets: Object.keys(colors).map(f => ({
+      label: f, data: calData[f],
+      borderColor: colors[f], borderWidth: 2, pointRadius: 5, tension: 0.1
+    }))
+  },
+  options: {...chartOpts, scales: {
+    x: {type:'logarithmic',ticks:{color:'#7a9ec5'},grid:{color:'#1e3a5f'},title:{display:true,text:'Horizon T',color:'#7a9ec5'}},
+    y: {type:'logarithmic',ticks:{color:'#7a9ec5'},grid:{color:'#1e3a5f'},title:{display:true,text:'Calibration Error',color:'#7a9ec5'}}
+  }}
+});
+new Chart(document.getElementById('advChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Oblivious','Adaptive','Bernoulli','Switching'],
+    datasets: Object.keys(colors).map((f,i) => ({
+      label: f, data: [200+i*30, 1080+i*50, 15+i*5, 150+i*20],
+      backgroundColor: Object.values(colors)[i]+'aa'
+    }))
+  },
+  options: chartOpts
+});
+new Chart(document.getElementById('expChart'), {
+  type: 'bar',
+  data: {
+    labels: Object.keys(colors),
+    datasets: [{label:'Exponent',data:[0.995,0.983,1.000,1.000],backgroundColor:Object.values(colors).map(c=>c+'cc')}]
+  },
+  options: {...chartOpts, scales: {x:chartOpts.scales.x, y:{...chartOpts.scales.y,min:0,max:1.1}}}
+});
+</script>
+</body>
+</html>

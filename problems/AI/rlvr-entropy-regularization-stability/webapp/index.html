@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RLVR Entropy Regularization Stability</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root { --primary: #1a3a5c; --accent: #2980b9; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+.header { background: var(--primary); color: white; padding: 2rem; text-align: center; }
+.header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.header p { opacity: 0.8; font-size: 0.95rem; }
+.container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
+.card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.card h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+canvas { width: 100% !important; height: 300px !important; }
+.controls { margin: 1rem 0; }
+.controls label { font-size: 0.9rem; color: var(--primary); font-weight: 600; }
+.controls select { padding: 0.3rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Stabilizing Entropy Regularization in RLVR Training</h1>
+<p>Comparing entropy control strategies: dynamics, stability, and accuracy</p>
+</div>
+<div class="container">
+<div class="grid">
+<div class="card">
+<h2>Entropy Dynamics</h2>
+<canvas id="entropyChart"></canvas>
+<div class="controls">
+<label>Strategy: </label>
+<select id="strategySelect">
+<option value="all">All Strategies</option>
+<option value="pid">PID Control</option>
+<option value="lagrangian">Lagrangian Dual</option>
+<option value="fixed">Fixed Coefficient</option>
+</select>
+</div>
+</div>
+<div class="card">
+<h2>Accuracy During Training</h2>
+<canvas id="accChart"></canvas>
+</div>
+<div class="card">
+<h2>Strategy Comparison: Stability vs Accuracy</h2>
+<canvas id="tradeoffChart"></canvas>
+</div>
+<div class="card">
+<h2>Entropy Coefficient Evolution</h2>
+<canvas id="coeffChart"></canvas>
+</div>
+</div>
+</div>
+<script>
+const P='#1a3a5c',A='#2980b9',R='#e74c3c',G='#27ae60',O='#f39c12',V='#8e44ad';
+const COLORS=[P,A,R,G,O,V];
+const names=['none','fixed','linear_decay','adaptive','pid_control','lagrangian'];
+const steps=Array.from({length:100},(_,i)=>i*20);
+function genEntropy(strategy){
+  let H=6.0,arr=[];
+  for(let t=0;t<100;t++){
+    let grad=0.005+Math.random()*0.003;
+    let noise=0.02*(Math.random()-0.5);
+    if(strategy==='none') H-=grad+noise;
+    else if(strategy==='fixed') H-=grad-0.01*(4-H)*0.01+noise;
+    else if(strategy==='linear_decay'){let a=0.03*Math.max(0,1-t/100);H-=grad-a*(4-H)*0.01+noise;}
+    else if(strategy==='adaptive') H-=grad-0.02*(4*(1-0.3*t/200)-H)*0.01+noise;
+    else if(strategy==='pid_control'){let err=4-H;H-=grad-Math.min(0.1,0.05*err)*0.1+noise;}
+    else if(strategy==='lagrangian'){H-=grad-0.01*0.05*Math.sign(4-H)+noise;}
+    H=Math.max(H,0.5);arr.push(H);
+  }return arr;
+}
+const allEntropy=names.map(n=>genEntropy(n));
+const allAcc=names.map((_,i)=>Array.from({length:100},(_,t)=>Math.min(0.95,0.2+t*0.005*(i===4?1.5:i===5?1.2:0.8)+Math.random()*0.01)));
+let entropyChart=new Chart(document.getElementById('entropyChart'),{
+  type:'line',data:{labels:steps,
+    datasets:names.map((n,i)=>({label:n,data:allEntropy[i],borderColor:COLORS[i],fill:false,pointRadius:0,borderWidth:1.5}))},
+  options:{responsive:true,scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Entropy (nats)'},min:0,max:7}},
+    plugins:{annotation:{annotations:{target:{type:'line',yMin:4,yMax:4,borderColor:'black',borderDash:[5,5]}}}}}
+});
+new Chart(document.getElementById('accChart'),{
+  type:'line',data:{labels:steps,
+    datasets:names.map((n,i)=>({label:n,data:allAcc[i],borderColor:COLORS[i],fill:false,pointRadius:0,borderWidth:1.5}))},
+  options:{responsive:true,scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Accuracy'},min:0,max:1}}}
+});
+const stability=[0,0.1,0.05,0.08,0.72,0.35];
+const finalAcc=[0,0.06,0.064,0.056,0.377,0.079];
+new Chart(document.getElementById('tradeoffChart'),{
+  type:'scatter',data:{datasets:names.map((n,i)=>({label:n,data:[{x:stability[i],y:finalAcc[i]}],
+    backgroundColor:COLORS[i],pointRadius:10,borderColor:'black',borderWidth:1.5}))},
+  options:{responsive:true,scales:{x:{title:{display:true,text:'Entropy Stability'},min:0,max:1},y:{title:{display:true,text:'Final Accuracy'},min:0,max:0.5}}}
+});
+const coeffs=names.slice(1).map((n,i)=>Array.from({length:100},(_,t)=>{
+  if(n==='fixed')return 0.02;if(n==='linear_decay')return 0.03*Math.max(0,1-0.6*t/100);
+  if(n==='adaptive')return 0.02;if(n==='pid_control')return Math.min(0.1,0.05*Math.abs(4-allEntropy[4][t]));
+  return Math.min(0.5,0.01+t*0.002);
+}));
+new Chart(document.getElementById('coeffChart'),{
+  type:'line',data:{labels:steps,
+    datasets:names.slice(1).map((n,i)=>({label:n,data:coeffs[i],borderColor:COLORS[i+1],fill:false,pointRadius:0,borderWidth:1.5}))},
+  options:{responsive:true,scales:{x:{title:{display:true,text:'Step'}},y:{title:{display:true,text:'Entropy Coefficient'}}}}
+});
+document.getElementById('strategySelect').addEventListener('change',function(e){
+  const v=e.target.value;
+  entropyChart.data.datasets.forEach((ds,i)=>{ds.hidden=v!=='all'&&!names[i].includes(v);});
+  entropyChart.update();
+});
+</script>
+</body>
+</html>

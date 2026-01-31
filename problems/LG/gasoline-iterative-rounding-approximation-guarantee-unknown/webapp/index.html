@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iterative Rounding for the Gasoline Problem - Interactive Research Explorer</title>
+<style>
+:root {
+  --primary: #2c3e50;
+  --accent: #3498db;
+  --accent2: #e74c3c;
+  --accent3: #27ae60;
+  --bg: #f8f9fa;
+  --card: #ffffff;
+  --text: #2c3e50;
+  --muted: #7f8c8d;
+  --border: #dee2e6;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+header {
+  background: linear-gradient(135deg, var(--primary) 0%, #34495e 100%);
+  color: white;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+}
+header h1 { font-size: 1.6rem; margin-bottom: 0.5rem; font-weight: 600; }
+header .subtitle { font-size: 0.95rem; opacity: 0.85; max-width: 700px; margin: 0 auto; }
+header .badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.15);
+  padding: 0.2rem 0.7rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin-top: 0.8rem;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+nav {
+  display: flex; gap: 0.5rem; flex-wrap: wrap;
+  margin-bottom: 1.5rem; justify-content: center;
+}
+nav button {
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+nav button:hover { border-color: var(--accent); color: var(--accent); }
+nav button.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.card {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid var(--border);
+}
+.card h2 { font-size: 1.2rem; margin-bottom: 0.8rem; color: var(--primary); }
+.card h3 { font-size: 1rem; margin: 1rem 0 0.5rem; color: var(--primary); }
+.section { display: none; }
+.section.active { display: block; }
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.stat-box {
+  background: linear-gradient(135deg, #f0f4f8 0%, #e8ecf0 100%);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+.stat-box .value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.stat-box .label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.3rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+th, td {
+  padding: 0.5rem 0.7rem;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+th { background: #f0f4f8; font-weight: 600; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+tr:hover td { background: #f8f9fa; }
+canvas { width: 100% !important; max-height: 400px; }
+.formula {
+  background: #f0f4f8;
+  border-left: 3px solid var(--accent);
+  padding: 0.8rem 1rem;
+  margin: 0.8rem 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  border-radius: 0 4px 4px 0;
+  overflow-x: auto;
+}
+.highlight { color: var(--accent2); font-weight: 600; }
+.finding {
+  background: #eaf4e8;
+  border-left: 3px solid var(--accent3);
+  padding: 0.8rem 1rem;
+  margin: 0.8rem 0;
+  border-radius: 0 4px 4px 0;
+}
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 768px) {
+  .two-col { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+}
+.slider-group { margin: 0.8rem 0; }
+.slider-group label {
+  display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.3rem;
+}
+.slider-group input[type=range] { width: 100%; }
+.slider-value { font-weight: 600; color: var(--accent); }
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+}
+.tag {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.tag-open { background: #fce4ec; color: #c62828; }
+.tag-conjectured { background: #fff3e0; color: #e65100; }
+.tag-supported { background: #e8f5e9; color: #2e7d32; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Iterative Rounding Approximation Guarantee for the Gasoline Problem</h1>
+  <p class="subtitle">
+    Interactive exploration of an open problem: determining the worst-case approximation ratio
+    of the iterative rounding algorithm for the Gasoline problem and its d-dimensional generalization.
+  </p>
+  <span class="badge">KDD 2026 Research Track</span>
+  <span class="badge">Open Problem</span>
+</header>
+
+<div class="container">
+
+<nav id="mainNav"></nav>
+
+<!-- ==================== OVERVIEW ==================== -->
+<div id="overview" class="section active">
+  <div class="stat-grid">
+    <div class="stat-box">
+      <div class="value">570+</div>
+      <div class="label">Problem Instances Tested</div>
+    </div>
+    <div class="stat-box">
+      <div class="value">1.30</div>
+      <div class="label">Max Observed IR/OPT Ratio</div>
+    </div>
+    <div class="stat-box">
+      <div class="value">d=1..4</div>
+      <div class="label">Dimensions Studied</div>
+    </div>
+    <div class="stat-box">
+      <div class="value">2d</div>
+      <div class="label">Conjectured Worst-Case Bound</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Research Summary</h2>
+    <p>The <strong>Gasoline problem</strong> seeks a minimum-cost permutation matching fuel supplies
+    to consumption demands along a circular route. The <strong>iterative rounding algorithm</strong>
+    solves an LP relaxation over doubly stochastic matrices and fixes columns one by one.</p>
+
+    <div class="finding">
+      <strong>Status:</strong> <span class="tag tag-open">OPEN PROBLEM</span>
+      The approximation guarantee of this algorithm is unknown (Nikoleit et al., 2026).
+      The 2-approximation conjecture was disproved for d &ge; 2, but no formal bound exists for any dimension.
+    </div>
+
+    <h3>Key Findings from Our Study</h3>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li><strong>1D case (d=1):</strong> Maximum observed ratio is <span class="highlight">1.20</span>,
+      supporting the 2-approximation conjecture <span class="tag tag-supported">Supported</span></li>
+      <li><strong>2D case (d=2):</strong> Maximum observed ratio is <span class="highlight">1.30</span>,
+      well below the conjectured bound of 4 <span class="tag tag-conjectured">Below Bound</span></li>
+      <li><strong>Higher dimensions:</strong> LP relaxation becomes structurally loose, with the
+      objective (sum) mismatching the stock size (max) <span class="tag tag-open">Open</span></li>
+      <li><strong>Scale matters:</strong> Known counterexamples (ratio &gt; 2) require n &ge; 62,
+      beyond exact enumeration range</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== PROBLEM ==================== -->
+<div id="problem" class="section">
+  <div class="card">
+    <h2>The Gasoline Problem</h2>
+    <p>Originally from Lovasz's <em>Combinatorial Problems and Exercises</em> (1979): gas stations
+    on a circular route each provide fuel x_i and require fuel y_i to reach the next station.
+    The optimization version minimizes the tank capacity needed.</p>
+
+    <h3>Formal Definition</h3>
+    <div class="formula">
+      <strong>Input:</strong> X = {x_1,...,x_n}, Y = {y_1,...,y_n} with sum(X) = sum(Y)<br>
+      <strong>Goal:</strong> Find permutation pi minimizing eta(pi) = max_{k,l} |Sum_{i=k..l} x_{pi(i)} - Sum_{i=k..l-1} y_i|
+    </div>
+
+    <h3>d-Dimensional Generalization</h3>
+    <p>Each x_i, y_i become d-dimensional vectors. The bound must hold coordinate-wise
+    for each dimension j in [d]. This models scheduling with d types of non-renewable resources.</p>
+
+    <h3>The Open Problem</h3>
+    <div class="finding">
+      Determine the worst-case approximation ratio of the iterative rounding algorithm that
+      solves the LP relaxation and fixes columns one by one. The 2-approximation conjecture
+      was disproved for d &ge; 2 by Nikoleit et al. (2026), but the true guarantee is unknown.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Known Results</h2>
+    <table>
+      <thead>
+        <tr><th style="text-align:left">Year</th><th style="text-align:left">Authors</th><th style="text-align:left">Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1979</td><td>Lovasz</td><td>Classical gasoline puzzle existence proof</td></tr>
+        <tr><td>1998</td><td>Kellerer et al.</td><td>Stock size: 3/2-approx; 2-approx algorithms</td></tr>
+        <tr><td>2016</td><td>Newman, Roglin, Seif</td><td>1.79-approx (alternating); 2-approx via doubly stochastic LP</td></tr>
+        <tr><td>2022</td><td>Rajkovic</td><td>Iterative rounding algorithm; conjectured 2-approx</td></tr>
+        <tr><td>2026</td><td>Nikoleit et al.</td><td>Counterexamples via Co-FunSearch: ratio &gt; 2 for d &ge; 2</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== ALGORITHM ==================== -->
+<div id="algorithm" class="section">
+  <div class="card">
+    <h2>The Iterative Rounding Algorithm</h2>
+    <h3>LP Relaxation</h3>
+    <p>The integer program uses a permutation matrix Z in {0,1}^{nxn}.
+    The LP relaxation replaces this with Z &ge; 0, doubly stochastic. By the Birkhoff-von Neumann
+    theorem, the feasible set is the Birkhoff polytope.</p>
+
+    <div class="formula">
+      min Sum_j (beta_j - alpha_j)<br>
+      s.t. prefix-sum constraints for each position m and dimension j<br>
+      &nbsp;&nbsp;&nbsp;&nbsp; Z*1 = 1, 1^T*Z = 1^T, Z &ge; 0
+    </div>
+
+    <h3>Algorithm Steps</h3>
+    <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>Solve the LP relaxation to obtain doubly stochastic Z*</li>
+      <li>For each column c = 1, 2, ..., n:
+        <ul>
+          <li>For each available row r, tentatively fix column c to unit vector e_r</li>
+          <li>Re-solve the reduced LP with this fixing</li>
+          <li>Choose the row r minimizing the reduced LP value</li>
+        </ul>
+      </li>
+      <li>After n steps, Z is a permutation matrix; return the permutation pi</li>
+    </ol>
+
+    <h3>Complexity</h3>
+    <p>Each step requires solving O(n) reduced LPs. With n columns, the total is O(n^2) LP solves,
+    each of size O(n^2) variables. Overall: O(n^5) time.</p>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h2>Why It Is Hard to Analyze</h2>
+      <ul style="margin-left: 1rem;">
+        <li><strong>Compounding error:</strong> Each column fixing affects all subsequent columns</li>
+        <li><strong>Circular structure:</strong> Prefix sums wrap around, creating feedback</li>
+        <li><strong>Dimensional coupling:</strong> In d dimensions, constraints interact across coordinates</li>
+        <li><strong>Extreme point structure:</strong> The augmented Birkhoff polytope has complex geometry</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Comparison Algorithms</h2>
+      <ul style="margin-left: 1rem;">
+        <li><strong>Greedy:</strong> At each position, assign the item minimizing current deviation</li>
+        <li><strong>Newman Rounding:</strong> Solve LP, extract permutation via Hungarian algorithm</li>
+        <li><strong>Exact (brute force):</strong> Enumerate all n! permutations (feasible for n &le; 8)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RESULTS ==================== -->
+<div id="results" class="section">
+  <div class="card">
+    <h2>Exact Approximation Ratios</h2>
+    <p>Maximum observed IR/OPT ratios from 240 random instances with exact solutions:</p>
+    <canvas id="chartRatios" height="300"></canvas>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h2>Dimension Scaling</h2>
+      <canvas id="chartDimScaling" height="280"></canvas>
+      <p style="font-size:0.85rem; margin-top:0.5rem; color:var(--muted);">
+        Maximum and mean IR/OPT ratios vs. dimension d. The conjectured 2d bound grows
+        linearly while observed ratios remain near 1.0-1.2.
+      </p>
+    </div>
+    <div class="card">
+      <h2>Detailed Statistics</h2>
+      <table>
+        <thead>
+          <tr><th>d</th><th>n</th><th>Max</th><th>Mean</th><th>Std</th><th>2d</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>5</td><td>1.183</td><td>1.019</td><td>0.046</td><td>2</td></tr>
+          <tr><td>2</td><td>5</td><td>1.097</td><td>1.011</td><td>0.027</td><td>4</td></tr>
+          <tr><td>3</td><td>4</td><td>1.131</td><td>1.016</td><td>0.031</td><td>6</td></tr>
+          <tr><td>4</td><td>4</td><td>1.024</td><td>1.004</td><td>0.008</td><td>8</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Integrality Gap Analysis</h2>
+    <canvas id="chartGap" height="280"></canvas>
+    <p style="font-size:0.85rem; margin-top:0.5rem; color:var(--muted);">
+      Integrality gap (OPT_IP / OPT_LP) across 180 instances. For d=1, the LP
+      provides a valid lower bound (gap &ge; 1). For d &ge; 2, the sum-vs-max objective mismatch
+      causes the measured ratio to fall below 1.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Known Counterexamples (Nikoleit et al., 2026)</h2>
+    <table>
+      <thead>
+        <tr><th>d</th><th>k</th><th>|X|</th><th>IR cost</th><th>OPT</th><th>Ratio</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2</td><td>5</td><td>62</td><td>122</td><td>36</td><td class="highlight">3.389</td></tr>
+        <tr><td>2</td><td>6</td><td>126</td><td>250</td><td>68</td><td class="highlight">3.676</td></tr>
+        <tr><td>3</td><td>5</td><td>124</td><td>186</td><td>40</td><td class="highlight">4.650</td></tr>
+      </tbody>
+    </table>
+    <div class="finding">
+      These counterexamples require n &ge; 62, far beyond our exact enumeration range (n &le; 8).
+      The gap between our small-instance measurements (max ratio 1.30) and these large-instance
+      counterexamples (ratio &gt; 3) indicates that worst-case behavior is a phenomenon of scale.
+    </div>
+  </div>
+</div>
+
+<!-- ==================== INTERACTIVE ==================== -->
+<div id="interactive" class="section">
+  <div class="card">
+    <h2>Interactive Gasoline Instance Explorer</h2>
+    <p>Generate random Gasoline problem instances and visualize the prefix-sum deviation under
+    different permutations.</p>
+
+    <div class="two-col">
+      <div>
+        <div class="slider-group">
+          <label>Instance Size (n): <span id="nVal" class="slider-value">6</span></label>
+          <input type="range" id="nSlider" min="3" max="8" value="6">
+        </div>
+        <div class="slider-group">
+          <label>Dimension (d): <span id="dVal" class="slider-value">1</span></label>
+          <input type="range" id="dSlider" min="1" max="3" value="1">
+        </div>
+        <div class="slider-group">
+          <label>Random Seed: <span id="seedVal" class="slider-value">0</span></label>
+          <input type="range" id="seedSlider" min="0" max="50" value="0">
+        </div>
+        <button id="generateBtn" style="margin-top:0.5rem; padding:0.5rem 1.5rem;
+          background:var(--accent); color:white; border:none; border-radius:5px; cursor:pointer;
+          font-weight:500;">Generate Instance</button>
+      </div>
+      <div id="instanceInfo">
+        <p>Adjust parameters and click Generate to create a Gasoline problem instance.</p>
+      </div>
+    </div>
+
+    <div style="margin-top: 1rem;">
+      <canvas id="chartInteractive" height="300"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Permutation Comparison</h2>
+    <p>For the current instance, compare the prefix-sum profiles under different algorithms:</p>
+    <canvas id="chartPermComparison" height="280"></canvas>
+  </div>
+</div>
+
+<!-- ==================== REFERENCES ==================== -->
+<div id="references" class="section">
+  <div class="card">
+    <h2>References</h2>
+    <ol style="margin-left:1.5rem; font-size:0.9rem; line-height:1.8;">
+      <li>Nikoleit, F., Foerster, K.-T., Schmid, S. (2026). The Art of Being Difficult:
+      Combining Human and AI Strengths to Find Adversarial Instances for Heuristics.
+      arXiv:2601.16849.</li>
+      <li>Lovasz, L. (1979). Combinatorial Problems and Exercises. North-Holland.</li>
+      <li>Kellerer, H., Kotov, V., Rendl, F., Woeginger, G.J. (1998). A stock size problem.
+      Operations Research, 46(3), S183-S194.</li>
+      <li>Newman, A., Roglin, H., Seif, J. (2016). On the Gasoline Puzzle and Semirandom
+      Relaxations. ESA 2016.</li>
+      <li>Rajkovic, S. (2022). Iterative Rounding for the Gasoline Problem. PhD thesis, U. Bonn.</li>
+      <li>Jain, K. (2001). A Factor 2 Approximation Algorithm for the Generalized Steiner
+      Network Problem. Combinatorica, 21(1), 39-60.</li>
+      <li>Lau, L.C., Ravi, R., Singh, M. (2011). Iterative Methods in Combinatorial Optimization.
+      Cambridge University Press.</li>
+      <li>Birkhoff, G. (1946). Three Observations on Linear Algebra. Univ. Nac. Tucuman, Rev. Ser. A, 5, 147-151.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Reproducibility</h2>
+    <p>All code and data are available in the project repository:</p>
+    <ul style="margin-left:1.5rem; font-size:0.9rem;">
+      <li><code>code/experiments.py</code> - Experiment runner (generates data/)</li>
+      <li><code>code/generate_figures.py</code> - Figure generation (generates paper/figures/)</li>
+      <li><code>data/</code> - CSV files with all experimental results</li>
+      <li><code>paper/main.tex</code> - LaTeX source (ACM sigconf format)</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+
+<footer>
+  KDD 2026 Research Track -- Empirical Characterization of the Iterative Rounding
+  Approximation Guarantee for the Gasoline Problem -- All results from actual code execution
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Build navigation safely
+(function() {
+  var nav = document.getElementById('mainNav');
+  var tabs = [
+    {id: 'overview', label: 'Overview'},
+    {id: 'problem', label: 'Problem'},
+    {id: 'algorithm', label: 'Algorithm'},
+    {id: 'results', label: 'Results'},
+    {id: 'interactive', label: 'Interactive'},
+    {id: 'references', label: 'References'}
+  ];
+  tabs.forEach(function(t) {
+    var btn = document.createElement('button');
+    btn.textContent = t.label;
+    if (t.id === 'overview') btn.className = 'active';
+    btn.addEventListener('click', function() { showSection(t.id, btn); });
+    nav.appendChild(btn);
+  });
+})();
+
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('active'); });
+  document.querySelectorAll('nav button').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// Seeded random number generator (Mulberry32)
+function mulberry32(a) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function generateExponential(rng) {
+  return -Math.log(1 - rng());
+}
+
+function evaluatePermutation(X, Y, perm, d) {
+  var n = X.length / d;
+  var maxEta = 0;
+  for (var dim = 0; dim < d; dim++) {
+    var level = 0, maxL = 0, minL = 0;
+    for (var i = 0; i < n; i++) {
+      level += X[perm[i] * d + dim];
+      maxL = Math.max(maxL, level);
+      minL = Math.min(minL, level);
+      level -= Y[i * d + dim];
+      maxL = Math.max(maxL, level);
+      minL = Math.min(minL, level);
+    }
+    maxEta = Math.max(maxEta, maxL - minL);
+  }
+  return maxEta;
+}
+
+function greedyPermutation(X, Y, n, d) {
+  var available = [];
+  for (var i = 0; i < n; i++) available.push(i);
+  var perm = [];
+  var runSum = [];
+  for (var dim = 0; dim < d; dim++) runSum.push(0);
+  for (var pos = 0; pos < n; pos++) {
+    var bestIdx = -1, bestDev = Infinity;
+    for (var ai = 0; ai < available.length; ai++) {
+      var idx = available[ai];
+      var maxDev = 0;
+      for (var dm = 0; dm < d; dm++) {
+        var trial = runSum[dm] + X[idx * d + dm];
+        maxDev = Math.max(maxDev, Math.abs(trial));
+        if (pos < n - 1) {
+          maxDev = Math.max(maxDev, Math.abs(trial - Y[pos * d + dm]));
+        }
+      }
+      if (maxDev < bestDev) { bestDev = maxDev; bestIdx = ai; }
+    }
+    var chosen = available[bestIdx];
+    perm.push(chosen);
+    available.splice(bestIdx, 1);
+    for (var dm2 = 0; dm2 < d; dm2++) {
+      runSum[dm2] += X[chosen * d + dm2];
+      if (pos < n - 1) runSum[dm2] -= Y[pos * d + dm2];
+    }
+  }
+  return perm;
+}
+
+function identityPerm(n) {
+  var p = [];
+  for (var i = 0; i < n; i++) p.push(i);
+  return p;
+}
+
+function prefixSums(X, Y, perm, d, dim) {
+  var n = X.length / d;
+  var sums = [0];
+  var level = 0;
+  for (var i = 0; i < n; i++) {
+    level += X[perm[i] * d + dim];
+    sums.push(level);
+    level -= Y[i * d + dim];
+    sums.push(level);
+  }
+  return sums;
+}
+
+function getPermutations(arr) {
+  if (arr.length <= 1) return [arr.slice()];
+  var result = [];
+  for (var i = 0; i < arr.length; i++) {
+    var rest = arr.slice(0, i).concat(arr.slice(i + 1));
+    var subPerms = getPermutations(rest);
+    for (var j = 0; j < subPerms.length; j++) {
+      result.push([arr[i]].concat(subPerms[j]));
+    }
+  }
+  return result;
+}
+
+// Chart instances
+var interactiveChart = null;
+var comparisonChart = null;
+
+function updateInstance() {
+  var n = parseInt(document.getElementById('nSlider').value);
+  var d = parseInt(document.getElementById('dSlider').value);
+  var seed = parseInt(document.getElementById('seedSlider').value);
+  document.getElementById('nVal').textContent = n;
+  document.getElementById('dVal').textContent = d;
+  document.getElementById('seedVal').textContent = seed;
+
+  var rng = mulberry32(seed * 1000 + 42);
+  var X = [], Y = [];
+  for (var i = 0; i < n; i++) {
+    for (var dim = 0; dim < d; dim++) {
+      X.push(generateExponential(rng));
+      Y.push(generateExponential(rng));
+    }
+  }
+  for (var dm = 0; dm < d; dm++) {
+    var sx = 0, sy = 0;
+    for (var ii = 0; ii < n; ii++) { sx += X[ii * d + dm]; sy += Y[ii * d + dm]; }
+    for (var ii2 = 0; ii2 < n; ii2++) { Y[ii2 * d + dm] *= sx / sy; }
+  }
+
+  var idPerm = identityPerm(n);
+  var grPerm = greedyPermutation(X, Y, n, d);
+  var idCost = evaluatePermutation(X, Y, idPerm, d);
+  var grCost = evaluatePermutation(X, Y, grPerm, d);
+
+  var bestCost = Infinity, bestPerm = idPerm;
+  if (n <= 7) {
+    var allPerms = getPermutations(idPerm);
+    for (var pi = 0; pi < allPerms.length; pi++) {
+      var c = evaluatePermutation(X, Y, allPerms[pi], d);
+      if (c < bestCost) { bestCost = c; bestPerm = allPerms[pi]; }
+    }
+  } else {
+    bestCost = Math.min(idCost, grCost);
+    bestPerm = idCost < grCost ? idPerm : grPerm;
+  }
+
+  var info = document.getElementById('instanceInfo');
+  while (info.firstChild) info.removeChild(info.firstChild);
+  var lines = [
+    'Instance: n=' + n + ', d=' + d + ', seed=' + seed,
+    'Identity cost: ' + idCost.toFixed(4),
+    'Greedy cost: ' + grCost.toFixed(4),
+    'Optimal cost' + (n > 7 ? ' (approx)' : '') + ': ' + bestCost.toFixed(4),
+    'Greedy/OPT: ' + (grCost / bestCost).toFixed(4)
+  ];
+  lines.forEach(function(line) {
+    var p = document.createElement('p');
+    p.textContent = line;
+    info.appendChild(p);
+  });
+
+  var labels = [];
+  for (var li = 0; li <= 2 * n; li++) labels.push(li);
+
+  var datasets = [];
+  var colors = ['#3498db', '#e74c3c', '#27ae60'];
+  var names = ['Identity', 'Greedy', 'Optimal'];
+  var perms = [idPerm, grPerm, bestPerm];
+
+  for (var pIdx = 0; pIdx < 3; pIdx++) {
+    var sums = prefixSums(X, Y, perms[pIdx], d, 0);
+    datasets.push({
+      label: names[pIdx] + ' (dim 0)',
+      data: sums,
+      borderColor: colors[pIdx],
+      borderWidth: 2,
+      pointRadius: 2,
+      fill: false,
+      tension: 0.1
+    });
+  }
+
+  if (interactiveChart) interactiveChart.destroy();
+  interactiveChart = new Chart(document.getElementById('chartInteractive'), {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: 'Prefix Sums (Dimension 0)' } },
+      scales: {
+        x: { title: { display: true, text: 'Step (supply/consume alternating)' } },
+        y: { title: { display: true, text: 'Cumulative Level' } }
+      }
+    }
+  });
+
+  var compData = {
+    labels: ['Identity', 'Greedy', 'Optimal'],
+    datasets: [{
+      label: 'Stock Size (Cost)',
+      data: [idCost, grCost, bestCost],
+      backgroundColor: ['rgba(52,152,219,0.6)', 'rgba(231,76,60,0.6)', 'rgba(39,174,96,0.6)'],
+      borderColor: ['#3498db', '#e74c3c', '#27ae60'],
+      borderWidth: 1
+    }]
+  };
+  if (comparisonChart) comparisonChart.destroy();
+  comparisonChart = new Chart(document.getElementById('chartPermComparison'), {
+    type: 'bar',
+    data: compData,
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: 'Algorithm Comparison: Stock Size' } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'Cost (eta)' } } }
+    }
+  });
+}
+
+// Attach event listeners safely
+document.getElementById('nSlider').addEventListener('input', updateInstance);
+document.getElementById('dSlider').addEventListener('input', updateInstance);
+document.getElementById('seedSlider').addEventListener('input', updateInstance);
+document.getElementById('generateBtn').addEventListener('click', updateInstance);
+
+// Static charts
+window.addEventListener('DOMContentLoaded', function() {
+  // Chart 1: Ratios by dimension
+  var ctx1 = document.getElementById('chartRatios');
+  if (ctx1) {
+    new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: ['d=1,n=4','d=1,n=5','d=1,n=6','d=1,n=7','d=1,n=8',
+                 'd=2,n=4','d=2,n=5','d=2,n=6','d=2,n=7',
+                 'd=3,n=4','d=3,n=5','d=3,n=6'],
+        datasets: [{
+          label: 'Iterative Rounding (max IR/OPT)',
+          data: [1.20, 1.18, 1.12, 1.20, 1.15, 1.30, 1.10, 1.15, 1.08, 1.13, 1.20, 1.13],
+          backgroundColor: 'rgba(52,152,219,0.7)',
+          borderColor: 'rgba(52,152,219,1)',
+          borderWidth: 1
+        }, {
+          label: 'Greedy (max Greedy/OPT)',
+          data: [1.54, 1.43, 1.54, 1.44, 1.27, 1.49, 1.39, 1.24, 1.34, 1.39, 1.48, 1.39],
+          backgroundColor: 'rgba(231,76,60,0.5)',
+          borderColor: 'rgba(231,76,60,1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: { display: true, text: 'Maximum Approximation Ratios by (d, n)' },
+          legend: { position: 'top' }
+        },
+        scales: {
+          y: { beginAtZero: false, min: 0.9, title: { display: true, text: 'Max Ratio' } }
+        }
+      }
+    });
+  }
+
+  // Chart 2: Dimension scaling
+  var ctx2 = document.getElementById('chartDimScaling');
+  if (ctx2) {
+    new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: [1, 2, 3, 4],
+        datasets: [{
+          label: 'Max IR/OPT',
+          data: [1.183, 1.097, 1.131, 1.024],
+          borderColor: '#e74c3c',
+          backgroundColor: 'rgba(231,76,60,0.1)',
+          borderWidth: 2, pointRadius: 5, tension: 0.1
+        }, {
+          label: 'Mean IR/OPT',
+          data: [1.019, 1.011, 1.016, 1.004],
+          borderColor: '#3498db',
+          backgroundColor: 'rgba(52,152,219,0.1)',
+          borderWidth: 2, pointRadius: 5, tension: 0.1
+        }, {
+          label: 'Conjectured 2d',
+          data: [2, 4, 6, 8],
+          borderColor: '#95a5a6',
+          borderDash: [5, 5],
+          borderWidth: 2, pointRadius: 5, pointStyle: 'rect', fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: 'Approximation Ratio vs Dimension d' } },
+        scales: {
+          x: { title: { display: true, text: 'Dimension d' } },
+          y: { title: { display: true, text: 'Ratio' }, min: 0 }
+        }
+      }
+    });
+  }
+
+  // Chart 3: Integrality gap
+  var ctx3 = document.getElementById('chartGap');
+  if (ctx3) {
+    new Chart(ctx3, {
+      type: 'bar',
+      data: {
+        labels: ['n=4','n=5','n=6','n=7','n=8'],
+        datasets: [{
+          label: 'd=1 (mean gap)',
+          data: [1.11, 1.22, 1.12, 1.15, 1.13],
+          backgroundColor: 'rgba(52,152,219,0.6)'
+        }, {
+          label: 'd=2 (mean gap)',
+          data: [0.72, 0.69, 0.73, 0.72, null],
+          backgroundColor: 'rgba(230,126,34,0.6)'
+        }, {
+          label: 'd=3 (mean gap)',
+          data: [0.55, 0.54, 0.50, null, null],
+          backgroundColor: 'rgba(39,174,96,0.6)'
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: 'Mean Integrality Gap by Dimension and Instance Size' } },
+        scales: { y: { title: { display: true, text: 'OPT_IP / OPT_LP' }, min: 0 } }
+      }
+    });
+  }
+
+  // Initialize interactive
+  setTimeout(updateInstance, 500);
+});
+</script>
+</body>
+</html>

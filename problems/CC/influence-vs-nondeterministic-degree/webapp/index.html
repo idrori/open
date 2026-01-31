@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Influence vs Nondeterministic Degree</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f6f9; color: #333; }
+  header { background: var(--primary); color: #fff; padding: 2rem; text-align: center; }
+  header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  header p { font-size: 0.95rem; opacity: 0.85; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .chart-wrap { position: relative; height: 340px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { padding: 0.55rem 0.75rem; text-align: center; border-bottom: 1px solid #e0e0e0; }
+  th { background: var(--primary); color: #fff; }
+  tr:nth-child(even) { background: #f9fafb; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .kpi { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 1.2rem; text-align: center; }
+  .kpi .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .kpi .label { font-size: 0.82rem; color: #666; margin-top: 0.3rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Influence vs Nondeterministic Degree</h1>
+  <p>Is Inf[f] &le; O(sqrt(n) &middot; ndeg(f)) for all Boolean functions? A computational investigation.</p>
+</header>
+<div class="container">
+  <div class="kpi-row">
+    <div class="kpi"><div class="value">56</div><div class="label">Functions Tested</div></div>
+    <div class="kpi"><div class="value">100%</div><div class="label">Conjecture Holds</div></div>
+    <div class="kpi"><div class="value">0.577</div><div class="label">Max Ratio (ndeg)</div></div>
+    <div class="kpi"><div class="value">33%</div><div class="label">Tighter than sdeg</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Comparison: ndeg vs sdeg Conjecture Ratios</h2>
+    <table>
+      <thead><tr><th>Statistic</th><th>R<sub>ndeg</sub></th><th>R<sub>sdeg</sub></th></tr></thead>
+      <tbody>
+        <tr><td>Max ratio</td><td>0.577</td><td>0.866</td></tr>
+        <tr><td>Mean ratio</td><td>0.281</td><td>0.422</td></tr>
+        <tr><td>Median ratio</td><td>0.267</td><td>0.433</td></tr>
+        <tr><td>Std deviation</td><td>0.148</td><td>0.196</td></tr>
+        <tr><td>95th percentile</td><td>0.540</td><td>0.830</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>ndeg vs sdeg Ratios by Family</h2><div class="chart-wrap"><canvas id="compareChart"></canvas></div></div>
+    <div class="card"><h2>Ratio Distribution (ndeg version)</h2><div class="chart-wrap"><canvas id="histChart"></canvas></div></div>
+    <div class="card"><h2>Tightening Factor by Family</h2><div class="chart-wrap"><canvas id="tightenChart"></canvas></div></div>
+    <div class="card"><h2>Max Ratio Scaling with n</h2><div class="chart-wrap"><canvas id="scaleChart"></canvas></div></div>
+  </div>
+</div>
+<script>
+const families = ['Dictator','Majority','Threshold','Tribes','Address','Parity'];
+
+new Chart(document.getElementById('compareChart'),{type:'bar',data:{labels:families,datasets:[
+  {label:'R_ndeg (mean)',data:[0.22,0.54,0.35,0.25,0.29,0.12],backgroundColor:'#2980b9'},
+  {label:'R_sdeg (mean)',data:[0.35,0.85,0.52,0.38,0.43,0.18],backgroundColor:'#e74c3c'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:1,title:{display:true,text:'Mean Ratio'}}}}});
+
+new Chart(document.getElementById('histChart'),{type:'bar',data:{labels:['0-0.1','0.1-0.2','0.2-0.3','0.3-0.4','0.4-0.5','0.5-0.6'],datasets:[
+  {label:'Count',data:[5,12,15,12,8,4],backgroundColor:'#2980b9'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{title:{display:true,text:'Number of Functions'}}},plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('tightenChart'),{type:'bar',data:{labels:families,datasets:[
+  {label:'R_ndeg/R_sdeg',data:[0.63,0.64,0.67,0.66,0.67,0.67],backgroundColor:'#27ae60'}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:1,title:{display:true,text:'Tightening Factor'}}},plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('scaleChart'),{type:'line',data:{labels:['n=3','n=5','n=7'],datasets:[
+  {label:'Max R_ndeg',data:[0.577,0.560,0.548],borderColor:'#2980b9',pointRadius:6,tension:0.2},
+  {label:'Max R_sdeg',data:[0.866,0.843,0.830],borderColor:'#e74c3c',pointRadius:6,tension:0.2}
+]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:1,title:{display:true,text:'Max Ratio'}}}}});
+</script>
+</body>
+</html>

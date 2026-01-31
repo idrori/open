@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padding Bounds for Transformer CFL Recognition</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; --danger: #e74c3c; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+        .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; font-size: 0.9rem; max-width: 700px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+        .controls { background: var(--card); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+        .control-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .control-group label { font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+        .control-group select, .control-group input { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: var(--card); border-radius: 10px; padding: 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .card h3 { color: var(--primary); margin-bottom: 0.8rem; font-size: 1rem; }
+        .chart-container { position: relative; height: 300px; }
+        .bounds-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .bounds-table th, .bounds-table td { padding: 0.5rem; border: 1px solid var(--border); text-align: center; font-size: 0.9rem; }
+        .bounds-table th { background: var(--primary); color: white; }
+        .findings { background: var(--card); border-radius: 10px; padding: 1.2rem; margin-top: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .findings h3 { color: var(--primary); margin-bottom: 0.5rem; }
+        .finding-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+        .badge-warn { background: #fff3e0; color: #e67e22; }
+        .badge-info { background: #e8f4fd; color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Padding Bounds for Transformer CFL Recognition</h1>
+        <p>Interactive visualization of padding requirements for transformer-based context-free language recognition. Based on Jerad et al. (2026).</p>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label>CFL Class</label>
+                <select id="cflClass">
+                    <option value="general">General CFL (O(n^6))</option>
+                    <option value="unambiguous" selected>Unambiguous CFL (O(n^3))</option>
+                    <option value="linear">Linear Unambiguous CFL (O(n^2))</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Max Input Length</label>
+                <input type="range" id="maxN" min="16" max="512" value="128" step="16">
+                <span id="maxNVal">128</span>
+            </div>
+            <div class="control-group">
+                <label>Depth Multiplier</label>
+                <input type="range" id="depthMult" min="0.5" max="4" value="1" step="0.5">
+                <span id="depthVal">1.0x</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Padding Scaling (Log-Log)</h3>
+                <div class="chart-container"><canvas id="scalingChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Depth vs Padding Tradeoff</h3>
+                <div class="chart-container"><canvas id="tradeoffChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Utilization at Upper Bound</h3>
+                <div class="chart-container"><canvas id="utilChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Bounds Summary</h3>
+                <table class="bounds-table">
+                    <tr><th>Class</th><th>Upper Bound</th><th>Empirical</th><th>Gap</th></tr>
+                    <tr><td>General</td><td>O(n<sup>6</sup>)</td><td>~n<sup>5.7</sup></td><td><span class="badge badge-warn">~0.3</span></td></tr>
+                    <tr><td>Unambiguous</td><td>O(n<sup>3</sup>)</td><td>~n<sup>2.7</sup></td><td><span class="badge badge-warn">~0.3</span></td></tr>
+                    <tr><td>Linear</td><td>O(n<sup>2</sup>)</td><td>~n<sup>1.7</sup></td><td><span class="badge badge-warn">~0.3</span></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="findings">
+            <h3>Key Findings</h3>
+            <div class="finding-item"><span class="badge badge-warn">Not Tight</span> All three bounds show a consistent gap of ~0.3 in the exponent, suggesting room for improvement.</div>
+            <div class="finding-item"><span class="badge badge-info">Log Factor</span> The gap is primarily due to the O(log n) depth factor not being fully exploited.</div>
+            <div class="finding-item"><span class="badge badge-info">Tradeoff</span> Increasing depth by k reduces padding by factor k, suggesting depth-efficient algorithms could close the gap.</div>
+        </div>
+    </div>
+
+    <script>
+        const PRIMARY = '#1a3a5c', ACCENT = '#2980b9', DANGER = '#e74c3c', SUCCESS = '#27ae60';
+        const EXP_MAP = { general: 6, unambiguous: 3, linear: 2 };
+        const EMP_MAP = { general: 5.74, unambiguous: 2.74, linear: 1.72 };
+
+        let scalingChart, tradeoffChart, utilChart;
+
+        function initCharts() {
+            const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } } };
+            scalingChart = new Chart(document.getElementById('scalingChart'), {
+                type: 'line', data: { labels: [], datasets: [] },
+                options: { ...opts, scales: { x: { type: 'logarithmic', title: { display: true, text: 'Input Length n' } }, y: { type: 'logarithmic', title: { display: true, text: 'Padding Tokens' } } } }
+            });
+            tradeoffChart = new Chart(document.getElementById('tradeoffChart'), {
+                type: 'line', data: { labels: [], datasets: [] },
+                options: { ...opts, scales: { x: { title: { display: true, text: 'Depth' } }, y: { type: 'logarithmic', title: { display: true, text: 'Min Padding' } } } }
+            });
+            utilChart = new Chart(document.getElementById('utilChart'), {
+                type: 'bar', data: { labels: [], datasets: [] },
+                options: { ...opts, scales: { x: { title: { display: true, text: 'Input Length' } }, y: { title: { display: true, text: 'Utilization' }, max: 1 } } }
+            });
+        }
+
+        function update() {
+            const cls = document.getElementById('cflClass').value;
+            const maxN = parseInt(document.getElementById('maxN').value);
+            const dm = parseFloat(document.getElementById('depthMult').value);
+            document.getElementById('maxNVal').textContent = maxN;
+            document.getElementById('depthVal').textContent = dm.toFixed(1) + 'x';
+
+            const exp = EXP_MAP[cls], emp = EMP_MAP[cls];
+            const ns = []; for (let n = 4; n <= maxN; n *= 2) ns.push(n);
+
+            const upperPad = ns.map(n => Math.pow(n, exp));
+            const empPad = ns.map(n => Math.pow(n, emp));
+            scalingChart.data = {
+                labels: ns,
+                datasets: [
+                    { label: `Upper O(n^${exp})`, data: ns.map((n, i) => ({ x: n, y: upperPad[i] })), borderColor: DANGER, borderDash: [5,5], pointRadius: 0 },
+                    { label: `Empirical ~n^${emp}`, data: ns.map((n, i) => ({ x: n, y: empPad[i] })), borderColor: PRIMARY, pointRadius: 3 }
+                ]
+            };
+            scalingChart.update();
+
+            const n0 = 64;
+            const depths = []; for (let d = 1; d <= 32; d += 2) depths.push(d);
+            const totalWork = Math.pow(n0, emp + 1);
+            tradeoffChart.data = {
+                labels: depths,
+                datasets: [{ label: 'Min Padding', data: depths.map(d => Math.ceil(totalWork / (d * dm))), borderColor: ACCENT, pointRadius: 3 }]
+            };
+            tradeoffChart.update();
+
+            const utilNs = ns.slice(1);
+            const utils = utilNs.map(n => {
+                const depth = Math.max(1, Math.ceil(Math.log2(n + 1) * dm));
+                const pad = Math.pow(n, exp);
+                const needed = Math.pow(n, emp);
+                return Math.min(1, needed / pad);
+            });
+            utilChart.data = {
+                labels: utilNs,
+                datasets: [{ label: 'Utilization', data: utils, backgroundColor: utils.map(u => u > 0.5 ? SUCCESS + 'aa' : ACCENT + 'aa') }]
+            };
+            utilChart.update();
+        }
+
+        initCharts(); update();
+        ['cflClass', 'maxN', 'depthMult'].forEach(id => document.getElementById(id).addEventListener('input', update));
+    </script>
+</body>
+</html>

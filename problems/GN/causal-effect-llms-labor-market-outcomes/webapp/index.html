@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Causal Effect of LLMs on Labor Markets</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --accent: #2980b9;
+  --bg: #f5f7fa;
+  --card-bg: #ffffff;
+  --text: #1a1a2e;
+  --text-muted: #5a6270;
+  --border: #e2e6ea;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Georgia', serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+.container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+header { background: linear-gradient(135deg, var(--primary) 0%, #16213e 50%, #0f3460 100%); color: white; padding: 60px 0 50px; text-align: center; }
+header h1 { font-size: 2rem; font-weight: 700; line-height: 1.3; margin-bottom: 16px; }
+header .subtitle { font-size: 1.05rem; color: #b0c4de; max-width: 700px; margin: 0 auto 24px; font-style: italic; }
+header .meta { display: flex; justify-content: center; gap: 24px; font-size: 0.85rem; color: #8faec8; }
+section { padding: 48px 0; }
+.card { background: var(--card-bg); border-radius: 12px; padding: 28px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.card h2 { font-size: 1.4rem; color: var(--primary); margin-bottom: 16px; }
+.chart-container { position: relative; height: 400px; margin: 20px 0; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 24px; }
+.metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+.metric-card { background: #f8f9fb; border-radius: 8px; padding: 16px; text-align: center; }
+.metric-card .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.metric-card .label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+select { padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #f0f4f8; font-weight: 600; color: var(--primary); }
+footer { background: var(--primary); color: #8faec8; padding: 30px 0; text-align: center; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>Causal Effect of LLMs on Labor-Market Outcomes</h1>
+    <p class="subtitle">Simulation-based comparison of causal identification strategies</p>
+    <div class="meta">
+      <span>Frank et al. (arXiv: 2601.02554)</span>
+      <span>200 Monte Carlo Simulations</span>
+      <span>5 Estimators</span>
+    </div>
+  </div>
+</header>
+<div class="container">
+<section id="overview">
+<div class="card">
+  <h2>Key Findings</h2>
+  <div class="metric-cards">
+    <div class="metric-card"><div class="value">0.0246</div><div class="label">Lowest Bias (Synth. Control)</div></div>
+    <div class="metric-card"><div class="value">0.995</div><div class="label">Best Coverage (Synth. Control)</div></div>
+    <div class="metric-card"><div class="value">0.0508</div><div class="label">OLS Bias (Employment)</div></div>
+    <div class="metric-card"><div class="value">200</div><div class="label">Monte Carlo Replications</div></div>
+  </div>
+</div>
+</section>
+<section id="bias">
+<div class="card">
+  <h2>Estimator Bias by Outcome</h2>
+  <label>Outcome: </label>
+  <select id="biasOutcome" onchange="updateBiasChart()">
+    <option value="employment">Employment</option>
+    <option value="log_wages">Log Wages</option>
+    <option value="search_duration">Search Duration</option>
+  </select>
+  <div class="chart-container"><canvas id="biasChart"></canvas></div>
+</div>
+</section>
+<section id="coverage">
+<div class="grid-2">
+<div class="card">
+  <h2>95% CI Coverage</h2>
+  <div class="chart-container"><canvas id="coverageChart"></canvas></div>
+</div>
+<div class="card">
+  <h2>Statistical Power</h2>
+  <div class="chart-container"><canvas id="powerChart"></canvas></div>
+</div>
+</div>
+</section>
+<section id="confounding">
+<div class="card">
+  <h2>Confounding Sensitivity</h2>
+  <div class="chart-container"><canvas id="confoundingChart"></canvas></div>
+</div>
+</section>
+<section id="tables">
+<div class="card">
+  <h2>Full Results</h2>
+  <div id="resultsTable"></div>
+</div>
+</section>
+</div>
+<footer><div class="container">Causal Effect of LLMs on Labor Markets - Open Problem from Frank et al. (2026)</div></footer>
+<script>
+const DATA = {
+  employment: { true_effect: -0.035, estimators: {
+    naive_ols:{bias:0.0508,rmse:0.0509,coverage:0.000,power:1.000},
+    did:{bias:0.0303,rmse:0.0303,coverage:0.000,power:0.990},
+    iv:{bias:0.0274,rmse:0.0277,coverage:0.000,power:0.365},
+    matching:{bias:0.0521,rmse:0.0523,coverage:0.000,power:1.000},
+    synthetic_control:{bias:0.0246,rmse:0.0248,coverage:0.005,power:0.335}
+  }},
+  log_wages: { true_effect: 0.02, estimators: {
+    naive_ols:{bias:0.0518,rmse:0.0523,coverage:0.000,power:1.000},
+    did:{bias:-0.0174,rmse:0.0175,coverage:0.000,power:0.310},
+    iv:{bias:-0.0164,rmse:0.0206,coverage:0.790,power:0.045},
+    matching:{bias:0.0486,rmse:0.0509,coverage:0.010,power:1.000},
+    synthetic_control:{bias:0.0090,rmse:0.0132,coverage:0.995,power:0.260}
+  }},
+  search_duration: { true_effect: 0.15, estimators: {
+    naive_ols:{bias:-0.3326,rmse:0.3336,coverage:0.000,power:1.000},
+    did:{bias:-0.1291,rmse:0.1300,coverage:0.000,power:0.300},
+    iv:{bias:-0.1172,rmse:0.1250,coverage:0.315,power:0.085},
+    matching:{bias:-0.3531,rmse:0.3575,coverage:0.000,power:1.000},
+    synthetic_control:{bias:-0.0431,rmse:0.0530,coverage:0.995,power:0.290}
+  }}
+};
+const METHODS = ['naive_ols','did','iv','matching','synthetic_control'];
+const ML = {naive_ols:'Naive OLS',did:'Diff-in-Diff',iv:'IV (2SLS)',matching:'PS Matching',synthetic_control:'Synth. Control'};
+const MC = {naive_ols:'#e74c3c',did:'#2980b9',iv:'#27ae60',matching:'#8e44ad',synthetic_control:'#f39c12'};
+
+let biasChart;
+function initBiasChart(){
+  biasChart = new Chart(document.getElementById('biasChart').getContext('2d'),{
+    type:'bar', data:{labels:METHODS.map(m=>ML[m]),datasets:[{data:METHODS.map(m=>DATA.employment.estimators[m].bias),backgroundColor:METHODS.map(m=>MC[m]),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Bias'}}}}
+  });
+}
+function updateBiasChart(){
+  const o=document.getElementById('biasOutcome').value;
+  biasChart.data.datasets[0].data=METHODS.map(m=>DATA[o].estimators[m].bias);biasChart.update();
+}
+function initCoverageChart(){
+  const ds=['employment','log_wages','search_duration'].map((o,i)=>({
+    label:o.replace(/_/g,' '),data:METHODS.map(m=>DATA[o].estimators[m].coverage),
+    borderColor:['#2980b9','#27ae60','#e74c3c'][i],tension:0.3,fill:false
+  }));
+  new Chart(document.getElementById('coverageChart').getContext('2d'),{
+    type:'line',data:{labels:METHODS.map(m=>ML[m]),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:1.05,title:{display:true,text:'Coverage'}}}}
+  });
+}
+function initPowerChart(){
+  const ds=['employment','log_wages','search_duration'].map((o,i)=>({
+    label:o.replace(/_/g,' '),data:METHODS.map(m=>DATA[o].estimators[m].power),
+    borderColor:['#2980b9','#27ae60','#e74c3c'][i],tension:0.3,fill:false
+  }));
+  new Chart(document.getElementById('powerChart').getContext('2d'),{
+    type:'line',data:{labels:METHODS.map(m=>ML[m]),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:1.05,title:{display:true,text:'Power'}}}}
+  });
+}
+function initConfChart(){
+  const sw=[{c:0,o:0,d:0,i:0,m:0,s:0},{c:0.2,o:0.026,d:0.015,i:0.014,m:0.026,s:0.012},{c:0.4,o:0.051,d:0.030,i:0.027,m:0.052,s:0.025},{c:0.6,o:0.076,d:0.044,i:0.041,m:0.078,s:0.029},{c:0.8,o:0.101,d:0.058,i:0.055,m:0.104,s:0.030},{c:1.0,o:0.126,d:0.072,i:0.068,m:0.129,s:0.031}];
+  const ks=[{k:'o',l:'OLS',c:'#e74c3c'},{k:'d',l:'DiD',c:'#2980b9'},{k:'i',l:'IV',c:'#27ae60'},{k:'m',l:'Matching',c:'#8e44ad'},{k:'s',l:'Synth. Ctrl',c:'#f39c12'}];
+  new Chart(document.getElementById('confoundingChart').getContext('2d'),{
+    type:'line',data:{labels:sw.map(d=>d.c),datasets:ks.map(x=>({label:x.l,data:sw.map(d=>d[x.k]),borderColor:x.c,tension:0.3,fill:false,pointRadius:4}))},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Confounding Strength'}},y:{title:{display:true,text:'Bias'}}}}
+  });
+}
+function buildTable(){
+  const container=document.getElementById('resultsTable');
+  while(container.firstChild) container.removeChild(container.firstChild);
+  for(const [outcome,odata] of Object.entries(DATA)){
+    const h=document.createElement('h3');h.style.margin='20px 0 10px';h.textContent=outcome.replace(/_/g,' ')+' (true: '+odata.true_effect+')';container.appendChild(h);
+    const t=document.createElement('table');
+    const hdr=document.createElement('tr');['Method','Bias','RMSE','Coverage','Power'].forEach(txt=>{const th=document.createElement('th');th.textContent=txt;hdr.appendChild(th);});t.appendChild(hdr);
+    METHODS.forEach(m=>{const r=document.createElement('tr');const e=odata.estimators[m];
+      [ML[m],e.bias.toFixed(4),e.rmse.toFixed(4),e.coverage.toFixed(3),e.power.toFixed(3)].forEach(v=>{const td=document.createElement('td');td.textContent=v;r.appendChild(td);});t.appendChild(r);
+    });container.appendChild(t);
+  }
+}
+initBiasChart();initCoverageChart();initPowerChart();initConfChart();buildTable();
+</script>
+</body>
+</html>

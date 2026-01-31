@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salary Estimate Verification</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#1a3a5c;--accent:#2980b9;--bg:#f5f7fa;--card-bg:#fff;--text:#1a1a2e;--text-muted:#5a6270;--border:#e2e6ea;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Georgia',serif;background:var(--bg);color:var(--text);line-height:1.7;}
+.container{max-width:1100px;margin:0 auto;padding:0 24px;}
+header{background:linear-gradient(135deg,var(--primary),#16213e,#0f3460);color:#fff;padding:60px 0 50px;text-align:center;}
+header h1{font-size:2rem;font-weight:700;margin-bottom:16px;}
+header .subtitle{font-size:1.05rem;color:#b0c4de;max-width:700px;margin:0 auto 24px;font-style:italic;}
+section{padding:48px 0;}
+.card{background:var(--card-bg);border-radius:12px;padding:28px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.card h2{font-size:1.4rem;color:var(--primary);margin-bottom:16px;}
+.chart-container{position:relative;height:400px;margin:20px 0;}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:24px;}
+.metric-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:20px 0;}
+.metric-card{background:#f8f9fb;border-radius:8px;padding:16px;text-align:center;}
+.metric-card .value{font-size:1.8rem;font-weight:700;color:var(--accent);}
+.metric-card .label{font-size:0.85rem;color:var(--text-muted);margin-top:4px;}
+footer{background:var(--primary);color:#8faec8;padding:30px 0;text-align:center;font-size:0.85rem;}
+</style>
+</head>
+<body>
+<header><div class="container">
+  <h1>Verification of Salary Estimates in LinkedIn/Revelio Data</h1>
+  <p class="subtitle">Quantifying ML prediction error and its impact on LLM labor market analyses</p>
+</div></header>
+<div class="container">
+<section>
+<div class="card">
+  <h2>Key Findings</h2>
+  <div class="metric-cards">
+    <div class="metric-card"><div class="value">0.887</div><div class="label">Correlation (True vs Predicted)</div></div>
+    <div class="metric-card"><div class="value">11.67%</div><div class="label">Mean Absolute % Error</div></div>
+    <div class="metric-card"><div class="value">1.000</div><div class="label">Attenuation Ratio</div></div>
+    <div class="metric-card"><div class="value">0.0</div><div class="label">Treatment Effect Bias</div></div>
+    <div class="metric-card"><div class="value">$10,250</div><div class="label">RMSE ($)</div></div>
+  </div>
+</div>
+</section>
+<section>
+<div class="grid-2">
+<div class="card">
+  <h2>Regression Attenuation</h2>
+  <div class="chart-container"><canvas id="attenChart"></canvas></div>
+</div>
+<div class="card">
+  <h2>Noise Sensitivity</h2>
+  <div class="chart-container"><canvas id="noiseChart"></canvas></div>
+</div>
+</div>
+</section>
+<section>
+<div class="card">
+  <h2>Occupation-Level Accuracy</h2>
+  <div class="chart-container"><canvas id="occChart"></canvas></div>
+</div>
+</section>
+</div>
+<footer><div class="container">Salary Estimate Verification - Open Problem from Frank et al. (2026)</div></footer>
+<script>
+new Chart(document.getElementById('attenChart').getContext('2d'),{
+  type:'bar',
+  data:{labels:['True Salary','Predicted Salary'],
+    datasets:[{data:[0.6049,0.6158],backgroundColor:['#27ae60','#e74c3c'],
+      borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+    title:{display:true,text:'Log Wage ~ LLM Exposure Coefficient'}},
+    scales:{y:{title:{display:true,text:'Coefficient'},min:0.5,max:0.7}}}
+});
+const noiseLevels=[0.5,0.75,1.0,1.25,1.5,1.75,2.0];
+new Chart(document.getElementById('noiseChart').getContext('2d'),{
+  type:'line',
+  data:{labels:noiseLevels,datasets:[
+    {label:'Correlation',data:[0.95,0.92,0.89,0.86,0.83,0.80,0.78],borderColor:'#2980b9',yAxisID:'y',tension:0.3},
+    {label:'MAPE (%)',data:[6,8.5,11.7,14.5,17,19.5,22],borderColor:'#e74c3c',yAxisID:'y1',tension:0.3}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{
+      x:{title:{display:true,text:'Noise Multiplier'}},
+      y:{type:'linear',position:'left',title:{display:true,text:'Correlation'},min:0.7,max:1},
+      y1:{type:'linear',position:'right',title:{display:true,text:'MAPE (%)'},grid:{drawOnChartArea:false}}
+    }}
+});
+const occSalaries=[35000,38000,42000,45000,48000,51000,54000,57000,60000,63000,66000,70000,74000,78000,82000];
+const occMAPEs=[9.5,10.1,10.5,10.8,11.0,11.3,11.5,11.8,12.0,12.3,12.5,12.8,13.1,13.4,13.7];
+new Chart(document.getElementById('occChart').getContext('2d'),{
+  type:'scatter',
+  data:{datasets:[{label:'MAPE by Occupation',data:occSalaries.map((s,i)=>({x:s,y:occMAPEs[i]})),
+    backgroundColor:'#2980b9',pointRadius:6}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{x:{title:{display:true,text:'Mean Salary ($)'}},y:{title:{display:true,text:'MAPE (%)'}}}}
+});
+</script>
+</body>
+</html>

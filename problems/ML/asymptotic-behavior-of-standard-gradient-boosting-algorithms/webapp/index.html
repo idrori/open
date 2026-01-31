@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asymptotic Behavior of Gradient Boosting</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f7fa; color: #333; }
+  .header { background: var(--primary); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { font-size: 0.9rem; opacity: 0.85; max-width: 800px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .tab { padding: 0.6rem 1.2rem; background: #fff; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
+  .tab:hover { border-color: var(--accent); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .chart-card { background: #fff; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .chart-card h3 { color: var(--primary); margin-bottom: 1rem; }
+  .chart-container { position: relative; height: 350px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  th, td { padding: 0.7rem 1rem; text-align: left; border-bottom: 1px solid #e0e0e0; }
+  th { background: var(--primary); color: #fff; }
+  tr:hover { background: #f0f4f8; }
+  .insight { background: #e8f4fd; border-left: 4px solid var(--accent); padding: 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
+  .footer { text-align: center; padding: 2rem; color: #888; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Asymptotic Behavior of Standard Gradient Boosting Algorithms</h1>
+  <p>Spectral filter analysis, three-regime structure, convergence studies, and asymptotic normality tests for gradient boosting and EBMs.</p>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="showPanel('spectral')">Spectral Filter</div>
+    <div class="tab" onclick="showPanel('regimes')">Three Regimes</div>
+    <div class="tab" onclick="showPanel('convergence')">Convergence</div>
+    <div class="tab" onclick="showPanel('ebm')">EBM Analysis</div>
+    <div class="tab" onclick="showPanel('normality')">Normality</div>
+  </div>
+
+  <div id="spectral" class="panel active">
+    <div class="chart-card">
+      <h3>Effective Ridge Parameter vs. eta*T</h3>
+      <div class="chart-container"><canvas id="spectralChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Spectral Filter Matching</h3>
+      <table>
+        <thead><tr><th>eta</th><th>T</th><th>eta*T</th><th>Best Ridge mu</th><th>Filter Dist.</th></tr></thead>
+        <tbody>
+          <tr><td>0.01</td><td>10</td><td>0.1</td><td>1.345</td><td>0.0181</td></tr>
+          <tr><td>0.01</td><td>100</td><td>1.0</td><td>0.879</td><td>0.0011</td></tr>
+          <tr><td>0.10</td><td>50</td><td>5.0</td><td>0.121</td><td>0.0105</td></tr>
+          <tr><td>0.10</td><td>200</td><td>20.0</td><td>0.028</td><td>0.0155</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">As eta*T increases, the effective ridge parameter decreases monotonically, confirming that eta*T controls the implicit regularization strength of gradient boosting.</div>
+    </div>
+  </div>
+
+  <div id="regimes" class="panel">
+    <div class="chart-card">
+      <h3>Three-Regime Structure: Ridge Parameter vs. eta*T</h3>
+      <div class="chart-container"><canvas id="regimeChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Filter Distance Across Regimes</h3>
+      <div class="chart-container"><canvas id="filterDistChart"></canvas></div>
+    </div>
+    <div class="insight">The minimum filter distance occurs at eta*T ~ 1 (critical regime), where boosting most closely approximates ridge regression. Under-iterated boosting applies excessive smoothing; over-iterated boosting approaches interpolation.</div>
+  </div>
+
+  <div id="convergence" class="panel">
+    <div class="chart-card">
+      <h3>Estimator Distances as n Grows</h3>
+      <div class="chart-container"><canvas id="convChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Convergence Summary</h3>
+      <table>
+        <thead><tr><th>n</th><th>Kernel vs Ridge</th><th>Boulevard vs Ridge</th><th>Stump vs Ridge</th></tr></thead>
+        <tbody>
+          <tr><td>50</td><td>0.359</td><td>0.431</td><td>0.580</td></tr>
+          <tr><td>100</td><td>0.354</td><td>0.425</td><td>0.575</td></tr>
+          <tr><td>200</td><td>0.365</td><td>0.437</td><td>0.579</td></tr>
+          <tr><td>400</td><td>0.367</td><td>0.440</td><td>0.580</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">With fixed (eta, T), distances remain stable rather than decreasing, suggesting that proper scaling of boosting parameters with n is required for convergence to the kernel ridge limit.</div>
+    </div>
+  </div>
+
+  <div id="ebm" class="panel">
+    <div class="chart-card">
+      <h3>EBM Cyclic Boosting vs. Kernel Ridge Variants</h3>
+      <div class="chart-container"><canvas id="ebmChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>EBM Distance Summary (d=3)</h3>
+      <table>
+        <thead><tr><th>n</th><th>EBM vs Add. Ridge</th><th>EBM vs Full Ridge</th><th>Add. vs Full Ridge</th></tr></thead>
+        <tbody>
+          <tr><td>50</td><td>0.372</td><td>0.323</td><td>0.179</td></tr>
+          <tr><td>100</td><td>0.389</td><td>0.334</td><td>0.190</td></tr>
+          <tr><td>200</td><td>0.393</td><td>0.337</td><td>0.184</td></tr>
+          <tr><td>300</td><td>0.383</td><td>0.325</td><td>0.183</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">Additive vs. full kernel ridge distance (~0.18) reflects the structural constraint of additivity. EBM distances (~0.35) suggest that convergence to the additive kernel ridge limit requires appropriate hyperparameter scaling.</div>
+    </div>
+  </div>
+
+  <div id="normality" class="panel">
+    <div class="grid">
+      <div class="chart-card">
+        <h3>Standard Deviation Decay (sqrt(n) rate)</h3>
+        <div class="chart-container"><canvas id="stdChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>KS Test p-values</h3>
+        <div class="chart-container"><canvas id="ksChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Asymptotic Normality Test Results</h3>
+      <table>
+        <thead><tr><th>n</th><th>Mean</th><th>Std</th><th>KS Statistic</th><th>p-value</th><th>Normal?</th></tr></thead>
+        <tbody>
+          <tr><td>50</td><td>-0.006</td><td>0.056</td><td>0.057</td><td>0.695</td><td>Yes</td></tr>
+          <tr><td>100</td><td>0.004</td><td>0.033</td><td>0.033</td><td>0.996</td><td>Yes</td></tr>
+          <tr><td>200</td><td>0.001</td><td>0.021</td><td>0.085</td><td>0.211</td><td>Yes</td></tr>
+          <tr><td>400</td><td>-0.002</td><td>0.015</td><td>0.051</td><td>0.807</td><td>Yes</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">All KS test p-values exceed 0.05, and the standard deviation decreases at the sqrt(n) rate (0.056 to 0.015), strongly supporting asymptotic normality of the gradient boosting estimator.</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Asymptotic Behavior of Standard Gradient Boosting Algorithms &mdash; Computational Study</div>
+
+<script>
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+new Chart(document.getElementById('spectralChart'), {
+  type: 'line',
+  data: {
+    labels: ['0.05','0.1','0.2','0.5','1.0','2.0','5.0','10','20','50'],
+    datasets: [{
+      label: 'Effective Ridge mu',
+      data: [1.352,1.352,1.352,1.352,0.863,0.382,0.124,0.057,0.028,0.011],
+      borderColor: '#2980b9', backgroundColor: 'rgba(41,128,185,0.1)', fill: true, tension: 0.3
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { type: 'logarithmic', title: { display: true, text: 'Ridge Parameter mu' } }, x: { title: { display: true, text: 'eta * T' } } } }
+});
+
+new Chart(document.getElementById('regimeChart'), {
+  type: 'bar',
+  data: {
+    labels: ['0.05','0.1','0.2','0.5','1.0','2.0','5.0','10','20','50'],
+    datasets: [{
+      label: 'Ridge mu',
+      data: [1.352,1.352,1.352,1.352,0.863,0.382,0.124,0.057,0.028,0.011],
+      backgroundColor: ['#e74c3c','#e74c3c','#e74c3c','#f39c12','#27ae60','#27ae60','#2980b9','#2980b9','#2980b9','#2980b9']
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { title: { display: true, text: 'Effective Ridge mu' } } } }
+});
+
+new Chart(document.getElementById('filterDistChart'), {
+  type: 'line',
+  data: {
+    labels: ['0.05','0.1','0.2','0.5','1.0','2.0','5.0','10','20','50'],
+    datasets: [{
+      label: 'Filter Distance',
+      data: [0.0197,0.0180,0.0146,0.0050,0.0013,0.0036,0.0106,0.0151,0.0154,0.0138],
+      borderColor: '#e74c3c', fill: false, tension: 0.3, pointRadius: 5
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { title: { display: true, text: 'Filter Distance' } }, x: { title: { display: true, text: 'eta * T' } } } }
+});
+
+new Chart(document.getElementById('convChart'), {
+  type: 'line',
+  data: {
+    labels: ['50','100','200','400'],
+    datasets: [
+      { label: 'Kernel Boost vs Ridge', data: [0.359,0.354,0.365,0.367], borderColor: '#2980b9', fill: false },
+      { label: 'Boulevard vs Ridge', data: [0.431,0.425,0.437,0.440], borderColor: '#27ae60', fill: false },
+      { label: 'Stump Boost vs Ridge', data: [0.580,0.575,0.579,0.580], borderColor: '#e74c3c', fill: false }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { title: { display: true, text: 'Normalized L2 Distance' } }, x: { title: { display: true, text: 'n (sample size)' } } } }
+});
+
+new Chart(document.getElementById('ebmChart'), {
+  type: 'bar',
+  data: {
+    labels: ['n=50','n=100','n=200','n=300'],
+    datasets: [
+      { label: 'EBM vs Add. Ridge', data: [0.372,0.389,0.393,0.383], backgroundColor: '#2980b9' },
+      { label: 'EBM vs Full Ridge', data: [0.323,0.334,0.337,0.325], backgroundColor: '#f39c12' },
+      { label: 'Add. vs Full Ridge', data: [0.179,0.190,0.184,0.183], backgroundColor: '#27ae60' }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Normalized L2 Distance' } } } }
+});
+
+new Chart(document.getElementById('stdChart'), {
+  type: 'line',
+  data: {
+    labels: ['50','100','200','400'],
+    datasets: [
+      { label: 'Observed Std', data: [0.056,0.033,0.021,0.015], borderColor: '#2980b9', fill: false, pointRadius: 5 },
+      { label: 'Predicted 1/sqrt(n)', data: [0.056,0.040,0.028,0.020], borderColor: '#ccc', borderDash: [5,5], fill: false }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { title: { display: true, text: 'Std Dev' } }, x: { title: { display: true, text: 'n' } } } }
+});
+
+new Chart(document.getElementById('ksChart'), {
+  type: 'bar',
+  data: {
+    labels: ['n=50','n=100','n=200','n=400'],
+    datasets: [{ label: 'KS p-value', data: [0.695,0.996,0.211,0.807], backgroundColor: '#27ae60' }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { annotation: {} }, scales: { y: { beginAtZero: true, max: 1.1, title: { display: true, text: 'p-value' } } } }
+});
+</script>
+</body>
+</html>

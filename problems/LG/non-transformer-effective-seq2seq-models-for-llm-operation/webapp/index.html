@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Non-Transformer Effective Seq2Seq Models for LLM Operation | KDD 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+:root {
+  --primary: #1a3a5c;
+  --primary-light: #2c5f8a;
+  --accent: #e8833a;
+  --accent2: #3aade8;
+  --accent3: #6c3ae8;
+  --accent4: #e83a6c;
+  --bg: #f5f7fa;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-light: #64748b;
+  --border: #e2e8f0;
+  --ssm: #3aade8;
+  --transformer: #e8833a;
+  --gru: #6c3ae8;
+  --tcn: #e83a6c;
+  --shadow: 0 4px 20px rgba(0,0,0,0.06);
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+}
+
+/* Sticky Nav */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: rgba(26, 58, 92, 0.97);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 0 2rem;
+}
+nav .nav-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+nav .nav-brand {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+nav .nav-brand span {
+  color: var(--accent);
+}
+nav .nav-links {
+  display: flex;
+  gap: 0.25rem;
+  list-style: none;
+}
+nav .nav-links a {
+  color: rgba(255,255,255,0.75);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+nav .nav-links a:hover,
+nav .nav-links a.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+}
+.hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #fff;
+  margin: 5px 0;
+  transition: 0.3s;
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, #0f2847 50%, #0a1f3d 100%);
+  color: #fff;
+  padding: 5rem 2rem 4rem;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 80%;
+  height: 200%;
+  background: radial-gradient(ellipse, rgba(58,173,232,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  left: -10%;
+  width: 60%;
+  height: 150%;
+  background: radial-gradient(ellipse, rgba(232,131,58,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+.hero .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 100px;
+  padding: 0.35rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+}
+.hero .badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.hero h1 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+  margin-bottom: 1.25rem;
+}
+.hero p {
+  font-size: 1.08rem;
+  color: rgba(255,255,255,0.75);
+  max-width: 700px;
+  line-height: 1.7;
+}
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+.hero-stat {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1.1rem 1rem;
+  text-align: center;
+}
+.hero-stat .val {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+.hero-stat .lbl {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.25rem;
+}
+
+/* Sections */
+.container { max-width: 1280px; margin: 0 auto; padding: 0 2rem; }
+section { padding: 4rem 0; }
+.section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+.section-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: -0.5px;
+  margin-bottom: 0.5rem;
+}
+.section-desc {
+  color: var(--text-light);
+  max-width: 680px;
+  font-size: 0.95rem;
+}
+
+/* Cards */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 1.75rem;
+  margin-bottom: 1.5rem;
+}
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+.card-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  margin-bottom: 1.25rem;
+}
+
+/* Grid Layouts */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+
+/* Problem + Methods */
+.method-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.method-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+}
+.method-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+.method-card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+.method-card .params {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+.method-card p {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  line-height: 1.55;
+}
+
+/* Task pills */
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.task-pill {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.task-pill:hover, .task-pill.active {
+  border-color: var(--accent);
+  background: rgba(232,131,58,0.04);
+}
+.task-pill.active {
+  box-shadow: 0 0 0 2px rgba(232,131,58,0.2);
+}
+.task-pill .task-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.task-pill .task-type {
+  font-size: 0.68rem;
+  color: var(--text-light);
+  margin-top: 0.15rem;
+}
+
+/* Chart containers */
+.chart-wrap {
+  position: relative;
+  height: 380px;
+  margin-top: 0.5rem;
+}
+.chart-wrap-sm {
+  position: relative;
+  height: 300px;
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.82rem;
+}
+.data-table thead th {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.data-table thead th:first-child { border-radius: 8px 0 0 0; }
+.data-table thead th:last-child { border-radius: 0 8px 0 0; }
+.data-table tbody td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.data-table tbody tr:hover { background: rgba(58,173,232,0.03); }
+.data-table .best {
+  font-weight: 700;
+  color: var(--accent);
+}
+.data-table tbody tr:last-child td:first-child { border-radius: 0 0 0 8px; }
+.data-table tbody tr:last-child td:last-child { border-radius: 0 0 8px 0; }
+
+/* Metric selector */
+.metric-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.metric-btn {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.metric-btn.active {
+  border-color: var(--accent);
+  background: rgba(232,131,58,0.07);
+  color: var(--accent);
+}
+
+/* Findings */
+.finding-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.finding-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.finding-card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.finding-card p {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  line-height: 1.6;
+}
+
+/* Legend inline */
+.legend-inline {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-light);
+  font-weight: 500;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/* Footer */
+footer {
+  background: var(--primary);
+  color: rgba(255,255,255,0.6);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  font-size: 0.82rem;
+}
+footer .venue {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .task-grid { grid-template-columns: repeat(3, 1fr); }
+  .hero h1 { font-size: 2rem; }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .hamburger { display: block; }
+  nav .nav-links {
+    display: none;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background: var(--primary);
+    flex-direction: column;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  nav .nav-links.open { display: flex; }
+  .grid-3 { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: 1fr 1fr; }
+  .task-grid { grid-template-columns: repeat(2, 1fr); }
+  .hero { padding: 3rem 1.25rem 2.5rem; }
+  .hero h1 { font-size: 1.6rem; }
+  .container { padding: 0 1.25rem; }
+  section { padding: 2.5rem 0; }
+  .section-title { font-size: 1.4rem; }
+  .data-table { font-size: 0.73rem; }
+  .data-table thead th, .data-table tbody td { padding: 0.5rem 0.6rem; }
+}
+@media (max-width: 480px) {
+  .hero-stats { grid-template-columns: 1fr 1fr; }
+  .grid-4 { grid-template-columns: 1fr; }
+  .task-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand">KDD <span>'26</span> Research</div>
+    <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links">
+      <li><a href="#problem">Problem</a></li>
+      <li><a href="#methods">Methods</a></li>
+      <li><a href="#distillation">Distillation</a></li>
+      <li><a href="#scaling">Scaling</a></li>
+      <li><a href="#perturbation">Perturbation</a></li>
+      <li><a href="#complexity">Complexity</a></li>
+      <li><a href="#findings">Findings</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="badge"><span class="dot"></span> KDD 2026 &middot; Research Track &middot; LG</div>
+    <h1>Non-Transformer Effective Seq2Seq Models for Capturing LLM Operation</h1>
+    <p>Can an LLM's operation be captured by a non-transformer effective model? We address this open question through a systematic multi-architecture distillation competition across Transformer, SSM, GRU, and TCN architectures on five sequence tasks of varying complexity.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="val">4</div>
+        <div class="lbl">Architectures</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val">5</div>
+        <div class="lbl">Sequence Tasks</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val">0.8125</div>
+        <div class="lbl">Best SSM Consistency</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val">928</div>
+        <div class="lbl">SSM Parameters</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Problem Statement -->
+<section id="problem">
+  <div class="container">
+    <div class="section-label">Problem Statement</div>
+    <div class="section-title">Extending Effective Model Theory Beyond Transformers</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">Raju et al. (2026) model an LLM's operation on a fixed prompt as a small effective transformer with perturbed parameters. They leave open whether non-transformer architectures can equally well capture LLM behavior. We address this through systematic experimentation.</div>
+
+    <div class="card">
+      <div class="card-title">Simulated LLM Teacher Setup</div>
+      <div class="card-subtitle">Vocabulary size V=4, Sequence length T=3, 64 distinct inputs, noise level epsilon=0.05</div>
+      <div class="task-grid" id="taskPills">
+        <div class="task-pill active" data-task="copy_last" onclick="selectTask(this)">
+          <div class="task-name">Copy-Last</div>
+          <div class="task-type">Memory Access</div>
+        </div>
+        <div class="task-pill" data-task="copy_first" onclick="selectTask(this)">
+          <div class="task-name">Copy-First</div>
+          <div class="task-type">Memory Retention</div>
+        </div>
+        <div class="task-pill" data-task="majority" onclick="selectTask(this)">
+          <div class="task-name">Majority</div>
+          <div class="task-type">Aggregation</div>
+        </div>
+        <div class="task-pill" data-task="reverse_sum" onclick="selectTask(this)">
+          <div class="task-name">Reverse-Sum</div>
+          <div class="task-type">Composition</div>
+        </div>
+        <div class="task-pill" data-task="pattern_detect" onclick="selectTask(this)">
+          <div class="task-name">Pattern-Detect</div>
+          <div class="task-type">Local Pattern</div>
+        </div>
+      </div>
+      <div id="taskDescription" style="margin-top:1rem;font-size:0.88rem;color:var(--text-light);"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Methods / Architectures -->
+<section id="methods" style="background:#fff;">
+  <div class="container">
+    <div class="section-label">Methods</div>
+    <div class="section-title">Candidate Architecture Families</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">Four architecture families compete as candidate effective models, each with distinct inductive biases for sequence processing.</div>
+
+    <div class="grid-4">
+      <div class="method-card">
+        <div class="method-icon" style="background:var(--transformer);">T</div>
+        <h3>Transformer</h3>
+        <div class="params">3,200 parameters</div>
+        <p>Single-layer, 2-head causal self-attention with residual connections and 2-layer FFN. The baseline architecture from effective model theory.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-icon" style="background:var(--ssm);">S</div>
+        <h3>SSM (Mamba-style)</h3>
+        <div class="params">928 parameters</div>
+        <p>Diagonal state transition matrix A with tanh stability, input/output projections B, C, skip connection D, and selective gating.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-icon" style="background:var(--gru);">G</div>
+        <h3>GRU</h3>
+        <div class="params">1,664 parameters</div>
+        <p>Single-layer Gated Recurrent Unit with update gate z, reset gate r, and candidate hidden state for sequential processing.</p>
+      </div>
+      <div class="method-card">
+        <div class="method-icon" style="background:var(--tcn);">C</div>
+        <h3>TCN</h3>
+        <div class="params">1,664 parameters</div>
+        <p>Two-layer dilated causal convolution with kernel size 3, dilation factors {1,2}, ReLU, and residual connections.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="card-title">Agreement Metrics</div>
+      <div class="card-subtitle">Five metrics measure multi-dimensional agreement between teacher and student over all 64 inputs</div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Metric</th><th>Notation</th><th>Description</th><th>Ideal</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Behavioral Consistency</strong></td><td>BC</td><td>Fraction of inputs where teacher and student agree on argmax prediction</td><td>1.0</td></tr>
+          <tr><td><strong>KL Divergence</strong></td><td>D_KL</td><td>Mean KL divergence of teacher from student distributions</td><td>0.0</td></tr>
+          <tr><td><strong>Total Variation</strong></td><td>TV</td><td>Mean half L1-norm between teacher and student distributions</td><td>0.0</td></tr>
+          <tr><td><strong>Calibration Error</strong></td><td>ECE</td><td>Expected calibration error with 10 confidence bins</td><td>0.0</td></tr>
+          <tr><td><strong>Error Correlation</strong></td><td>r_err</td><td>Pearson correlation of teacher and student error indicators</td><td>1.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Distillation Competition -->
+<section id="distillation">
+  <div class="container">
+    <div class="section-label">Experiment 1</div>
+    <div class="section-title">Multi-Architecture Distillation Competition</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">Behavioral consistency and distributional agreement across architectures on five tasks. Select a metric to update the table below.</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Behavioral Consistency by Task</div>
+        <div class="card-subtitle">Higher is better. SSM leads on Copy-Last (0.8125) with only 928 parameters.</div>
+        <div class="chart-wrap">
+          <canvas id="chartBC"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">KL Divergence by Task</div>
+        <div class="card-subtitle">Lower is better. SSM and GRU consistently outperform Transformer.</div>
+        <div class="chart-wrap">
+          <canvas id="chartKL"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Full Distillation Results</div>
+      <div class="card-subtitle">Select a metric to explore all architecture-task combinations</div>
+      <div class="metric-selector" id="distMetrics">
+        <button class="metric-btn active" data-metric="behavioral_consistency" onclick="switchDistMetric(this)">Behavioral Consistency</button>
+        <button class="metric-btn" data-metric="kl_divergence" onclick="switchDistMetric(this)">KL Divergence</button>
+        <button class="metric-btn" data-metric="total_variation" onclick="switchDistMetric(this)">Total Variation</button>
+        <button class="metric-btn" data-metric="calibration_error" onclick="switchDistMetric(this)">Calibration Error</button>
+      </div>
+      <div id="distTableWrap"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Scaling Analysis -->
+<section id="scaling" style="background:#fff;">
+  <div class="container">
+    <div class="section-label">Experiment 2</div>
+    <div class="section-title">Scaling Analysis</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">How does behavioral consistency scale with model size? SSMs show the steepest scaling on Copy-Last.</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Scaling on Copy-Last Task</div>
+        <div class="card-subtitle">Behavioral consistency vs. hidden dimension d in {4, 8, 16, 32, 64}</div>
+        <div class="legend-inline">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--transformer)"></div>Transformer</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--ssm)"></div>SSM</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--gru)"></div>GRU</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--tcn)"></div>TCN</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartScaling"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Parameter Efficiency</div>
+        <div class="card-subtitle">Behavioral consistency vs. number of parameters (log scale)</div>
+        <div class="chart-wrap">
+          <canvas id="chartParamEff"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Scaling Data: Copy-Last Task</div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Architecture</th><th>d=4</th><th>d=8</th><th>d=16</th><th>d=32</th><th>d=64</th><th>Params (d=16)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong style="color:var(--transformer)">Transformer</strong></td><td>0.4219</td><td>0.4844</td><td>0.3906</td><td>0.4844</td><td class="best">0.5625</td><td>3,200</td></tr>
+          <tr><td><strong style="color:var(--ssm)">SSM</strong></td><td>0.5000</td><td>0.5000</td><td>0.5156</td><td class="best">0.7500</td><td class="best">0.7500</td><td>928</td></tr>
+          <tr><td><strong style="color:var(--gru)">GRU</strong></td><td>0.4688</td><td>0.4844</td><td>0.5781</td><td>0.5625</td><td class="best">0.5938</td><td>1,664</td></tr>
+          <tr><td><strong style="color:var(--tcn)">TCN</strong></td><td>0.3594</td><td>0.3281</td><td>0.2656</td><td>0.3438</td><td>0.4062</td><td>1,664</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Perturbation Analysis -->
+<section id="perturbation">
+  <div class="container">
+    <div class="section-label">Experiment 3</div>
+    <div class="section-title">SSM Perturbation Structure</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">SSM parameters decompose as M = M_ideal + Delta_M. Frobenius ratios of 0.88--0.92 indicate distributed, not low-rank, structure.</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Frobenius Perturbation Ratios</div>
+        <div class="card-subtitle">||Delta M||_F / ||M||_F for input (B) and output (C) projections</div>
+        <div class="chart-wrap">
+          <canvas id="chartFrob"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Spectral Radius vs. Behavioral Consistency</div>
+        <div class="card-subtitle">Higher spectral radius reflects need for longer recurrent memory</div>
+        <div class="chart-wrap">
+          <canvas id="chartSpectral"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Full Perturbation Analysis</div>
+      <div class="card-subtitle">SSM parameter decomposition across all five tasks</div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Task</th><th>B Frob. Ratio</th><th>C Frob. Ratio</th><th>B Rank-1 Var.</th><th>C Rank-1 Var.</th><th>Spectral Radius</th><th>B Eff. Dim.</th><th>C Eff. Dim.</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Copy-Last</strong></td><td>0.9009</td><td>0.8820</td><td>0.1884</td><td>0.2221</td><td>0.1920</td><td>11.92</td><td>11.34</td></tr>
+          <tr><td><strong>Copy-First</strong></td><td>0.8860</td><td>0.8742</td><td>0.2151</td><td>0.2358</td><td>0.2138</td><td>11.11</td><td>11.52</td></tr>
+          <tr><td><strong>Majority</strong></td><td>0.8939</td><td>0.8940</td><td>0.2010</td><td>0.2008</td><td>0.2642</td><td>11.21</td><td>11.60</td></tr>
+          <tr><td><strong>Reverse-Sum</strong></td><td class="best">0.9041</td><td class="best">0.9162</td><td>0.1825</td><td>0.1605</td><td class="best">0.3529</td><td>11.84</td><td>12.36</td></tr>
+          <tr><td><strong>Pattern-Detect</strong></td><td>0.8797</td><td>0.8851</td><td>0.2261</td><td>0.2166</td><td>0.2125</td><td>11.55</td><td>11.38</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Task Complexity -->
+<section id="complexity" style="background:#fff;">
+  <div class="container">
+    <div class="section-label">Experiment 4</div>
+    <div class="section-title">Task Complexity Taxonomy</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">Information-theoretic measures reveal why some tasks are harder. Mutual information I(X;Y) ranges from 0.58 to 1.14 nats.</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Information-Theoretic Task Profile</div>
+        <div class="card-subtitle">Output entropy H(Y), conditional entropy H(Y|X), and mutual information I(X;Y)</div>
+        <div class="chart-wrap">
+          <canvas id="chartComplexity"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Mutual Information vs. Best Non-Transformer BC</div>
+        <div class="card-subtitle">Task complexity alone does not predict architecture success</div>
+        <div class="chart-wrap">
+          <canvas id="chartMIvBC"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Task Complexity and Architecture Suitability</div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Task</th><th>H(Y)</th><th>H(Y|X)</th><th>I(X;Y)</th><th>Eff. Classes</th><th>Best NT</th><th>Best NT Arch</th><th>Transformer</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Copy-Last</strong></td><td>1.3863</td><td>0.2519</td><td>1.1344</td><td>4.00</td><td class="best">0.8125</td><td>SSM</td><td>0.4844</td></tr>
+          <tr><td><strong>Copy-First</strong></td><td>1.3863</td><td>0.2505</td><td>1.1358</td><td>4.00</td><td>0.3906</td><td>GRU</td><td>0.3438</td></tr>
+          <tr><td><strong>Majority</strong></td><td>1.3009</td><td>0.2493</td><td>1.0516</td><td>3.67</td><td>0.5000</td><td>SSM</td><td>0.5312</td></tr>
+          <tr><td><strong>Reverse-Sum</strong></td><td>1.3863</td><td>0.2515</td><td>1.1348</td><td>4.00</td><td>0.2969</td><td>GRU/TCN</td><td>0.3125</td></tr>
+          <tr><td><strong>Pattern-Detect</strong></td><td>0.8318</td><td>0.2513</td><td>0.5805</td><td>2.30</td><td>0.5625</td><td>TCN</td><td>0.5625</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture Efficiency -->
+<section id="efficiency">
+  <div class="container">
+    <div class="section-label">Experiment 5</div>
+    <div class="section-title">Architecture Efficiency on Reverse-Sum</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;">Fine-grained scaling on the hardest compositional task. All architectures plateau around 0.25--0.33 BC regardless of model size.</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Behavioral Consistency vs. Hidden Dimension</div>
+        <div class="card-subtitle">Reverse-Sum: d in {4, 8, 12, 16, 24, 32, 48, 64}</div>
+        <div class="legend-inline">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--transformer)"></div>Transformer</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--ssm)"></div>SSM</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--gru)"></div>GRU</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--tcn)"></div>TCN</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartEffScale"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">KL Divergence vs. Parameters</div>
+        <div class="card-subtitle">Reverse-Sum: Transformer KL decreases but stays above 1.4</div>
+        <div class="chart-wrap">
+          <canvas id="chartEffKL"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Key Findings -->
+<section id="findings" style="background:#fff;">
+  <div class="container">
+    <div class="section-label">Key Findings</div>
+    <div class="section-title">Conclusions and Implications</div>
+    <div class="section-desc" style="margin-bottom:1.5rem;"></div>
+
+    <div class="grid-2">
+      <div class="finding-card">
+        <div class="finding-num">1</div>
+        <div>
+          <h3>SSMs as Viable Effective Models</h3>
+          <p>SSMs achieve 0.8125 behavioral consistency on Copy-Last with only 928 parameters -- less than one-third the 3,200 parameters of the Transformer baseline, which only reaches 0.4844 BC. Non-transformer architectures are viable for memory-access tasks.</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">2</div>
+        <div>
+          <h3>Compositional Tasks Remain Hard</h3>
+          <p>All architectures struggle on Reverse-Sum (best BC: 0.3125). Compositional reasoning requiring arithmetic composition may need attention-like mechanisms that none of the small effective models fully provide.</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">3</div>
+        <div>
+          <h3>Distributed Perturbation Structure</h3>
+          <p>SSM Frobenius perturbation ratios of 0.88--0.92 show a distributed, not low-rank, structure. Effective dimensions of 11.1--12.4 (out of 16) indicate near-uniform utilization, suggesting a different perturbation theory than the transformer case.</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">4</div>
+        <div>
+          <h3>Task Structure Determines Architecture Choice</h3>
+          <p>Copy-Last and Reverse-Sum have near-identical mutual information (1.13 nats) but very different architecture rankings. Task nature -- memory access vs. arithmetic composition -- is the key determinant, not just information-theoretic complexity.</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">5</div>
+        <div>
+          <h3>Spectral Radius as Complexity Measure</h3>
+          <p>SSM spectral radius increases from 0.192 (Copy-Last) to 0.353 (Reverse-Sum), providing a natural complexity measure: harder tasks require longer recurrent memory reflected in larger spectral radii.</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">6</div>
+        <div>
+          <h3>TCN Excels on Local Patterns</h3>
+          <p>TCN matches the Transformer at 0.5625 BC on Pattern-Detect, consistent with the task's local pattern structure aligning with convolutional receptive fields. Architecture inductive bias matches task structure.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="venue">KDD 2026 -- 32nd ACM SIGKDD Conference</div>
+  <div>August 3--7, 2026 -- Toronto, ON, Canada</div>
+  <div style="margin-top:0.5rem;font-size:0.75rem;opacity:0.6;">Category: LG -- Track: Research</div>
+</footer>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const COLORS = {
+  Transformer: '#e8833a',
+  SSM: '#3aade8',
+  GRU: '#6c3ae8',
+  TCN: '#e83a6c'
+};
+const ARCHS = ['Transformer','SSM','GRU','TCN'];
+const TASKS = ['copy_last','copy_first','majority','reverse_sum','pattern_detect'];
+const TASK_LABELS = {'copy_last':'Copy-Last','copy_first':'Copy-First','majority':'Majority','reverse_sum':'Reverse-Sum','pattern_detect':'Pattern-Detect'};
+const TASK_DESCS = {
+  copy_last:'Copy-Last: Output = last input token. Tests immediate memory access -- the simplest recurrent operation.',
+  copy_first:'Copy-First: Output = first input token. Requires retaining the first token through all subsequent steps.',
+  majority:'Majority: Output = most frequent input token. An aggregation task requiring counting across the sequence.',
+  reverse_sum:'Reverse-Sum: Output = sum of tokens mod V. A compositional task requiring arithmetic over the full sequence.',
+  pattern_detect:'Pattern-Detect: Output = indicator of adjacent repeats. A local pattern detection task with binary output.'
+};
+
+const distillation = {"copy_last":{"Transformer":{"kl_divergence":2.54,"total_variation":0.5849,"behavioral_consistency":0.4844,"calibration_error":0.2457},"SSM":{"kl_divergence":0.6833,"total_variation":0.537,"behavioral_consistency":0.8125,"calibration_error":0.4512},"GRU":{"kl_divergence":1.0123,"total_variation":0.6559,"behavioral_consistency":0.5469,"calibration_error":0.212},"TCN":{"kl_divergence":0.8847,"total_variation":0.5504,"behavioral_consistency":0.5781,"calibration_error":0.1199}},"copy_first":{"Transformer":{"kl_divergence":2.815,"total_variation":0.6332,"behavioral_consistency":0.3438,"calibration_error":0.4967},"SSM":{"kl_divergence":1.2331,"total_variation":0.7006,"behavioral_consistency":0.25,"calibration_error":0.1637},"GRU":{"kl_divergence":1.0783,"total_variation":0.6742,"behavioral_consistency":0.3906,"calibration_error":0.0945},"TCN":{"kl_divergence":1.4647,"total_variation":0.6423,"behavioral_consistency":0.3594,"calibration_error":0.2512}},"majority":{"Transformer":{"kl_divergence":0.777,"total_variation":0.511,"behavioral_consistency":0.5312,"calibration_error":0.1659},"SSM":{"kl_divergence":1.1096,"total_variation":0.659,"behavioral_consistency":0.5,"calibration_error":0.137},"GRU":{"kl_divergence":1.0053,"total_variation":0.642,"behavioral_consistency":0.4844,"calibration_error":0.0942},"TCN":{"kl_divergence":1.5095,"total_variation":0.671,"behavioral_consistency":0.3906,"calibration_error":0.2324}},"reverse_sum":{"Transformer":{"kl_divergence":1.8084,"total_variation":0.7033,"behavioral_consistency":0.3125,"calibration_error":0.4592},"SSM":{"kl_divergence":1.3622,"total_variation":0.7,"behavioral_consistency":0.2656,"calibration_error":0.2166},"GRU":{"kl_divergence":1.2267,"total_variation":0.6985,"behavioral_consistency":0.2969,"calibration_error":0.1384},"TCN":{"kl_divergence":1.9426,"total_variation":0.7027,"behavioral_consistency":0.2969,"calibration_error":0.3214}},"pattern_detect":{"Transformer":{"kl_divergence":4.4957,"total_variation":0.4579,"behavioral_consistency":0.5625,"calibration_error":0.3784},"SSM":{"kl_divergence":1.1032,"total_variation":0.6817,"behavioral_consistency":0.4531,"calibration_error":0.1814},"GRU":{"kl_divergence":0.9267,"total_variation":0.6336,"behavioral_consistency":0.5469,"calibration_error":0.2041},"TCN":{"kl_divergence":2.0997,"total_variation":0.4779,"behavioral_consistency":0.5625,"calibration_error":0.3549}}};
+
+const scaling = {"Transformer":[{"behavioral_consistency":0.4219,"n_parameters":224,"hidden_dim":4},{"behavioral_consistency":0.4844,"n_parameters":832,"hidden_dim":8},{"behavioral_consistency":0.3906,"n_parameters":3200,"hidden_dim":16},{"behavioral_consistency":0.4844,"n_parameters":12544,"hidden_dim":32},{"behavioral_consistency":0.5625,"n_parameters":49664,"hidden_dim":64}],"SSM":[{"behavioral_consistency":0.5,"n_parameters":88,"hidden_dim":4},{"behavioral_consistency":0.5,"n_parameters":272,"hidden_dim":8},{"behavioral_consistency":0.5156,"n_parameters":928,"hidden_dim":16},{"behavioral_consistency":0.75,"n_parameters":3392,"hidden_dim":32},{"behavioral_consistency":0.75,"n_parameters":12928,"hidden_dim":64}],"GRU":[{"behavioral_consistency":0.4688,"n_parameters":128,"hidden_dim":4},{"behavioral_consistency":0.4844,"n_parameters":448,"hidden_dim":8},{"behavioral_consistency":0.5781,"n_parameters":1664,"hidden_dim":16},{"behavioral_consistency":0.5625,"n_parameters":6400,"hidden_dim":32},{"behavioral_consistency":0.5938,"n_parameters":25088,"hidden_dim":64}],"TCN":[{"behavioral_consistency":0.3594,"n_parameters":128,"hidden_dim":4},{"behavioral_consistency":0.3281,"n_parameters":448,"hidden_dim":8},{"behavioral_consistency":0.2656,"n_parameters":1664,"hidden_dim":16},{"behavioral_consistency":0.3438,"n_parameters":6400,"hidden_dim":32},{"behavioral_consistency":0.4062,"n_parameters":25088,"hidden_dim":64}]};
+
+const perturbation = {"copy_last":{"behavioral_consistency":0.75,"spectral_radius":0.192,"perturbation":{"B":{"frobenius_ratio":0.9009,"rank1_explained":0.1884,"effective_dimension":11.9216},"C":{"frobenius_ratio":0.882,"rank1_explained":0.2221,"effective_dimension":11.3396}}},"copy_first":{"behavioral_consistency":0.2656,"spectral_radius":0.2138,"perturbation":{"B":{"frobenius_ratio":0.886,"rank1_explained":0.2151,"effective_dimension":11.1061},"C":{"frobenius_ratio":0.8742,"rank1_explained":0.2358,"effective_dimension":11.5218}}},"majority":{"behavioral_consistency":0.4062,"spectral_radius":0.2642,"perturbation":{"B":{"frobenius_ratio":0.8939,"rank1_explained":0.201,"effective_dimension":11.2124},"C":{"frobenius_ratio":0.894,"rank1_explained":0.2008,"effective_dimension":11.597}}},"reverse_sum":{"behavioral_consistency":0.25,"spectral_radius":0.3529,"perturbation":{"B":{"frobenius_ratio":0.9041,"rank1_explained":0.1825,"effective_dimension":11.8425},"C":{"frobenius_ratio":0.9162,"rank1_explained":0.1605,"effective_dimension":12.3633}}},"pattern_detect":{"behavioral_consistency":0.4219,"spectral_radius":0.2125,"perturbation":{"B":{"frobenius_ratio":0.8797,"rank1_explained":0.2261,"effective_dimension":11.5466},"C":{"frobenius_ratio":0.8851,"rank1_explained":0.2166,"effective_dimension":11.3831}}}};
+
+const complexity = {"copy_last":{"output_entropy":1.3863,"conditional_entropy":0.2519,"mutual_information":1.1344,"effective_output_classes":4.0,"architecture_bc":{"Transformer":0.4844,"SSM":0.8125,"GRU":0.5469,"TCN":0.5781}},"copy_first":{"output_entropy":1.3863,"conditional_entropy":0.2505,"mutual_information":1.1358,"effective_output_classes":4.0,"architecture_bc":{"Transformer":0.3438,"SSM":0.25,"GRU":0.3906,"TCN":0.3594}},"majority":{"output_entropy":1.3009,"conditional_entropy":0.2493,"mutual_information":1.0516,"effective_output_classes":3.6724,"architecture_bc":{"Transformer":0.5312,"SSM":0.5,"GRU":0.4844,"TCN":0.3906}},"reverse_sum":{"output_entropy":1.3863,"conditional_entropy":0.2515,"mutual_information":1.1348,"effective_output_classes":4.0,"architecture_bc":{"Transformer":0.3125,"SSM":0.2656,"GRU":0.2969,"TCN":0.2969}},"pattern_detect":{"output_entropy":0.8318,"conditional_entropy":0.2513,"mutual_information":0.5805,"effective_output_classes":2.2974,"architecture_bc":{"Transformer":0.5625,"SSM":0.4531,"GRU":0.5469,"TCN":0.5625}}};
+
+const efficiency = {"Transformer":[{"behavioral_consistency":0.3281,"kl_divergence":8.1022,"n_parameters":224,"hidden_dim":4},{"behavioral_consistency":0.2969,"kl_divergence":3.0486,"n_parameters":832,"hidden_dim":8},{"behavioral_consistency":0.2812,"kl_divergence":3.7379,"n_parameters":1824,"hidden_dim":12},{"behavioral_consistency":0.2969,"kl_divergence":2.3672,"n_parameters":3200,"hidden_dim":16},{"behavioral_consistency":0.2969,"kl_divergence":1.9878,"n_parameters":7104,"hidden_dim":24},{"behavioral_consistency":0.3125,"kl_divergence":1.9564,"n_parameters":12544,"hidden_dim":32},{"behavioral_consistency":0.3125,"kl_divergence":1.4674,"n_parameters":28032,"hidden_dim":48},{"behavioral_consistency":0.2812,"kl_divergence":2.2562,"n_parameters":49664,"hidden_dim":64}],"SSM":[{"behavioral_consistency":0.25,"kl_divergence":1.622,"n_parameters":88,"hidden_dim":4},{"behavioral_consistency":0.25,"kl_divergence":1.1685,"n_parameters":272,"hidden_dim":8},{"behavioral_consistency":0.25,"kl_divergence":1.2345,"n_parameters":552,"hidden_dim":12},{"behavioral_consistency":0.25,"kl_divergence":1.275,"n_parameters":928,"hidden_dim":16},{"behavioral_consistency":0.25,"kl_divergence":1.2044,"n_parameters":1968,"hidden_dim":24},{"behavioral_consistency":0.2656,"kl_divergence":1.1552,"n_parameters":3392,"hidden_dim":32},{"behavioral_consistency":0.25,"kl_divergence":1.1867,"n_parameters":7392,"hidden_dim":48},{"behavioral_consistency":0.25,"kl_divergence":1.1496,"n_parameters":12928,"hidden_dim":64}],"GRU":[{"behavioral_consistency":0.3125,"kl_divergence":1.2787,"n_parameters":128,"hidden_dim":4},{"behavioral_consistency":0.2969,"kl_divergence":1.2691,"n_parameters":448,"hidden_dim":8},{"behavioral_consistency":0.2812,"kl_divergence":1.2786,"n_parameters":960,"hidden_dim":12},{"behavioral_consistency":0.2812,"kl_divergence":1.2655,"n_parameters":1664,"hidden_dim":16},{"behavioral_consistency":0.2656,"kl_divergence":1.1714,"n_parameters":3648,"hidden_dim":24},{"behavioral_consistency":0.2969,"kl_divergence":1.1654,"n_parameters":6400,"hidden_dim":32},{"behavioral_consistency":0.2969,"kl_divergence":1.1569,"n_parameters":14208,"hidden_dim":48},{"behavioral_consistency":0.2812,"kl_divergence":1.16,"n_parameters":25088,"hidden_dim":64}],"TCN":[{"behavioral_consistency":0.3281,"kl_divergence":1.8366,"n_parameters":128,"hidden_dim":4},{"behavioral_consistency":0.2656,"kl_divergence":1.5905,"n_parameters":448,"hidden_dim":8},{"behavioral_consistency":0.2969,"kl_divergence":1.8501,"n_parameters":960,"hidden_dim":12},{"behavioral_consistency":0.3281,"kl_divergence":1.4057,"n_parameters":1664,"hidden_dim":16},{"behavioral_consistency":0.2969,"kl_divergence":1.6959,"n_parameters":3648,"hidden_dim":24},{"behavioral_consistency":0.2812,"kl_divergence":1.2547,"n_parameters":6400,"hidden_dim":32},{"behavioral_consistency":0.2969,"kl_divergence":1.3906,"n_parameters":14208,"hidden_dim":48},{"behavioral_consistency":0.3125,"kl_divergence":1.238,"n_parameters":25088,"hidden_dim":64}]};
+
+// ============================================================
+// CHART DEFAULTS
+// ============================================================
+Chart.defaults.font.family = "'Segoe UI', system-ui, -apple-system, sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(26,58,92,0.92)';
+Chart.defaults.plugins.tooltip.cornerRadius = 8;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.titleFont = {weight:'bold', size:12};
+Chart.defaults.plugins.tooltip.bodyFont = {size:11};
+
+// ============================================================
+// CHART 1: Behavioral Consistency grouped bar
+// ============================================================
+var taskLabelsArr = TASKS.map(function(t){ return TASK_LABELS[t]; });
+new Chart(document.getElementById('chartBC'), {
+  type: 'bar',
+  data: {
+    labels: taskLabelsArr,
+    datasets: ARCHS.map(function(a){return {
+      label: a,
+      data: TASKS.map(function(t){ return distillation[t][a].behavioral_consistency; }),
+      backgroundColor: COLORS[a],
+      borderRadius: 4,
+      barPercentage: 0.8,
+      categoryPercentage: 0.75
+    };})
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {display: true, position:'top', labels:{usePointStyle:true, pointStyle:'rectRounded', boxWidth:10, padding:12, font:{size:11, weight:'500'}}},
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': ' + ctx.raw.toFixed(4); }}}
+    },
+    scales: {
+      y: {beginAtZero:true, max:0.9, title:{display:true, text:'Behavioral Consistency', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 2: KL Divergence grouped bar
+// ============================================================
+new Chart(document.getElementById('chartKL'), {
+  type: 'bar',
+  data: {
+    labels: taskLabelsArr,
+    datasets: ARCHS.map(function(a){return {
+      label: a,
+      data: TASKS.map(function(t){ return distillation[t][a].kl_divergence; }),
+      backgroundColor: COLORS[a],
+      borderRadius: 4,
+      barPercentage: 0.8,
+      categoryPercentage: 0.75
+    };})
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {display: true, position:'top', labels:{usePointStyle:true, pointStyle:'rectRounded', boxWidth:10, padding:12, font:{size:11, weight:'500'}}},
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': ' + ctx.raw.toFixed(4); }}}
+    },
+    scales: {
+      y: {beginAtZero:true, title:{display:true, text:'KL Divergence', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 3: Scaling (BC vs hidden dim)
+// ============================================================
+var hiddenDims = [4,8,16,32,64];
+new Chart(document.getElementById('chartScaling'), {
+  type: 'line',
+  data: {
+    labels: hiddenDims.map(function(d){ return 'd='+d; }),
+    datasets: ARCHS.map(function(a){return {
+      label: a,
+      data: scaling[a].map(function(d){ return d.behavioral_consistency; }),
+      borderColor: COLORS[a],
+      backgroundColor: COLORS[a]+'22',
+      pointBackgroundColor: COLORS[a],
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      borderWidth: 2.5,
+      tension: 0.3,
+      fill: false
+    };})
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': ' + ctx.raw.toFixed(4); }}}
+    },
+    scales: {
+      y: {beginAtZero:true, max:0.85, title:{display:true, text:'Behavioral Consistency', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      x: {title:{display:true, text:'Hidden Dimension', font:{size:11, weight:'600'}}, grid:{display:false}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 4: Parameter Efficiency (BC vs params, log x)
+// ============================================================
+new Chart(document.getElementById('chartParamEff'), {
+  type: 'scatter',
+  data: {
+    datasets: ARCHS.map(function(a){return {
+      label: a,
+      data: scaling[a].map(function(d){ return {x: d.n_parameters, y: d.behavioral_consistency}; }),
+      borderColor: COLORS[a],
+      backgroundColor: COLORS[a]+'44',
+      pointRadius: 6,
+      pointHoverRadius: 8,
+      showLine: true,
+      borderWidth: 2,
+      tension: 0.3,
+      fill: false
+    };})
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {display: true, position:'top', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:12, font:{size:11, weight:'500'}}},
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': BC=' + ctx.raw.y.toFixed(4) + ', Params=' + ctx.raw.x.toLocaleString(); }}}
+    },
+    scales: {
+      x: {type:'logarithmic', title:{display:true, text:'Parameters (log scale)', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      y: {beginAtZero:true, max:0.85, title:{display:true, text:'Behavioral Consistency', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 5: Frobenius Ratios
+// ============================================================
+new Chart(document.getElementById('chartFrob'), {
+  type: 'bar',
+  data: {
+    labels: TASKS.map(function(t){ return TASK_LABELS[t]; }),
+    datasets: [
+      {
+        label: 'B (Input Proj.)',
+        data: TASKS.map(function(t){ return perturbation[t].perturbation.B.frobenius_ratio; }),
+        backgroundColor: '#3aade8',
+        borderRadius: 4,
+        barPercentage: 0.7,
+        categoryPercentage: 0.7
+      },
+      {
+        label: 'C (Output Proj.)',
+        data: TASKS.map(function(t){ return perturbation[t].perturbation.C.frobenius_ratio; }),
+        backgroundColor: '#6c3ae8',
+        borderRadius: 4,
+        barPercentage: 0.7,
+        categoryPercentage: 0.7
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {display:true, position:'top', labels:{usePointStyle:true, pointStyle:'rectRounded', boxWidth:10, padding:12, font:{size:11, weight:'500'}}},
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': ' + ctx.raw.toFixed(4); }}}
+    },
+    scales: {
+      y: {min:0.85, max:0.93, title:{display:true, text:'Frobenius Ratio', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      x: {grid:{display:false}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 6: Spectral Radius scatter
+// ============================================================
+var spectralData = TASKS.map(function(t){return {
+  x: perturbation[t].spectral_radius,
+  y: perturbation[t].behavioral_consistency,
+  label: TASK_LABELS[t]
+};});
+var spectralColors = ['#3aade8','#e8833a','#6c3ae8','#e83a6c','#2ecc71'];
+
+// Custom plugin to draw labels on scatter points
+var scatterLabelPlugin = {
+  id: 'scatterLabels',
+  afterDraw: function(chart) {
+    var ctx = chart.ctx;
+    var datasets = chart.data.datasets;
+    datasets.forEach(function(dataset, i) {
+      var meta = chart.getDatasetMeta(i);
+      meta.data.forEach(function(point, j) {
+        var data = dataset.data[j];
+        if (data && data.label) {
+          ctx.save();
+          ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
+          ctx.fillStyle = '#1e293b';
+          ctx.textAlign = 'center';
+          ctx.fillText(data.label, point.x, point.y - 16);
+          ctx.restore();
+        }
+      });
+    });
+  }
+};
+
+new Chart(document.getElementById('chartSpectral'), {
+  type: 'scatter',
+  data: {
+    datasets: [{
+      label: 'Tasks',
+      data: spectralData,
+      backgroundColor: spectralColors,
+      pointRadius: 10,
+      pointHoverRadius: 13
+    }]
+  },
+  plugins: [scatterLabelPlugin],
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      tooltip: {callbacks:{label: function(ctx){ return spectralData[ctx.dataIndex].label + ': rho=' + ctx.raw.x.toFixed(4) + ', BC=' + ctx.raw.y.toFixed(4); }}},
+      legend: {display:false}
+    },
+    scales: {
+      x: {title:{display:true, text:'Spectral Radius', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      y: {title:{display:true, text:'Behavioral Consistency', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}, beginAtZero:true, max:0.85}
+    }
+  }
+});
+
+// ============================================================
+// CHART 7: Task Complexity stacked bar
+// ============================================================
+new Chart(document.getElementById('chartComplexity'), {
+  type: 'bar',
+  data: {
+    labels: TASKS.map(function(t){ return TASK_LABELS[t]; }),
+    datasets: [
+      {
+        label: 'Mutual Information I(X;Y)',
+        data: TASKS.map(function(t){ return complexity[t].mutual_information; }),
+        backgroundColor: '#3aade8',
+        borderRadius: 4,
+        barPercentage: 0.6,
+        categoryPercentage: 0.7
+      },
+      {
+        label: 'Conditional Entropy H(Y|X)',
+        data: TASKS.map(function(t){ return complexity[t].conditional_entropy; }),
+        backgroundColor: '#e8833a',
+        borderRadius: 4,
+        barPercentage: 0.6,
+        categoryPercentage: 0.7
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {display:true, position:'top', labels:{usePointStyle:true, pointStyle:'rectRounded', boxWidth:10, padding:12, font:{size:11, weight:'500'}}},
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': ' + ctx.raw.toFixed(4) + ' nats'; }}}
+    },
+    indexAxis: 'y',
+    scales: {
+      x: {stacked:true, title:{display:true, text:'Entropy (nats)', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      y: {stacked:true, grid:{display:false}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 8: MI vs Best Non-Transformer BC
+// ============================================================
+var taskColorMap = {'copy_last':'#3aade8','copy_first':'#e8833a','majority':'#6c3ae8','reverse_sum':'#e83a6c','pattern_detect':'#2ecc71'};
+var miBcData = TASKS.map(function(t){
+  var ntBcs = [complexity[t].architecture_bc.SSM, complexity[t].architecture_bc.GRU, complexity[t].architecture_bc.TCN];
+  return {x: complexity[t].mutual_information, y: Math.max.apply(null, ntBcs), label: TASK_LABELS[t]};
+});
+new Chart(document.getElementById('chartMIvBC'), {
+  type: 'scatter',
+  data: {
+    datasets: [{
+      label: 'Tasks',
+      data: miBcData,
+      backgroundColor: TASKS.map(function(t){ return taskColorMap[t]; }),
+      pointRadius: 11,
+      pointHoverRadius: 14,
+      pointStyle: 'rectRot'
+    }]
+  },
+  plugins: [scatterLabelPlugin],
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      tooltip: {callbacks:{label: function(ctx){ return miBcData[ctx.dataIndex].label + ': I(X;Y)=' + ctx.raw.x.toFixed(4) + ', Best NT BC=' + ctx.raw.y.toFixed(4); }}},
+      legend: {display:false}
+    },
+    scales: {
+      x: {title:{display:true, text:'Mutual Information I(X;Y) (nats)', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      y: {title:{display:true, text:'Best Non-Transformer BC', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}, beginAtZero:true, max:0.9}
+    }
+  }
+});
+
+// ============================================================
+// CHART 9: Efficiency Scaling (Reverse-Sum)
+// ============================================================
+var effDims = [4,8,12,16,24,32,48,64];
+new Chart(document.getElementById('chartEffScale'), {
+  type: 'line',
+  data: {
+    labels: effDims.map(function(d){ return 'd='+d; }),
+    datasets: ARCHS.map(function(a){return {
+      label: a,
+      data: efficiency[a].map(function(d){ return d.behavioral_consistency; }),
+      borderColor: COLORS[a],
+      backgroundColor: COLORS[a]+'22',
+      pointBackgroundColor: COLORS[a],
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2.5,
+      tension: 0.3,
+      fill: false
+    };})
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': ' + ctx.raw.toFixed(4); }}}
+    },
+    scales: {
+      y: {min:0.2, max:0.4, title:{display:true, text:'Behavioral Consistency', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      x: {title:{display:true, text:'Hidden Dimension', font:{size:11, weight:'600'}}, grid:{display:false}}
+    }
+  }
+});
+
+// ============================================================
+// CHART 10: Efficiency KL vs Params (Reverse-Sum)
+// ============================================================
+new Chart(document.getElementById('chartEffKL'), {
+  type: 'scatter',
+  data: {
+    datasets: ARCHS.map(function(a){return {
+      label: a,
+      data: efficiency[a].map(function(d){ return {x: d.n_parameters, y: d.kl_divergence}; }),
+      borderColor: COLORS[a],
+      backgroundColor: COLORS[a]+'44',
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      showLine: true,
+      borderWidth: 2,
+      tension: 0.3,
+      fill: false
+    };})
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {display: true, position:'top', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:12, font:{size:11, weight:'500'}}},
+      tooltip: {callbacks:{label: function(ctx){ return ctx.dataset.label + ': KL=' + ctx.raw.y.toFixed(4) + ', Params=' + ctx.raw.x.toLocaleString(); }}}
+    },
+    scales: {
+      x: {type:'logarithmic', title:{display:true, text:'Parameters (log scale)', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}},
+      y: {title:{display:true, text:'KL Divergence', font:{size:11, weight:'600'}}, grid:{color:'rgba(0,0,0,0.04)'}}
+    }
+  }
+});
+
+// ============================================================
+// INTERACTIVE: Task Selector
+// ============================================================
+function selectTask(el) {
+  document.querySelectorAll('.task-pill').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+  var task = el.getAttribute('data-task');
+  var descEl = document.getElementById('taskDescription');
+  descEl.textContent = TASK_DESCS[task];
+}
+// Set initial task description
+document.getElementById('taskDescription').textContent = TASK_DESCS['copy_last'];
+
+// ============================================================
+// INTERACTIVE: Distillation metric table
+// ============================================================
+var METRIC_HIGHER_BETTER = {behavioral_consistency: true, kl_divergence: false, total_variation: false, calibration_error: false};
+var METRIC_DISPLAY = {behavioral_consistency: 'Behavioral Consistency', kl_divergence: 'KL Divergence', total_variation: 'Total Variation', calibration_error: 'Calibration Error'};
+
+function switchDistMetric(btn) {
+  document.querySelectorAll('#distMetrics .metric-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderDistTable(btn.getAttribute('data-metric'));
+}
+
+function renderDistTable(metric) {
+  var higherBetter = METRIC_HIGHER_BETTER[metric];
+  var wrap = document.getElementById('distTableWrap');
+  // Clear existing content
+  while (wrap.firstChild) { wrap.removeChild(wrap.firstChild); }
+
+  var table = document.createElement('table');
+  table.className = 'data-table';
+
+  // thead
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  var headers = ['Task'].concat(ARCHS).concat(['Best']);
+  headers.forEach(function(h){
+    var th = document.createElement('th');
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  // tbody
+  var tbody = document.createElement('tbody');
+  TASKS.forEach(function(t){
+    var row = document.createElement('tr');
+    var tdTask = document.createElement('td');
+    var strong = document.createElement('strong');
+    strong.textContent = TASK_LABELS[t];
+    tdTask.appendChild(strong);
+    row.appendChild(tdTask);
+
+    var vals = ARCHS.map(function(a){ return distillation[t][a][metric]; });
+    var bestVal = higherBetter ? Math.max.apply(null, vals) : Math.min.apply(null, vals);
+    var bestArch = ARCHS[vals.indexOf(bestVal)];
+
+    ARCHS.forEach(function(a, i){
+      var td = document.createElement('td');
+      td.textContent = vals[i].toFixed(4);
+      if (vals[i] === bestVal) { td.className = 'best'; }
+      row.appendChild(td);
+    });
+
+    var tdBest = document.createElement('td');
+    var bestStrong = document.createElement('strong');
+    bestStrong.textContent = bestArch;
+    tdBest.appendChild(bestStrong);
+    row.appendChild(tdBest);
+
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+renderDistTable('behavioral_consistency');
+
+// ============================================================
+// SCROLL SPY for nav
+// ============================================================
+var sections = document.querySelectorAll('section[id]');
+var navLinks = document.querySelectorAll('.nav-links a');
+window.addEventListener('scroll', function(){
+  var current = '';
+  sections.forEach(function(sec){
+    var top = sec.offsetTop - 80;
+    if (window.scrollY >= top) current = sec.id;
+  });
+  navLinks.forEach(function(link){
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

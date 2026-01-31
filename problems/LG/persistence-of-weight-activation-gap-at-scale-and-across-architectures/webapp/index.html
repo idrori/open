@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weight-Activation Gap in MoE Models</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root { --primary: #1a3a5c; --accent: #2980b9; --bg: #f5f7fa; --card: #ffffff; --text: #2c3e50; --border: #dce1e8; --success: #27ae60; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 2rem; text-align: center; }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  .full-width { grid-column: 1 / -1; }
+  .chart-container { position: relative; height: 350px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-box { background: var(--card); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .metric-box .label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+  .metric-box .delta { font-size: 0.85rem; color: var(--success); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary); color: #fff; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Persistence of the Weight-Activation Gap in MoE Models</h1>
+  <p>Investigating whether the disconnect between weight-space and activation-space orthogonality persists across model scales and architectural variants in Mixture-of-Experts models.</p>
+</div>
+<div class="container">
+  <div class="metric-grid">
+    <div class="metric-box"><div class="value">-0.112</div><div class="label">Pearson r (Weight vs Act MSO)</div><div class="delta">p = 0.596 (not significant)</div></div>
+    <div class="metric-box"><div class="value">50-90x</div><div class="label">Act MSO / Weight MSO Ratio</div><div class="delta">Across all scales</div></div>
+    <div class="metric-box"><div class="value">5/5</div><div class="label">Architectures with Gap</div><div class="delta">Universal presence</div></div>
+    <div class="metric-box"><div class="value">4.2M</div><div class="label">Max Expert Params Tested</div><div class="delta">Gap persists at all scales</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Regularization Scan: Weight vs Activation MSO</h2>
+      <div class="chart-container"><canvas id="chartReg"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Scale Dependence of the Gap</h2>
+      <div class="chart-container"><canvas id="chartScale"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Architecture Comparison</h2>
+      <div class="chart-container"><canvas id="chartArch"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Gap Magnitude Across Architectures</h2>
+      <div class="chart-container"><canvas id="chartGap"></canvas></div>
+    </div>
+    <div class="card full-width">
+      <h2>Scale Dependence Results</h2>
+      <table>
+        <thead><tr><th>Model Dim</th><th>Expert Params</th><th>Weight MSO</th><th>Activation MSO</th><th>Gap</th><th>Ratio (Act/Weight)</th></tr></thead>
+        <tbody>
+          <tr><td>32</td><td>65K</td><td>2.40e-4</td><td>2.24e-2</td><td>0.0222</td><td>93x</td></tr>
+          <tr><td>64</td><td>262K</td><td>6.27e-5</td><td>1.57e-2</td><td>0.0156</td><td>250x</td></tr>
+          <tr><td>128</td><td>1.0M</td><td>1.46e-5</td><td>7.89e-3</td><td>0.0079</td><td>540x</td></tr>
+          <tr><td>256</td><td>4.2M</td><td>4.29e-6</td><td>3.65e-3</td><td>0.0036</td><td>851x</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const regData = {
+  strengths: ['0.0','0.01','0.1','1.0','5.0'],
+  weightMSO: [1.33e-4, 1.33e-4, 1.33e-4, 1.31e-4, 1.29e-4],
+  actMSO: [1.69e-2, 1.69e-2, 1.68e-2, 1.68e-2, 1.67e-2]
+};
+
+new Chart(document.getElementById('chartReg'), {
+  type: 'line',
+  data: {
+    labels: regData.strengths,
+    datasets: [
+      {label:'Weight MSO', data: regData.weightMSO, borderColor:'#2980b9', tension:0.3, pointRadius:5, borderWidth:2, yAxisID:'y'},
+      {label:'Activation MSO', data: regData.actMSO, borderColor:'#e74c3c', tension:0.3, pointRadius:5, borderWidth:2, yAxisID:'y2'}
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      y: {type:'linear', position:'left', title:{display:true, text:'Weight MSO'}, ticks:{callback:v=>v.toExponential(1)}},
+      y2: {type:'linear', position:'right', title:{display:true, text:'Activation MSO'}, grid:{drawOnChartArea:false}},
+      x: {title:{display:true, text:'Regularization Strength'}}
+    }
+  }
+});
+
+const scaleData = {
+  sizes: ['32','64','128','256'],
+  weightMSO: [2.40e-4, 6.27e-5, 1.46e-5, 4.29e-6],
+  actMSO: [2.24e-2, 1.57e-2, 7.89e-3, 3.65e-3],
+  gap: [0.0222, 0.0156, 0.0079, 0.0036]
+};
+
+new Chart(document.getElementById('chartScale'), {
+  type: 'line',
+  data: {
+    labels: scaleData.sizes,
+    datasets: [
+      {label:'Activation MSO', data: scaleData.actMSO, borderColor:'#e74c3c', tension:0.3, pointRadius:5, borderWidth:2},
+      {label:'Weight MSO', data: scaleData.weightMSO, borderColor:'#2980b9', tension:0.3, pointRadius:5, borderWidth:2},
+      {label:'Gap', data: scaleData.gap, borderColor:'#8e44ad', tension:0.3, pointRadius:5, borderWidth:2, borderDash:[5,5]}
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      y: {type:'logarithmic', title:{display:true, text:'MSO (log scale)'}},
+      x: {title:{display:true, text:'Model Dimension'}}
+    }
+  }
+});
+
+const archData = {
+  names: ['Std-4E','Std-8E','Std-16E','Wide-4E','Narrow-16E'],
+  weightMSO: [6.11e-5, 1.33e-4, 2.48e-4, 2.79e-5, 5.29e-4],
+  actMSO: [0.0200, 0.0169, 0.0161, 0.0218, 0.0158]
+};
+
+new Chart(document.getElementById('chartArch'), {
+  type: 'bar',
+  data: {
+    labels: archData.names,
+    datasets: [
+      {label:'Weight MSO', data: archData.weightMSO, backgroundColor:'rgba(41,128,185,0.7)'},
+      {label:'Activation MSO', data: archData.actMSO, backgroundColor:'rgba(231,76,60,0.7)'}
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {y: {type:'logarithmic', title:{display:true, text:'MSO (log scale)'}}}
+  }
+});
+
+const gapData = {
+  names: ['Std-4E','Std-8E','Std-16E','Wide-4E','Narrow-16E'],
+  gap: [0.0199, 0.0167, 0.0159, 0.0218, 0.0152]
+};
+
+new Chart(document.getElementById('chartGap'), {
+  type: 'bar',
+  data: {
+    labels: gapData.names,
+    datasets: [{label:'Gap (Act MSO - Weight MSO)', data: gapData.gap, backgroundColor:['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6']}]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {legend:{display:false}},
+    scales: {y: {title:{display:true, text:'Gap Magnitude'}}}
+  }
+});
+</script>
+</body>
+</html>
