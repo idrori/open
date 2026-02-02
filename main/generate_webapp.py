@@ -55,14 +55,14 @@ for p in problems:
     cat_full = cat_names.get(p["cat"], p["cat"])
     prob_base = "problems/" + p["cat"] + "/" + p["slug"] + "/"
     paper_path = prob_base + "paper/main.pdf"
-    infographic_path = prob_base + "paper/infographic.jpg"
+    poster_path = prob_base + "paper/poster.jpg"
     slides_path = prob_base + "paper/slides.pdf"
     app_path = prob_base + "webapp/index.html"
 
     links = ""
     if p["has_pdf"]:
         links += '<a href="' + paper_path + '" target="_blank" rel="noopener" class="paper-link">Paper</a>'
-    links += '<a href="' + infographic_path + '" target="_blank" rel="noopener" class="review-link">Infographic</a>'
+    links += '<a href="' + poster_path + '" target="_blank" rel="noopener" class="review-link">Poster</a>'
     links += '<a href="' + slides_path + '" target="_blank" rel="noopener" class="revision-link">Slides</a>'
     if p["has_webapp"]:
         links += '<a href="' + app_path + '" target="_blank" rel="noopener" class="app-link">App</a>'
@@ -267,7 +267,7 @@ footer a{{color:var(--accent);text-decoration:none}}
     <div class="pipe-step"><div class="pipe-num">2</div><div class="pipe-label">Data</div></div>
     <div class="pipe-step"><div class="pipe-num">3</div><div class="pipe-label">Code</div></div>
     <div class="pipe-step"><div class="pipe-num">4</div><div class="pipe-label">Paper</div></div>
-    <div class="pipe-step"><div class="pipe-num">5</div><div class="pipe-label">Infographic</div></div>
+    <div class="pipe-step"><div class="pipe-num">5</div><div class="pipe-label">Poster</div></div>
     <div class="pipe-step"><div class="pipe-num">6</div><div class="pipe-label">Slides</div></div>
     <div class="pipe-step"><div class="pipe-num">7</div><div class="pipe-label">App</div></div>
   </div>
