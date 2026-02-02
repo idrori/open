@@ -187,8 +187,9 @@ footer a{{color:var(--accent);text-decoration:none}}
 ::-webkit-scrollbar-track{{background:var(--bg)}}
 ::-webkit-scrollbar-thumb{{background:var(--bg4);border-radius:3px}}
 @media(max-width:600px){{
-  .problem-row{{grid-template-columns:40px 1fr;gap:0.5rem;padding:0.6rem 0.8rem}}
-  .problem-links,.problem-row.header .problem-links{{display:none}}
+  .problem-row{{grid-template-columns:40px 1fr;gap:0.3rem 0.5rem;padding:0.6rem 0.8rem}}
+  .problem-links{{grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap;gap:0.4rem}}
+  .problem-row.header .problem-links{{display:none}}
   .hero-stats{{gap:1.5rem}}
   .pipeline-steps{{flex-wrap:wrap}}
   .pipe-step{{min-width:80px;flex:none;width:calc(25% - 1px)}}
