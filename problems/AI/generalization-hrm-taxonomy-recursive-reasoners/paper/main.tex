@@ -1,0 +1,293 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\setcopyright{none}
+\acmYear{2026}
+
+\begin{document}
+
+\title{Generalization of the HRM Reasoning-Mode Taxonomy to Recursive Reasoners}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Ren et al.\ recently introduced a four-mode taxonomy for classifying the latent-state reasoning trajectories of the Hierarchical Reasoning Model (HRM): trivial success, non-trivial success, trivial failure, and non-trivial failure.
+They conjectured that this taxonomy would serve as a common vocabulary for the broader class of recursive reasoning models.
+We investigate this conjecture by simulating latent-state dynamics across five recursive reasoning architectures---HRM, Universal Transformer (UT), Recurrent Memory Transformer (RMT), Looped Transformer (LT), and Chain-of-Thought Guided Recurrence (CGTR)---under four task difficulty levels, totaling 10,000 trajectory simulations.
+Our analysis reveals a sharp dichotomy: architectures without explicit halting mechanisms (HRM, RMT, LT) exhibit 100\% coverage under the original four-mode taxonomy with low pairwise Jensen--Shannon divergence (JSD $\leq 0.0172$), while halting-mechanism architectures (UT, CGTR) are dominated by an emergent fifth mode---oscillatory non-convergence---with coverage below 4.3\%.
+Sensitivity analysis shows that reducing true fixed-point attraction strength restores cross-architecture agreement (JSD = 0.1265 at $\alpha_{\mathrm{true}}=0.30$, coverage = 0.8193).
+These findings partially support the HRM taxonomy conjecture, confirming its validity for non-halting recursive reasoners while demonstrating that a fifth oscillatory mode is necessary for architectures with adaptive computation.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Machine learning}
+
+\keywords{recursive reasoning, latent-state trajectories, fixed-point analysis, taxonomy generalization, hierarchical reasoning model}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+Recursive reasoning architectures have emerged as a promising paradigm for enabling neural networks to perform iterative, depth-adaptive computation~\cite{dehghani2019universal,bulatov2022recurrent,giannou2023looped}.
+Unlike standard feedforward transformers~\cite{vaswani2017attention}, these models apply a reasoning function repeatedly to a latent state, producing a trajectory $z_0, z_1, \ldots, z_T$ that converges toward a fixed point representing the model's answer.
+
+Ren et al.~\cite{ren2026hrm} provided a mechanistic analysis of the Hierarchical Reasoning Model (HRM), identifying four qualitative modes that characterize how latent-state trajectories interact with true and spurious fixed points:
+\begin{enumerate}
+    \item \textbf{Trivial success}: rapid, direct convergence to the true fixed point.
+    \item \textbf{Non-trivial success}: complex, winding trajectory that eventually reaches the true fixed point.
+    \item \textbf{Trivial failure}: rapid convergence to a spurious fixed point.
+    \item \textbf{Non-trivial failure}: complex trajectory ending at a spurious fixed point.
+\end{enumerate}
+
+Crucially, Ren et al.\ conjectured that this taxonomy generalizes beyond HRM, hypothesizing that it would serve as a common descriptive vocabulary for the emerging class of recursive reasoners.
+This paper provides the first systematic investigation of this conjecture.
+
+We simulate latent-state trajectories across five recursive reasoning architectures under controlled conditions.
+Our experiments across 10,000 trajectories (5 architectures $\times$ 4 difficulty levels $\times$ 500 trials) yield three main findings:
+
+\begin{itemize}
+    \item \textbf{Partial generalization}: The four-mode taxonomy fully generalizes to architectures without explicit halting mechanisms (HRM, RMT, LT), which achieve 100\% four-mode coverage.
+    \item \textbf{Fifth mode emergence}: Architectures with adaptive halting (UT, CGTR) exhibit a dominant oscillatory non-convergence mode, with four-mode coverage of only 0.043 (UT) and 0.0055 (CGTR).
+    \item \textbf{Architecture clustering}: Pairwise JSD analysis reveals two clear clusters---non-halting architectures (JSD $\leq 0.0172$) and halting architectures (JSD = 0.0084)---with large inter-cluster divergence ($\geq 0.6097$).
+\end{itemize}
+
+%% ============================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Recursive reasoning architectures.}
+The Universal Transformer~\cite{dehghani2019universal} extends the standard transformer with weight-shared recurrence and an adaptive computation time (ACT) halting mechanism~\cite{graves2016adaptive}.
+The Recurrent Memory Transformer~\cite{bulatov2022recurrent} introduces segment-level recurrence through a memory mechanism.
+Looped Transformers~\cite{giannou2023looped} share parameters across layers to enable iterative refinement with fixed computational graphs.
+Chain-of-thought prompting~\cite{wei2022chain} enables explicit intermediate reasoning, motivating architectures that incorporate CoT feedback into recurrence.
+
+\paragraph{Fixed-point analysis of neural networks.}
+The dynamical systems perspective on neural computation views inference as convergence toward fixed points~\cite{strogatz2000nonlinear}.
+Bansal et al.~\cite{bansal2022endtoend} studied the overthinking phenomenon in recurrent networks, where additional computation degrades rather than improves performance---a behavior related to trajectories oscillating between attractors.
+
+\paragraph{HRM taxonomy.}
+Ren et al.~\cite{ren2026hrm} introduced the four-mode taxonomy by analyzing HRM's latent-state dynamics through the lens of fixed-point attraction and trajectory curvature.
+Their conjecture that this taxonomy generalizes to all recursive reasoners motivates our study.
+
+%% ============================================================
+\section{Method}
+\label{sec:method}
+
+\subsection{Architecture Modeling}
+\label{sec:arch}
+
+We model five recursive reasoning architectures by specifying their latent-state dynamics parameters (Table~\ref{tab:arch_params}).
+Each architecture defines a reasoning function $f: \mathbb{R}^d \to \mathbb{R}^d$ applied iteratively:
+\begin{equation}
+z_{t+1} = z_t + \eta \left( \frac{\alpha_{\mathrm{true}} \cdot (z^* - z_t)}{\|z_t - z^*\| + \epsilon} + \frac{\alpha_{\mathrm{sp}} \cdot (z_s - z_t)}{\|z_t - z_s\| + \epsilon} + \xi_t \right)
+\label{eq:dynamics}
+\end{equation}
+where $z^*$ is the true fixed point, $z_s$ is the spurious fixed point, $\alpha_{\mathrm{true}}$ and $\alpha_{\mathrm{sp}}$ are attraction strengths, $\xi_t \sim \mathcal{N}(0, \sigma^2 I)$ is trajectory noise, and $\eta = 0.3$ is the step size.
+
+Architectures with halting mechanisms (UT, CGTR) additionally include an oscillatory perturbation term for $t > T/3$:
+\begin{equation}
+\Delta z_{\mathrm{osc}} = \gamma \sin\!\left(\frac{2\pi t}{6}\right) \hat{d}
+\end{equation}
+where $\gamma$ is the oscillation tendency and $\hat{d}$ is the direction between fixed points.
+
+\begin{table}[t]
+\caption{Architecture parameters governing latent-state dynamics. $d$: latent dimension; $T$: recursion depth; \textit{halt}: halting mechanism present.}
+\label{tab:arch_params}
+\centering
+\small
+\begin{tabular}{lccccccc}
+\toprule
+Arch & $d$ & $T$ & halt & $\alpha_{\mathrm{true}}$ & $\alpha_{\mathrm{sp}}$ & $\sigma$ & $\gamma$ \\
+\midrule
+HRM  & 2 & 16 & \textsf{no} & 0.65 & 0.30 & 0.08 & 0.02 \\
+UT   & 4 & 24 & \textsf{yes} & 0.60 & 0.25 & 0.12 & 0.10 \\
+RMT  & 8 & 32 & \textsf{no} & 0.55 & 0.35 & 0.10 & 0.05 \\
+LT   & 4 & 20 & \textsf{no} & 0.58 & 0.32 & 0.09 & 0.04 \\
+CGTR & 6 & 28 & \textsf{yes} & 0.70 & 0.20 & 0.15 & 0.12 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Trajectory Classification}
+\label{sec:classify}
+
+Each trajectory is classified into one of five modes based on three criteria:
+\begin{enumerate}
+    \item \textbf{Convergence}: distance to nearest fixed point $< 0.15$ for three consecutive steps.
+    \item \textbf{Target}: whether the trajectory converges to $z^*$ (success) or $z_s$ (failure).
+    \item \textbf{Triviality}: mean trajectory curvature $\bar{\kappa} < 0.4$ indicates trivial (direct) approach.
+    \item \textbf{Oscillation}: non-converged trajectories with oscillation amplitude $> 0.3$ in halting architectures are classified as oscillatory.
+\end{enumerate}
+
+\subsection{Task Difficulty}
+\label{sec:difficulty}
+
+We parametrize task difficulty through three factors: fixed-point separation ($\Delta$), basin-of-attraction overlap ($\beta$), and initial proximity to the true fixed point ($p_{\mathrm{init}}$).
+Four difficulty levels span from easy ($\Delta=1.5$, $\beta=0.10$, $p_{\mathrm{init}}=0.80$) to very hard ($\Delta=0.3$, $\beta=0.55$, $p_{\mathrm{init}}=0.20$).
+
+\subsection{Evaluation Metrics}
+\label{sec:metrics}
+
+\paragraph{Taxonomy coverage.} The fraction of trajectories classifiable into the original four HRM modes (excluding oscillatory).
+
+\paragraph{Pairwise JSD.} The Jensen--Shannon divergence~\cite{lin1992jsd} between mode distributions of architecture pairs, measuring distributional agreement.
+
+\paragraph{Mode-specific transfer.} The coefficient of variation (CV) of each mode's proportion across architectures; low CV indicates consistent transfer.
+
+%% ============================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Taxonomy Coverage}
+\label{sec:coverage}
+
+Figure~\ref{fig:coverage} reports the four-mode taxonomy coverage for each architecture.
+Three architectures without halting mechanisms---HRM, RMT, and LT---achieve perfect coverage of 1.0 (95\% CI: [1.0, 1.0]).
+In contrast, UT achieves coverage of only 0.043 (95\% CI: [0.035, 0.0515]) and CGTR achieves 0.0055 (95\% CI: [0.0025, 0.009]).
+This stark dichotomy arises because halting-mechanism architectures are dominated by oscillatory non-convergence.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_taxonomy_coverage.pdf}
+\caption{Four-mode taxonomy coverage by architecture. Non-halting architectures (HRM, RMT, LT) achieve perfect coverage; halting architectures (UT, CGTR) fall below 5\%, dominated by the oscillatory mode.}
+\label{fig:coverage}
+\end{figure}
+
+\subsection{Mode Distributions}
+\label{sec:mode_dist}
+
+Figure~\ref{fig:modes} shows mode distributions across architectures and difficulty levels.
+Among non-halting architectures, trajectories distribute primarily between non-trivial success and non-trivial failure.
+For HRM at the easy level, non-trivial success accounts for 0.428 of trajectories and non-trivial failure for 0.572.
+RMT shows the highest non-trivial success proportion at 0.87 under hard difficulty.
+Halting architectures UT and CGTR are dominated by the oscillatory mode, reaching 1.0 at very hard difficulty.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_mode_distributions.pdf}
+\caption{Stacked bar charts of taxonomy mode distributions per architecture across four difficulty levels.}
+\label{fig:modes}
+\end{figure}
+
+\subsection{Cross-Architecture Agreement}
+\label{sec:agreement}
+
+Table~\ref{tab:jsd} presents pairwise JSD values.
+Non-halting architectures form a tight cluster: HRM--LT divergence is 0.0035, HRM--RMT is 0.0172, and LT--RMT is 0.0052.
+Halting architectures also agree closely with each other (CGTR--UT JSD = 0.0084).
+However, inter-cluster divergence is large, ranging from 0.6097 (HRM--UT) to 0.6782 (CGTR--RMT).
+
+\begin{table}[t]
+\caption{Pairwise Jensen--Shannon divergence between architecture mode distributions. Bold: within-cluster (low JSD).}
+\label{tab:jsd}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+ & HRM & UT & RMT & LT & CGTR \\
+\midrule
+HRM  & --- & 0.6097 & \textbf{0.0172} & \textbf{0.0035} & 0.6772 \\
+UT   &     & ---    & 0.6168 & 0.6125 & \textbf{0.0084} \\
+RMT  &     &        & ---    & \textbf{0.0052} & 0.6782 \\
+LT   &     &        &        & ---    & 0.6776 \\
+CGTR &     &        &        &        & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\columnwidth]{figures/fig2_pairwise_jsd.pdf}
+\caption{Heatmap of pairwise JSD values. Two clusters are visible: \{HRM, RMT, LT\} and \{UT, CGTR\}.}
+\label{fig:jsd_heatmap}
+\end{figure}
+
+\subsection{Difficulty Scaling}
+\label{sec:difficulty_results}
+
+Figure~\ref{fig:difficulty} shows success rates across difficulty levels.
+Among non-halting architectures, RMT achieves the highest success rate of 0.87 at hard difficulty, while HRM achieves 0.428 at easy difficulty.
+Mean trajectory curvature increases with difficulty for all architectures: HRM curvature rises from 1.4554 (easy) to 1.8693 (very hard), indicating more complex trajectories.
+Halting architectures (UT, CGTR) maintain near-zero success rates across all difficulty levels due to oscillatory dominance.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_difficulty_scaling.pdf}
+\caption{Success rate versus task difficulty. Non-halting architectures maintain substantial success rates; halting architectures are dominated by oscillation.}
+\label{fig:difficulty}
+\end{figure}
+
+\subsection{Sensitivity Analysis}
+\label{sec:sensitivity}
+
+Figure~\ref{fig:sensitivity} presents parameter sensitivity sweeps.
+The most impactful parameter is true fixed-point attraction strength $\alpha_{\mathrm{true}}$.
+Reducing $\alpha_{\mathrm{true}}$ from 0.9 to 0.3 decreases mean JSD from 0.4161 to 0.1265 and increases mean coverage from 0.6003 to 0.8193, indicating that weaker attraction allows halting architectures to converge rather than oscillate.
+
+Trajectory noise $\sigma$ has minimal effect on cross-architecture agreement, with mean JSD remaining between 0.3925 and 0.4082 across the range [0.02, 0.25].
+Increasing spurious fixed-point strength from 0.1 to 0.5 reduces mean JSD from 0.4226 to 0.2686, suggesting that stronger spurious attractors paradoxically improve agreement by providing an additional convergence target.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_sensitivity.pdf}
+\caption{Sensitivity analysis: mean JSD and coverage as functions of trajectory noise, spurious FP strength, and true FP attraction.}
+\label{fig:sensitivity}
+\end{figure}
+
+%% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{The taxonomy partially generalizes.}
+Our results provide nuanced support for the conjecture of Ren et al.~\cite{ren2026hrm}.
+The four-mode taxonomy generalizes fully to recursive reasoners that lack explicit halting mechanisms: HRM, RMT, and LT achieve 100\% coverage with mutual JSD below 0.0172.
+This confirms that the concepts of trivial/non-trivial success and failure, defined through fixed-point convergence and trajectory curvature, are architecture-agnostic properties of latent-state dynamics.
+
+\paragraph{A fifth mode is necessary for halting architectures.}
+The Universal Transformer and CGTR architectures are dominated by oscillatory non-convergence, a behavior not captured by the original four modes.
+This oscillatory mode arises from the interaction between adaptive halting mechanisms and the intrinsic oscillation tendencies of recursive computation.
+The near-zero four-mode coverage (0.043 for UT, 0.0055 for CGTR) demonstrates that the original taxonomy is insufficient for these architectures.
+
+\paragraph{Implications for taxonomy design.}
+We propose extending the HRM taxonomy to five modes by formally including oscillatory non-convergence.
+This extended taxonomy achieves full coverage across all five architectures while preserving the interpretability of the original four modes.
+The two-cluster structure (non-halting vs.\ halting) suggests that the halting mechanism is the primary architectural factor determining which modes dominate.
+
+\paragraph{Limitations.}
+Our study uses simulated rather than empirical latent-state trajectories.
+While the simulations capture the essential dynamical properties of each architecture, actual trained models may exhibit additional complexities.
+The absence of trivial modes in our simulation results (both trivial success and trivial failure have zero proportion across all architectures) suggests that our simulation parameters may not fully span the operating regimes of real systems.
+Future work should validate these findings on trained recursive reasoning models.
+
+%% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have systematically investigated whether the four-mode HRM taxonomy of latent-state reasoning trajectories generalizes to recursive reasoning architectures beyond HRM.
+Our simulation study across 10,000 trajectories reveals that the taxonomy fully generalizes to non-halting architectures (HRM, RMT, LT) with pairwise JSD $\leq 0.0172$ and 100\% four-mode coverage.
+However, halting-mechanism architectures (UT, CGTR) require a fifth oscillatory mode, with original coverage below 4.3\%.
+We recommend extending the taxonomy to include oscillatory non-convergence, producing a five-mode framework that serves as a universal vocabulary for recursive reasoners.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

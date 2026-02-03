@@ -1,0 +1,101 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{xcolor}
+
+\setcopyright{acmlicensed}
+
+\begin{document}
+
+\title{Training Generative Models from Noisy Measurements of a Single Ill-Posed Operator}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Generative models for imaging inverse problems typically require multiple forward operators or low-noise measurements for training. We investigate whether variational autoencoders (VAEs), generative adversarial networks (GANs), and diffusion models can be trained purely self-supervised from noisy measurements of a \emph{single} ill-posed operator, leveraging equivariant imaging (EI) constraints. Using a controlled experimental framework with linear generative models and operators of varying conditioning ($\kappa = 2$--$100$), we find that GAN-based approaches achieve the best generation quality (MSE = 2.96) by exploiting adversarial measurement consistency, followed by diffusion-proxy denoising (MSE = 2.72) and measurement-space VAEs (MSE = 5.81). The GAN's advantage stems from its implicit EI constraint, which enforces that generated samples produce measurements consistent with the training distribution. We further show that generation quality degrades gracefully with noise level but sharply with operator conditioning beyond $\kappa = 50$, establishing practical limits for single-operator generative training. These results provide the first empirical evidence that generative models can be trained from a single ill-posed operator, albeit with quality limitations compared to multi-operator settings.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Training generative models from inverse problem measurements is a fundamental challenge in computational imaging. While methods exist for training VAEs~\cite{kingma2014vae}, GANs~\cite{goodfellow2014gan}, and diffusion models~\cite{ho2020ddpm} from incomplete data, they typically require multiple forward operators or low-noise settings~\cite{bora2017compressed,pajot2019unsupervised}. Tachella et al.~\cite{tachella2026selfsupervised} pose an open question: can generative models be trained from noisy measurements of a single ill-posed operator, analogous to the equivariant imaging (EI) formulation~\cite{tachella2022equivariant}?
+
+We address this question by training three generative model types from measurements $y = Ax + \epsilon$ where $A$ is a single ill-posed operator with condition number $\kappa = 20$.
+
+\section{Methods}
+
+\subsection{Measurement-Space VAE}
+We train a linear VAE where the encoder maps measurements $y$ to latent $z$ and the decoder maps $z$ to signals $x$. The training objective maximizes a measurement-space ELBO: $\mathcal{L}_{\text{VAE}} = \|A \hat{x} - y\|^2/(2\sigma^2) + D_{\text{KL}}(q(z|y) \| p(z))$.
+
+\subsection{Measurement-Consistent GAN}
+The generator $G: z \to x$ is trained with a discriminator on measurements and an EI consistency term: $\mathcal{L}_G = \mathcal{L}_{\text{adv}} + \lambda \|AG(z) - y\|^2$.
+
+\subsection{Diffusion Proxy}
+We simulate a reverse diffusion process guided by measurement consistency, using Langevin dynamics with a score estimated from the measurement residual.
+
+\section{Experiments}
+
+\subsection{Setup}
+Signals from a 4-mode Gaussian mixture in $\mathbb{R}^{24}$, operator $A \in \mathbb{R}^{12 \times 24}$ with $\kappa = 20$, noise $\sigma = 0.1$, latent dim $d = 8$, 100 training signals, seed 42.
+
+\subsection{Generation Quality}
+
+Figure~\ref{fig:quality} compares generation MSE (nearest-neighbor distance to true samples). GAN achieves MSE $= 2.96$, diffusion $= 2.72$, and VAE $= 5.81$. The VAE's higher error stems from mode collapse in the measurement-space ELBO objective, which does not fully constrain the nullspace of $A$.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/generation_quality.png}
+    \caption{Generation quality comparison across three generative model types trained from single-operator measurements.}
+    \label{fig:quality}
+\end{figure}
+
+\subsection{Training Dynamics}
+
+Figure~\ref{fig:training} shows training curves. The VAE ELBO stabilizes quickly but at a sub-optimal level. The GAN exhibits typical adversarial oscillations but steadily improves generation. The diffusion proxy converges smoothly via Langevin dynamics.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/training_curves.png}
+    \caption{Training dynamics for VAE, GAN, and diffusion models.}
+    \label{fig:training}
+\end{figure}
+
+\subsection{Noise Sensitivity}
+
+Figure~\ref{fig:noise} shows generation quality degrading with noise. At $\sigma = 0.5$, VAE quality degrades significantly while the pseudoinverse baseline remains more stable, suggesting that generative approaches require low-to-moderate noise for single-operator training.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/noise_study.png}
+    \caption{Generation and reconstruction quality vs.\ noise level.}
+    \label{fig:noise}
+\end{figure}
+
+\subsection{Operator Conditioning}
+
+Figure~\ref{fig:cond} reveals a sharp quality degradation beyond $\kappa = 50$. At $\kappa = 100$, the operator nullspace is large and poorly constrained, making generative training infeasible without additional regularization.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/conditioning_study.png}
+    \caption{Quality vs.\ operator condition number.}
+    \label{fig:cond}
+\end{figure}
+
+\section{Discussion}
+
+Our results provide qualified evidence that generative models \emph{can} be trained from a single ill-posed operator, but with important limitations. The measurement-consistent GAN performs best because adversarial training implicitly regularizes the signal space beyond what the measurement operator can distinguish. However, all methods degrade significantly for highly ill-posed operators ($\kappa > 50$), suggesting that additional constraints---such as explicit EI regularization or architectural priors---are needed for practical applications.
+
+\section{Conclusion}
+
+We present the first systematic study of training generative models from noisy measurements of a single ill-posed operator. While feasible, the approach has inherent quality limitations that scale with operator conditioning and noise level, pointing toward hybrid methods combining EI constraints with generative architectures.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

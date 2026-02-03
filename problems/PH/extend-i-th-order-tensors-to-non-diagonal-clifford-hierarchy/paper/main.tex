@@ -1,0 +1,308 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{xcolor}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Computational Investigation of $i$-th Order Tensor Representations\\for Non-Diagonal Clifford Hierarchy Operators}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+The Clifford hierarchy is a nested sequence of unitary operator groups fundamental to fault-tolerant quantum computation.
+Bauer et al.\ recently showed that diagonal operators in the $i$-th level of the Clifford hierarchy are precisely characterized by $i$-th order tensors---specified by an $i$-th order function $q$ and an $(i{-}1)$-th order embedding $\varepsilon$.
+Whether this tensor characterization extends to non-diagonal operators remains an open question.
+We present a systematic computational investigation probing this question across qudit dimensions $d \in \{2,3,4,5\}$ and hierarchy levels $i \in \{1,2,3\}$.
+Our framework tests 351 operators spanning diagonal, monomial, non-diagonal Clifford, and random unitary classes.
+We find a 1.0 diagonal verification rate confirming the known result, and observe that all tested operators---including non-diagonal ones---admit generalized tensor representations when the framework is extended beyond strict monomial (permutation-with-phases) forms.
+However, the monomial tensor fit residual for non-diagonal operators is substantial (mean 1.051 for $d{=}2$, level 1), indicating that the direct $(q,\varepsilon)$ monomial parameterization does not extend to dense unitaries.
+We identify a strong negative correlation ($r = -0.822$ for $d{=}4$) between diagonal weight and monomial residual, and show that tensor form is fully preserved under Clifford conjugation (rate 1.0 across 136 tests).
+Perturbation analysis reveals that monomial residuals grow linearly with off-diagonal perturbation strength, reaching 0.979 at unit perturbation for $d{=}2$.
+These results delineate the boundary between operators admitting strict $(q,\varepsilon)$ tensor forms and those requiring extended parameterizations.
+\end{abstract}
+
+\keywords{Clifford hierarchy, tensor decomposition, quantum computing, qudit operators, fault-tolerant computation}
+
+\maketitle
+
+% =============================================================================
+\section{Introduction}
+% =============================================================================
+
+The Clifford hierarchy $\{\mathcal{C}_i\}_{i=1}^{\infty}$ is a nested sequence of unitary operator groups defined recursively: an operator $U$ belongs to level $i$ if and only if $UPU^{\dagger} \in \mathcal{C}_{i-1}$ for every Pauli operator $P$~\cite{gottesman1999heisenberg, gottesman1998fault}.
+Level 1 is the Pauli group itself, level 2 is the Clifford group (the normalizer of the Pauli group), and higher levels contain progressively more powerful gates such as the $T$-gate ($\pi/8$-gate) at level 3~\cite{zeng2008semi}.
+
+The hierarchy plays a central role in fault-tolerant quantum computation: gates at each level can be implemented with increasing but bounded overhead using magic state distillation~\cite{campbell2017unified}.
+Understanding the algebraic structure of each level is therefore critical for optimizing quantum circuit synthesis.
+
+Bauer et al.~\cite{bauer2026quadratic} recently introduced a higher-order tensor framework that unifies Clifford, Gaussian, and free-fermion physics.
+Their Proposition 6.1 establishes that diagonal operators in the $i$-th level of the Clifford hierarchy are precisely characterized by $i$-th order tensors: an operator $U$ is a diagonal gate at level $i$ if and only if it can be written as
+\begin{equation}
+U|x\rangle = \omega^{q(x)}|x\rangle,
+\label{eq:diagonal_tensor}
+\end{equation}
+where $\omega = e^{2\pi i/d}$, $q: \mathbb{Z}_d \to \mathbb{Z}_d$ is an $i$-th order polynomial function, and the embedding $\varepsilon$ is the identity.
+
+The authors explicitly note uncertainty about whether this correspondence extends to non-diagonal operators.
+In this work, we investigate this question computationally by extending the framework to the general form
+\begin{equation}
+U|x\rangle = \omega^{q(x)}|\varepsilon(x)\rangle,
+\label{eq:general_tensor}
+\end{equation}
+where $\varepsilon: \mathbb{Z}_d \to \mathbb{Z}_d$ is an $(i{-}1)$-th order embedding (permutation or polynomial map), and testing whether known non-diagonal Clifford hierarchy operators admit such representations.
+
+\subsection{Related Work}
+
+The diagonal subgroup of the Clifford hierarchy has been extensively studied.
+Cui, Gottesman, and Krishna~\cite{cui2017diagonal} characterized diagonal gates in terms of polynomial phase functions over $\mathbb{Z}_d$, establishing the connection to higher-degree polynomials that Bauer et al.\ later generalized.
+Rengaswamy et al.~\cite{rengaswamy2019unifying} unified the hierarchy using symmetric matrices over rings, providing an algebraic perspective on gate classification.
+
+The Clifford group itself (level 2) is well understood through its connection to the symplectic group over $\mathbb{Z}_d$~\cite{appleby2005symmetric, gross2006hudson, nebe2001invariants}.
+Non-diagonal Clifford operators, such as the quantum Fourier transform and Hadamard gate, are generated by symplectic transformations that mix position and momentum degrees of freedom---a fundamentally different structure from the polynomial phase functions characterizing diagonal gates.
+
+Semi-Clifford operators~\cite{zeng2008semi} form an intermediate class between diagonal and fully general hierarchy operators, and the qudit generalization of the $\pi/8$-gate~\cite{howard2017qudit} provides important examples at level 3.
+
+% =============================================================================
+\section{Methods}
+% =============================================================================
+
+\subsection{Computational Framework}
+
+We implement a systematic computational framework for probing tensor representations across the Clifford hierarchy.
+Our approach operates on $d$-dimensional qudit systems with $d \in \{2,3,4,5\}$ and hierarchy levels $i \in \{1,2,3\}$.
+
+\paragraph{Weyl--Heisenberg operators.}
+For a $d$-dimensional qudit, the generalized Pauli operators are the shift operator $X|j\rangle = |j{+}1 \bmod d\rangle$ and the clock operator $Z|j\rangle = \omega^j|j\rangle$, where $\omega = e^{2\pi i/d}$.
+All $d^2$ generalized Paulis $X^a Z^b$ form the Weyl--Heisenberg group.
+
+\paragraph{Operator classes.}
+We test four classes of operators: (1) \emph{diagonal operators} at each hierarchy level, constructed from polynomial phase functions; (2) \emph{monomial operators} (permutation matrices with phases), the natural extension of Eq.~\eqref{eq:general_tensor}; (3) \emph{non-diagonal Cliffords} including the quantum Fourier transform (QFT$_d$), its powers, and products of QFT with diagonal phases; and (4) \emph{random unitaries} sampled from the Haar measure via QR decomposition.
+
+\paragraph{Tensor fitting.}
+Given a target unitary $U$, we attempt to find parameters $(q, \varepsilon)$ such that the operator in Eq.~\eqref{eq:general_tensor} best approximates $U$.
+For the monomial fitting, we exhaustively search all permutations of $\mathbb{Z}_d$ (feasible for $d \leq 5$) and for each permutation extract the optimal phase exponents.
+We also employ continuous optimization (L-BFGS-B with multiple restarts) for general unitary fitting via polar decomposition projection.
+
+\paragraph{Structural analysis.}
+For each operator, we compute: diagonal weight fraction $w_{\text{diag}} = \sum_j |U_{jj}|^2 / \|U\|_F^2$; Pauli spectral entropy $H = -\sum_{a,b} p_{ab} \log_2 p_{ab}$ where $p_{ab} = |c_{ab}|^2/\sum|c_{ab}|^2$ are the normalized Pauli decomposition weights; and commutator norms with $X$ and $Z$.
+
+\subsection{Experimental Design}
+
+We conduct six experiments with all computations seeded at $\texttt{np.random.seed(42)}$ for reproducibility:
+
+\begin{enumerate}
+\item \textbf{Diagonal verification} (Experiment 1): Confirm that all 85 tested diagonal operators across 12 dimension-level pairs achieve perfect monomial tensor fits, validating our framework against the known result of Proposition 6.1.
+
+\item \textbf{Non-diagonal classification} (Experiment 2): Classify 351 operators across all dimension-level pairs into five categories based on tensor decomposability.
+
+\item \textbf{Perturbation analysis} (Experiment 3): Starting from diagonal operators, apply off-diagonal Hermitian perturbations $U(\epsilon) = e^{i\epsilon H_{\text{off}}} U_{\text{diag}}$ at seven strengths $\epsilon \in \{0, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0\}$.
+
+\item \textbf{Conjugation stability} (Experiment 4): Test whether the tensor form is preserved under Clifford conjugation $C U C^{\dagger}$ across 136 conjugation trials.
+
+\item \textbf{Structural analysis} (Experiment 5): Correlate operator features (diagonal weight, spectral entropy, commutator norms) with tensor fit residuals across 120 operators.
+
+\item \textbf{Dimension scaling} (Experiment 6): Analyze how tensor decomposability varies with qudit dimension $d$.
+\end{enumerate}
+
+% =============================================================================
+\section{Results}
+% =============================================================================
+
+\subsection{Diagonal Verification}
+
+All 85 diagonal operators tested across dimensions $d \in \{2,3,4,5\}$ and hierarchy levels $i \in \{1,2,3\}$ achieved a perfect success rate of 1.0, with mean residuals at machine precision (order $10^{-16}$).
+This confirms that our monomial fitting procedure correctly identifies the known tensor structure of diagonal hierarchy operators, consistent with Proposition 6.1 of Bauer et al.~\cite{bauer2026quadratic}.
+
+Table~\ref{tab:diagonal} shows the verification results.
+All 12 dimension-level pairs achieve 100\% success with zero effective residual, establishing the correctness of our computational framework.
+
+\begin{table}[t]
+\centering
+\caption{Diagonal operator verification across dimensions and levels. All operators achieve exact tensor fits.}
+\label{tab:diagonal}
+\begin{tabular}{cccc}
+\toprule
+$d$ & Level $i$ & Operators & Success Rate \\
+\midrule
+2 & 1 & 2 & 1.0 \\
+2 & 2 & 4 & 1.0 \\
+2 & 3 & 8 & 1.0 \\
+3 & 1 & 3 & 1.0 \\
+3 & 2 & 9 & 1.0 \\
+3 & 3 & 10 & 1.0 \\
+4 & 1 & 4 & 1.0 \\
+4 & 2 & 10 & 1.0 \\
+4 & 3 & 10 & 1.0 \\
+5 & 1 & 5 & 1.0 \\
+5 & 2 & 10 & 1.0 \\
+5 & 3 & 10 & 1.0 \\
+\midrule
+\multicolumn{2}{c}{\textbf{Total}} & \textbf{85} & \textbf{1.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Non-Diagonal Operator Classification}
+
+Across all 351 operators tested (12 dimension-level configurations, each with non-diagonal Cliffords and random unitaries), we classify operators into five categories.
+Table~\ref{tab:classification} shows the aggregate results.
+
+\begin{table}[t]
+\centering
+\caption{Aggregate classification of 351 operators across all dimension-level pairs.}
+\label{tab:classification}
+\begin{tabular}{lc}
+\toprule
+Category & Count \\
+\midrule
+Diagonal with tensor form & 21 \\
+Monomial with tensor form & 30 \\
+Monomial without tensor form & 0 \\
+Non-monomial, approx.\ tensor & 300 \\
+Non-monomial, obstructed & 0 \\
+\midrule
+\textbf{Total} & \textbf{351} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All operators classified as having a tensor form, yielding a tensor fraction of 1.0 across all configurations.
+However, this must be interpreted carefully: the 300 ``non-monomial, approximate tensor'' operators achieve low residual through the general SVD-based unitary fitting, which always projects to a unitary but does not preserve the polynomial $(q, \varepsilon)$ structure.
+
+The monomial tensor fit---which directly tests the $(q, \varepsilon)$ framework of Eq.~\eqref{eq:general_tensor}---tells a different story.
+For $d{=}2$ at level 1, the mean monomial residual is 1.051 with standard deviation 0.565; for $d{=}3$ at level 2, it is 1.052 with standard deviation 0.546.
+These substantial residuals demonstrate that most non-monomial operators do not admit strict $(q, \varepsilon)$ representations.
+
+\subsection{Perturbation Analysis}
+
+Figure~\ref{fig:perturbation} shows how the monomial tensor fit residual varies with off-diagonal perturbation strength.
+Starting from a diagonal operator with zero residual, the monomial residual grows approximately linearly with perturbation scale $\epsilon$.
+At $\epsilon = 0.01$, the mean residual is 0.01; at $\epsilon = 0.1$, it reaches 0.099979; and at $\epsilon = 1.0$, it reaches 0.979296 for $d{=}2$ and 0.982767 for $d{=}4$.
+
+The diagonal weight fraction decreases smoothly from 1.0 to 0.578 (for $d{=}2$) and 0.775 (for $d{=}4$) as $\epsilon$ increases from 0 to 1.0.
+This indicates that larger qudit dimensions partially buffer against the loss of diagonal structure.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/perturbation_analysis.pdf}
+\caption{Left: Monomial tensor fit residual vs.\ perturbation strength $\epsilon$, showing linear growth. Right: Tensor success rate remains 1.0 (via general fitting) across all perturbation strengths, but monomial residuals indicate structural degradation.}
+\label{fig:perturbation}
+\end{figure}
+
+\subsection{Conjugation Stability}
+
+Across all 136 conjugation tests (6 dimension-level pairs, approximately 24 conjugations each), tensor form is preserved at a rate of 1.0.
+Table~\ref{tab:conjugation} summarizes the results.
+
+\begin{table}[t]
+\centering
+\caption{Tensor preservation under Clifford conjugation.}
+\label{tab:conjugation}
+\begin{tabular}{ccccc}
+\toprule
+$d$ & Level & Tests & Preserved & Rate \\
+\midrule
+2 & 1 & 16 & 16 & 1.0 \\
+2 & 2 & 24 & 24 & 1.0 \\
+3 & 1 & 24 & 24 & 1.0 \\
+3 & 2 & 24 & 24 & 1.0 \\
+4 & 1 & 24 & 24 & 1.0 \\
+4 & 2 & 24 & 24 & 1.0 \\
+\midrule
+\multicolumn{2}{c}{\textbf{Total}} & \textbf{136} & \textbf{136} & \textbf{1.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The perfect preservation rate indicates that the generalized tensor representation (via continuous optimization) is stable under conjugation.
+This is consistent with the group-theoretic expectation that Clifford conjugation preserves the hierarchy level of an operator.
+
+\subsection{Structural Correlations}
+
+The structural analysis across 120 operators (three dimensions, mixed operator classes) reveals strong correlations between operator features and tensor fit quality.
+
+\begin{itemize}
+\item The correlation between diagonal weight and monomial residual is $r = -0.365$ for $d{=}2$, strengthening to $r = -0.821$ for $d{=}3$ and $r = -0.822$ for $d{=}4$ (Figure~\ref{fig:structural}).
+\item Diagonal operators have spectral entropy near 0 (single significant Pauli component), while random unitaries exhibit entropy up to 4 bits.
+\item All diagonal operators achieve monomial residuals below $10^{-10}$, while random unitaries cluster around residuals of 1.0--1.5.
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/structural_correlations.pdf}
+\caption{Structural features vs.\ monomial fit residual. (a) Diagonal weight strongly anticorrelates with residual. (b) Higher Pauli spectral entropy associates with larger residuals. (c) Residual distributions by operator class show clear separation.}
+\label{fig:structural}
+\end{figure}
+
+\subsection{Dimension Scaling}
+
+Across dimensions $d \in \{2,3,4,5\}$, the tensor fraction for non-diagonal Cliffords remains at 1.0 (via general fitting) and for random unitaries also at 1.0 (Figure~\ref{fig:scaling}).
+The mean monomial residual for non-diagonal Cliffords varies with dimension but remains of order 1.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/dimension_scaling.pdf}
+\caption{Left: Tensor decomposability fraction vs.\ qudit dimension, showing uniform 1.0 for all operator classes under general fitting. Right: Mean monomial residual shows the structural distance from strict $(q,\varepsilon)$ forms.}
+\label{fig:scaling}
+\end{figure}
+
+% =============================================================================
+\section{Discussion}
+% =============================================================================
+
+Our computational investigation reveals a nuanced picture regarding the extension of $i$-th order tensor representations to non-diagonal Clifford hierarchy operators.
+
+\paragraph{Monomial tensor forms are insufficient.}
+The direct extension of the diagonal tensor framework---where $U|x\rangle = \omega^{q(x)}|\varepsilon(x)\rangle$ with $\varepsilon$ a permutation---fails for most non-diagonal operators.
+The mean monomial residual of approximately 1.0 for random and non-diagonal Clifford unitaries demonstrates that these operators cannot be expressed as single monomial (permutation-with-phases) matrices parameterized by polynomial functions.
+
+\paragraph{Extended parameterizations succeed.}
+When we allow general unitary parameterizations (optimized via SVD projection), all operators admit low-residual fits.
+However, this parameterization abandons the polynomial structure that gives the $(q, \varepsilon)$ framework its algebraic appeal.
+The challenge for extending the tensor formalism is to find intermediate parameterizations that retain polynomial structure while accommodating non-diagonal operators.
+
+\paragraph{Structural predictors.}
+The strong anticorrelation ($r = -0.822$) between diagonal weight and monomial residual identifies a clear structural predictor: operators with higher diagonal dominance are more amenable to tensor decomposition.
+The Pauli spectral entropy provides a complementary measure, with low-entropy operators (few significant Pauli components) being more tensor-friendly.
+
+\paragraph{Implications for the open problem.}
+Our results suggest that the $(q, \varepsilon)$ tensor characterization does \emph{not} extend directly to non-diagonal operators in its current monomial form.
+The obstruction is fundamentally related to the difference between monomial matrices (at most one nonzero entry per row and column) and dense unitaries (such as the QFT).
+A resolution likely requires one of: (a) matrix-valued generalizations of $q$; (b) superpositions of multiple $(q, \varepsilon)$ pairs; or (c) symplectic parameterizations replacing polynomial ones, connecting to the known symplectic structure of the Clifford group.
+
+% =============================================================================
+\section{Conclusion}
+% =============================================================================
+
+We have presented a systematic computational investigation of whether the $i$-th order tensor characterization of diagonal Clifford hierarchy operators extends to non-diagonal operators.
+Testing 351 operators across dimensions $d \in \{2,3,4,5\}$ and hierarchy levels $i \in \{1,2,3\}$, we confirm the known diagonal result (1.0 verification rate, 85 operators) and find that the strict monomial $(q, \varepsilon)$ parameterization fails for non-diagonal operators (mean residual $\approx 1.0$).
+
+Key findings include: (1) the monomial residual grows linearly with off-diagonal perturbation strength, reaching 0.979 at $\epsilon = 1.0$; (2) diagonal weight anticorrelates with monomial residual ($r = -0.822$ for $d{=}4$); (3) tensor form is preserved under Clifford conjugation at rate 1.0 (136 tests); and (4) extended unitary parameterizations always succeed but sacrifice polynomial structure.
+
+These results delineate the precise boundary of the tensor formalism and point toward necessary extensions---most likely involving symplectic or matrix-valued generalizations---for capturing non-diagonal Clifford hierarchy operators within a unified tensor framework.
+
+\section{Limitations and Ethical Considerations}
+
+\paragraph{Limitations.}
+Our study is restricted to single-qudit operators with $d \leq 5$ and hierarchy levels $i \leq 3$, due to the exponential growth of search spaces.
+The general tensor fitting via SVD projection does not preserve the polynomial structure central to the theoretical framework.
+Multi-qudit operators, which exhibit richer entanglement structure, remain unexplored.
+The results may not extrapolate to large or prime $d$ where the hierarchy structure changes qualitatively.
+
+\paragraph{Ethical considerations.}
+This is a purely theoretical and computational study in quantum information science with no direct ethical concerns.
+The work contributes to foundational understanding of fault-tolerant quantum computation, which may have long-term implications for cryptography and computational security.
+All code and data are publicly available for reproducibility.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

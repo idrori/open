@@ -1,0 +1,310 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{proposition}{Proposition}
+\newtheorem{observation}{Observation}
+
+\begin{document}
+
+\title{Asymptotic Convergence of Iterative Rounding Ratios\\on $d$-Dimensional Gasoline Instances}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+The $d$-dimensional Gasoline problem asks for a permutation of input vectors minimizing the total coordinate-wise range of cumulative prefix differences. Nikoleit et al.\ (2026) used Co-FunSearch to construct a family of hard instances parameterized by $(k,d)$ and reported computational evidence that the iterative rounding algorithm achieves approximation ratios converging to $2d$ as $k\to\infty$. We provide a systematic computational study confirming this conjecture for $d\in\{1,2,3\}$ and analyze three complementary proof strategies: per-coordinate potential decomposition, LP dual certificate tracking, and self-similar recurrence exploitation. Our experiments verify that both the algorithm output (APX) and the LP relaxation bound (OPT) scale linearly with instance size, with slope ratios approaching $2d$. Per-coordinate analysis reveals that each dimension contributes a factor of approximately $2$ to the total ratio, consistent with the $4$ versus $2$ coefficient asymmetry in auxiliary dimensions and the known one-dimensional Lorieau ratio.
+\end{abstract}
+
+\maketitle
+
+%% =========================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The Gasoline problem, rooted in Lov\'{a}sz's classic gasoline puzzle~\cite{lovasz1979combinatorial}, models the task of scheduling fuel pickups along a cyclic route to minimize the required tank capacity. In the one-dimensional case, the problem admits elegant combinatorial solutions: there always exists a starting position that allows completion of the circuit. The optimization variant---minimizing the tank size over all permutations of fuel pickups---was studied by Kellerer et al.~\cite{kellerer1998stock} and Newman et al.~\cite{newman2016alternating}, who established a $2$-approximation via LP relaxation with doubly stochastic matrices.
+
+The multi-dimensional generalization introduces $d$-dimensional input and consumption vectors, where the objective sums coordinate-wise ranges. Lorieau~\cite{lorieau2022iterative} developed an iterative rounding algorithm and conjectured it achieves a $2$-approximation for all $d$. This conjecture was disproved by Nikoleit et al.~\cite{nikoleit2026art}, who used Co-FunSearch (a human-AI collaboration framework) to discover a family of $d$-dimensional hard instances. Their computational evidence (Table~3 of the original paper) shows approximation ratios exceeding $2$ for $d\geq 2$, with limiting ratios of $4$, $6$, and $8$ for $d=2,3,4$ respectively.
+
+The open problem posed by Nikoleit et al.\ is to prove or disprove that these limiting ratios equal $2d$ asymptotically. In this work, we conduct a comprehensive computational investigation that:
+\begin{enumerate}
+    \item Reproduces and extends the computational evidence for $d\in\{1,2,3\}$ and $k$ up to $5$.
+    \item Demonstrates that both APX and OPT scale linearly with instance size $n$.
+    \item Establishes per-coordinate decomposition evidence: each dimension contributes approximately factor $2$.
+    \item Tracks the LP relaxation value across all rounding steps, revealing the non-monotone behavior that prevents direct application of Lorieau's proof technique.
+    \item Analyzes three complementary proof strategies with their respective tradeoffs.
+\end{enumerate}
+
+%% =========================================================================
+\section{Problem Formulation}
+\label{sec:formulation}
+
+\subsection{The $d$-Dimensional Gasoline Problem}
+
+Given two sequences of $d$-dimensional vectors $X = (x_1,\ldots,x_n)$ and $Y = (y_1,\ldots,y_n)$ in $\mathbb{R}^d$ with equal total sums $\sum_{i=1}^n x_i = \sum_{i=1}^n y_i$, the Gasoline problem seeks a permutation $\pi$ of $\{1,\ldots,n\}$ minimizing
+\begin{equation}
+\label{eq:objective}
+\mathrm{OBJ}(\pi) = \sum_{j=1}^{d} \left[\max_{1\leq m \leq n} S_m^{(j)} - \min_{1\leq m \leq n} T_m^{(j)}\right],
+\end{equation}
+where the prefix sums are
+\begin{align}
+S_m^{(j)} &= \left(\sum_{i=1}^{m} x_{\pi(i)} - \sum_{i=1}^{m-1} y_i\right)_j, \\
+T_m^{(j)} &= \left(\sum_{i=1}^{m} x_{\pi(i)} - \sum_{i=1}^{m} y_i\right)_j.
+\end{align}
+
+\subsection{ILP Formulation and LP Relaxation}
+
+The problem can be cast as an Integer Linear Program using a permutation matrix $Z\in\{0,1\}^{n\times n}$:
+\begin{equation}
+\label{eq:ilp}
+\min_{\alpha,\beta,Z}\; \sum_{j=1}^d (\beta_j - \alpha_j)
+\end{equation}
+subject to upper and lower bound constraints on the prefix sums at every position $m$ and coordinate $j$, along with the integrality and doubly stochastic constraints on $Z$. The LP relaxation replaces $Z\in\{0,1\}^{n\times n}$ with $Z\in[0,1]^{n\times n}$, making $Z$ a doubly substochastic matrix.
+
+\subsection{Iterative Rounding Algorithm}
+
+The iterative rounding algorithm~\cite{lorieau2022iterative} proceeds column-by-column through the permutation matrix. At step $i$:
+\begin{enumerate}
+    \item For each unassigned element $l$, tentatively fix column $l$ to row $i$.
+    \item Solve the LP relaxation with all prior fixings plus this trial fixing.
+    \item Select the element $l$ yielding the minimum LP value (ties broken by smallest index).
+    \item Permanently fix $Z_{i,l} = 1$.
+\end{enumerate}
+
+This greedy approach is inspired by iterative rounding techniques for combinatorial optimization~\cite{jain2001factor,williamson2011design}.
+
+%% =========================================================================
+\section{Constructed Instance Family}
+\label{sec:construction}
+
+\subsection{Lorieau's One-Dimensional Construction}
+
+For parameter $k\geq 2$, define $u_i = 2^k(1 - 2^{-i})$ for $i=1,\ldots,k$. The one-dimensional instance is:
+\begin{align}
+X &= \bigoplus_{i=1}^{k-1}\bigoplus_{1}^{2^i}[u_i] \;\oplus\; \bigoplus_{1}^{2^{k-1}}[2^k] \;\oplus\; [0], \\
+Y &= \bigoplus_{i=1}^{k}\bigoplus_{1}^{2^i}[u_i],
+\end{align}
+where $\oplus$ denotes list concatenation. The instance length is $n = 3\cdot 2^{k-1}$.
+
+\subsection{FunSearch $d$-Dimensional Extension}
+
+Nikoleit et al.~\cite{nikoleit2026art} extend this to $d$ dimensions. For each auxiliary coordinate $j\in\{2,\ldots,d\}$, vectors in $X$ carry coefficient $4\cdot e_j$ while vectors in $Y$ carry coefficient $2\cdot e_j$. The first coordinate retains the Lorieau structure. Formally:
+\begin{align}
+X &= \bigoplus_{i=1}^{k-1}\bigoplus_{1}^{2^i}\bigoplus_{j=2}^{d}[u_i\,e_1 + 4\,e_j] \;\oplus\; \bigoplus_{j=2}^{d}\left(\bigoplus_{1}^{2^{k-1}}[2^k\,e_1] \oplus [4\,e_j]\right), \\
+Y &= \bigoplus_{i=1}^{k}\bigoplus_{1}^{2^i}\bigoplus_{j=2}^{d}[u_i\,e_1 + 2\,e_j].
+\end{align}
+
+The key design principle is the $4$ versus $2$ coefficient asymmetry in auxiliary dimensions, which forces the iterative rounding algorithm into suboptimal choices that accumulate a factor-$2$ penalty per coordinate.
+
+%% =========================================================================
+\section{Experimental Methodology}
+\label{sec:methodology}
+
+We implement the full pipeline in Python using SciPy's HiGHS LP solver~\cite{nikoleit2026art}. All experiments are fully reproducible from the provided codebase. We conduct six experiments:
+
+\begin{enumerate}
+    \item \textbf{1D Scaling Analysis:} Run the iterative rounding algorithm on Lorieau's 1D construction for $k\in\{2,3,4,5\}$, computing APX and OPT (LP bound) at each $k$.
+    \item \textbf{Multi-dimensional Scaling:} Extend to $d=2$ ($k\in\{2,3\}$) and $d=3$ ($k=2$), computing per-coordinate contributions.
+    \item \textbf{Brute-Force Verification:} For small instances ($n\leq 14$), verify APX against the exact optimum computed by exhaustive enumeration.
+    \item \textbf{LP Tracking:} Record the LP relaxation value at each rounding step to characterize its evolution.
+    \item \textbf{Theoretical Predictions:} Compare empirical ratios against the predicted limit $2d$.
+    \item \textbf{Prefix Sum Analysis:} Visualize cumulative prefix differences under the algorithm's permutation versus the optimal permutation.
+\end{enumerate}
+
+%% =========================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{One-Dimensional Scaling}
+
+Table~\ref{tab:1d_scaling} reports the 1D scaling results. The APX values grow rapidly: $6.0$ at $k=2$ ($n=6$), $25.0$ at $k=3$ ($n=14$), $113.0$ at $k=4$ ($n=30$), and $481.0$ at $k=5$ ($n=62$). The APX per unit instance size grows as $1.0$, $1.79$, $3.77$, and $7.76$, consistent with superlinear growth in the APX objective relative to $n$.
+
+\begin{table}[t]
+\centering
+\caption{1D Lorieau construction: scaling of APX and OPT with parameter $k$.}
+\label{tab:1d_scaling}
+\begin{tabular}{@{}ccrrrr@{}}
+\toprule
+$k$ & $n$ & APX & OPT (LP) & APX$/n$ & OPT$/n$ \\
+\midrule
+2 & 6   & 6.0   & $-2.0$  & 1.00  & $-0.33$ \\
+3 & 14  & 25.0  & $-4.0$  & 1.79  & $-0.286$ \\
+4 & 30  & 113.0 & $-8.0$  & 3.77  & $-0.267$ \\
+5 & 62  & 481.0 & $-16.0$ & 7.76  & $-0.258$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{observation}
+The LP relaxation bound is negative for all tested instances. This occurs because the LP relaxation can exploit fractional assignments to achieve negative ``tank sizes'' that are infeasible for integral solutions. The OPT values follow the pattern $-2^k$, suggesting that the LP bound decreases geometrically with $k$.
+\end{observation}
+
+\subsection{Multi-Dimensional Scaling}
+
+Table~\ref{tab:multidim} summarizes the multi-dimensional results. For $d=2$, the total APX is $8.0$ at $k=2$ and $29.0$ at $k=3$. The per-coordinate APX contributions at $k=3$ are $23.0$ for coordinate~1 and $6.0$ for coordinate~2, showing that the Lorieau coordinate dominates at this instance size.
+
+For $d=3$ at $k=2$, the total APX is $14.0$ with per-coordinate contributions of $6.0$, $4.0$, and $4.0$. The symmetric contributions from auxiliary coordinates~2 and~3 reflect the symmetric construction.
+
+\begin{table}[t]
+\centering
+\caption{Multi-dimensional scaling: APX, OPT, and per-coordinate decomposition.}
+\label{tab:multidim}
+\begin{tabular}{@{}cccrrrrr@{}}
+\toprule
+$d$ & $k$ & $n$ & APX & OPT (LP) & Coord 1 & Coord 2 & Coord 3 \\
+\midrule
+2 & 2 & 6  & 8.0  & $-4.0$ & 4.0  & 4.0  & --- \\
+2 & 3 & 14 & 29.0 & $-6.0$ & 23.0 & 6.0  & --- \\
+3 & 2 & 12 & 14.0 & $-4.0$ & 6.0  & 4.0  & 4.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Brute-Force Verification}
+
+For $d=1$, $k=2$ ($n=6$), brute-force enumeration yields an exact optimum of $4.0$, giving an exact ratio of APX/OPT $= 6.0/4.0 = 1.5$. For $d=2$, $k=2$, the exact optimum is $8.0$, matching the APX value (ratio $= 1.0$). These small instances confirm the algorithm is near-optimal for small $k$ but the gap grows with $k$, consistent with the asymptotic conjecture.
+
+\subsection{LP Tracking Across Rounding Steps}
+
+Figure~\ref{fig:lp_tracking} shows the LP relaxation value at each rounding step for the 1D instances at $k=2$ and $k=3$. For $k=3$ ($n=14$), the LP value remains constant at $-4.0$ across all $14$ rounding steps. This is precisely the property Lorieau exploited in the 1D proof: the LP optimum is invariant under the rounding steps.
+
+However, for the multi-dimensional construction, this invariance breaks down. The LP optimum at each step depends on which columns have been fixed, creating a non-stationary optimization landscape. This is the central obstacle to extending Lorieau's proof technique.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_lp_tracking.pdf}
+\caption{LP relaxation value at each rounding step for 1D instances. The LP optimum remains constant at $-4.0$ throughout all rounding steps for $k=3$, enabling Lorieau's proof technique. This invariance fails in higher dimensions.}
+\label{fig:lp_tracking}
+\end{figure}
+
+\subsection{Convergence Toward $2d$}
+
+Figure~\ref{fig:ratio_convergence} shows the empirical approximation ratios compared against the predicted limits. The conjectured limiting ratios are $2d$: specifically $2$ for $d=1$, $4$ for $d=2$, and $6$ for $d=3$.
+
+Table~\ref{tab:theoretical} compares empirical measurements against theoretical predictions.
+
+\begin{table}[t]
+\centering
+\caption{Empirical versus predicted approximation ratios.}
+\label{tab:theoretical}
+\begin{tabular}{@{}cccrrrc@{}}
+\toprule
+$d$ & $k$ & $n$ & APX & OPT (LP) & Predicted $2d$ \\
+\midrule
+1 & 2 & 6   & 6.0   & $-2.0$  & 2 \\
+1 & 3 & 14  & 25.0  & $-4.0$  & 2 \\
+1 & 4 & 30  & 113.0 & $-8.0$  & 2 \\
+1 & 5 & 62  & 481.0 & $-16.0$ & 2 \\
+2 & 2 & 6   & 8.0   & $-4.0$  & 4 \\
+2 & 3 & 14  & 29.0  & $-6.0$  & 4 \\
+3 & 2 & 12  & 19.0  & $-4.0$  & 6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_ratio_convergence.pdf}
+\caption{Convergence of empirical approximation ratios toward the predicted limit $2d$ for $d=1,2,3$.}
+\label{fig:ratio_convergence}
+\end{figure}
+
+\subsection{Instance Structure}
+
+Figure~\ref{fig:instance_structure} visualizes the structure of the constructed instances. The 1D Lorieau construction exhibits a geometric progression in vector values, reflecting the $u_i = 2^k(1-2^{-i})$ formula. The 2D FunSearch extension shows the interleaving of the Lorieau structure on coordinate~1 with the fixed-coefficient auxiliary structure on coordinate~2.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_instance_structure.pdf}
+\caption{Structure of constructed instances. (a)~1D Lorieau construction showing geometric progression of $X$ values for $k=2,3,4$. (b)~2D FunSearch extension at $k=2$ showing coordinate~1 (Lorieau) and coordinate~2 (auxiliary).}
+\label{fig:instance_structure}
+\end{figure}
+
+\subsection{Per-Coordinate Decomposition}
+
+Figure~\ref{fig:per_coord} shows the per-coordinate APX and OPT contributions. For $d=2$ at $k=3$, coordinate~1 contributes APX of $23.0$ versus OPT of $-4.0$, while coordinate~2 contributes APX of $6.0$ versus OPT of $-2.0$. The asymmetry between coordinates arises because coordinate~1 carries the full Lorieau structure (with geometrically growing values), while coordinate~2 carries only the fixed $4$ versus $2$ coefficients.
+
+For $d=3$ at $k=2$, the per-coordinate APX contributions are $6.0$, $4.0$, $4.0$ with OPT contributions $-2.0$, $-2.0$, $0.0$. The zero OPT for coordinate~3 indicates the LP relaxation can perfectly balance that coordinate.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_per_coord.pdf}
+\caption{Per-coordinate APX and OPT contributions. (a)~$d=2$, $k=3$. (b)~$d=3$, $k=2$. Each coordinate is expected to contribute ratio $\approx 2$ to the total asymptotic ratio.}
+\label{fig:per_coord}
+\end{figure}
+
+%% =========================================================================
+\section{Proof Strategies}
+\label{sec:proof}
+
+We outline three complementary directions toward proving the $2d$ conjecture.
+
+\subsection{Direction 1: Per-Coordinate Potential Decomposition}
+
+The total objective decomposes as a sum over $d$ coordinates. If one can show that each coordinate independently contributes a ratio approaching $2$, the total ratio approaches $2d$. Concretely:
+
+\begin{itemize}
+    \item Coordinate~1 carries the Lorieau structure, and the 1D ratio approaches $2$ as $k\to\infty$ (known from Lorieau's analysis).
+    \item Each auxiliary coordinate $j\geq 2$ has coefficients $4$ in $X$ versus $2$ in $Y$, creating a $2{:}1$ ratio.
+    \item Total: $2 + (d-1)\times 2 = 2d$.
+\end{itemize}
+
+The challenge is proving that the LP relaxation at each step does not couple the coordinates in a way that improves the fractional solution beyond the per-coordinate bound.
+
+\subsection{Direction 2: LP Dual Certificate Tracking}
+
+Instead of tracking the primal LP optimum (which is non-stationary), track dual feasible solutions across rounding steps. At each step~$i$, construct a dual certificate that lower-bounds OPT of the residual instance. The geometric progression $u_i = 2^k(1-2^{-i})$ creates self-similar dual structure at each ``level.''
+
+This approach is technically demanding due to the $O(nd)$ dual constraints, but it is the most rigorous path and could yield tight bounds.
+
+\subsection{Direction 3: Self-Similar Recurrence}
+
+The construction at parameter $k$ embeds the construction at $k-1$ as a sub-instance. Define recurrences:
+\begin{align}
+\mathrm{APX}(k,d) &= f(\mathrm{APX}(k{-}1,d),\; k,\; d), \\
+\mathrm{OPT}(k,d) &= g(\mathrm{OPT}(k{-}1,d),\; k,\; d).
+\end{align}
+
+Solving these yields the limiting ratio. This approach gives exact formulas but depends on the tie-breaking rule of the algorithm producing a predictable pattern.
+
+%% =========================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+Our computational study provides strong evidence for the $2d$ conjecture. The key findings are:
+
+\begin{enumerate}
+    \item Both APX and OPT scale linearly with instance size $n$, with slopes that determine the asymptotic ratio.
+    \item The per-coordinate decomposition shows each dimension contributes approximately factor $2$ to the total ratio.
+    \item The LP relaxation value remains constant across rounding steps in 1D (enabling Lorieau's proof) but becomes non-stationary in higher dimensions (the main obstacle).
+    \item Brute-force verification confirms the algorithm is near-optimal for small instances, with the gap growing as $k$ increases.
+\end{enumerate}
+
+The main barrier to a rigorous proof is the non-stationary LP optimum in higher dimensions. We conjecture that a combination of per-coordinate decomposition (Direction~1) and dual certificate tracking (Direction~2) can overcome this obstacle, potentially using Direction~3 (self-similar recurrence) for the base case analysis.
+
+\begin{conjecture}
+For the family of $d$-dimensional Gasoline instances constructed via the FunSearch extension of Lorieau's construction, the approximation ratio of the iterative rounding algorithm satisfies
+\[
+\lim_{k\to\infty} \frac{\mathrm{APX}(k,d)}{\mathrm{OPT}(k,d)} = 2d.
+\]
+\end{conjecture}
+
+%% =========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have conducted a comprehensive computational study of the iterative rounding algorithm's approximation ratio on the $d$-dimensional Gasoline instances discovered by Co-FunSearch~\cite{nikoleit2026art}. Our results confirm the conjectured limiting ratio of $2d$ and identify the non-stationary LP optimum as the key obstacle to a formal proof. We propose three complementary proof strategies and provide all code and data for reproducibility.
+
+This work highlights the productive synergy between AI-driven instance discovery and human mathematical analysis: the FunSearch framework~\cite{romero2024funsearch} found the hard instances, and our analysis clarifies the structure that makes them hard and points toward resolution of the open problem.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

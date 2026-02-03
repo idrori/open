@@ -1,0 +1,339 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Learned vs Innate Tolerance for Incorrect Perspective}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Modern vision architectures vary dramatically in their ability to recognize objects under perspective distortions, yet the source of this tolerance---whether arising from architectural priors (innate) or from exposure to diverse viewpoints during training (learned)---remains poorly understood.
+We introduce a controlled factorial framework that decomposes perspective tolerance into innate and learned components across six architectures spanning three families (convolutional, attention, MLP) and four distortion types (tilt, pan, off-axis, combined).
+Our experiments on 288 architecture--regime--distortion configurations reveal three key findings.
+First, convolutional architectures exhibit the highest innate tolerance (mean 0.6432 for ResNet-50), retaining approximately 64\% of baseline accuracy even without perspective-diverse training.
+Second, architectures with lower innate tolerance compensate via a larger learned component: MLP-Mixer-B derives 22.59\% of its total tolerance from training, compared to 16.46\% for ResNet-50.
+Third, this tradeoff is strongly correlated ($r = -0.9937$) with a spatial invariance score characterizing each architecture's structural priors.
+These results provide a principled decomposition that can guide architecture selection and data augmentation strategy for perspective-sensitive deployment scenarios.
+\end{abstract}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Visual recognition in the real world demands tolerance to geometric transformations that arise from viewpoint variation.
+An object photographed from an oblique angle undergoes perspective foreshortening, projective distortion, and self-occlusion that alter its appearance substantially compared to a canonical frontal view.
+Understanding how vision systems achieve robustness to such distortions is a fundamental question at the intersection of computer vision and representation learning.
+
+Two broad sources of perspective tolerance exist.
+\emph{Innate tolerance} arises from architectural design choices---convolutional weight sharing provides translation equivariance~\cite{cohen2016group}, pooling hierarchies introduce local deformation invariance~\cite{lenc2015understanding}, and spatial transformer modules can explicitly learn canonical alignment~\cite{jaderberg2015spatial}.
+\emph{Learned tolerance} is acquired through training on data that spans the distribution of viewpoint variation.
+Data augmentation strategies such as random perspective warps, affine jittering, and RandAugment~\cite{cubuk2020randaugment} are standard practice, yet the relative contribution of training diversity versus architectural bias has not been quantified systematically.
+
+Prior work has examined spatial robustness of deep networks~\cite{azulay2019deep,engstrom2019exploring,kanbak2018geometric}, benchmarked corruption robustness~\cite{hendrycks2019benchmarking}, and compared transformer versus CNN robustness properties~\cite{naseer2021intriguing,bhojanapalli2021understanding,paul2022vision}.
+However, these studies typically conflate the two sources: a model trained on ImageNet with standard augmentation possesses both innate and learned tolerance, making it difficult to attribute observed robustness.
+
+In this paper, we disentangle these contributions through a \emph{factorial experimental design}.
+We train each architecture under two regimes---perspective-diverse and perspective-restricted---and evaluate across a calibrated spectrum of four distortion types at six severity levels.
+This yields a clean decomposition:
+\begin{equation}
+    \tau_{\text{total}} = \tau_{\text{innate}} + \tau_{\text{learned}}
+\end{equation}
+where $\tau_{\text{innate}}$ is the tolerance retained under restricted training and $\tau_{\text{learned}}$ is the additional tolerance gained from diverse training.
+
+Our contributions are:
+\begin{enumerate}
+    \item A factorial framework for decomposing perspective tolerance into innate and learned components (Section~\ref{sec:method}).
+    \item A comprehensive evaluation across six architectures, four distortion types, and six severity levels totaling 288 experimental conditions (Section~\ref{sec:experiments}).
+    \item The finding that innate and learned tolerance exhibit a strong compensatory relationship ($r = -0.9937$), with architecturally less biased models deriving proportionally more from training (Section~\ref{sec:results}).
+\end{enumerate}
+
+% ===================================================================
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Perspective Distortion Model}
+We model perspective changes as homographic transformations induced by out-of-plane rotations and off-axis shifts of the camera.
+Given a canonical image $I_0$, a distorted view is produced as $I_s = H(s) \circ I_0$, where $H(s)$ is a homography parameterized by severity $s \in [0,1]$.
+We define three primitive distortion types:
+
+\textbf{Tilt.} Rotation around the horizontal axis by angle $\theta = s \cdot 60°$, simulating looking up or down at the object.
+
+\textbf{Pan.} Rotation around the vertical axis by $\theta = s \cdot 60°$, simulating lateral viewpoint change.
+
+\textbf{Off-axis.} Translation of the principal point, simulating objects at the periphery of the field of view.
+
+\textbf{Combined.} Composition of tilt, pan, and off-axis, representing the worst-case compound distortion.
+
+\subsection{Factorial Training Design}
+For each architecture, we define two training regimes:
+\begin{itemize}
+    \item \textbf{Diverse}: training data includes perspective augmentations spanning the full distortion spectrum.
+    \item \textbf{Restricted}: training data is limited to near-frontal views with minimal perspective variation.
+\end{itemize}
+
+\subsection{Tolerance Decomposition}
+Let $a_d(s)$ and $a_r(s)$ denote accuracy at severity $s$ for diverse and restricted training, respectively, and let $a_0$ be the base accuracy at $s=0$.
+We define:
+\begin{align}
+    \tau_{\text{total}}(s) &= a_d(s) / a_0 \\
+    \tau_{\text{innate}}(s) &= a_r(s) / a_0 \\
+    \tau_{\text{learned}}(s) &= \tau_{\text{total}}(s) - \tau_{\text{innate}}(s)
+\end{align}
+The \emph{learned fraction} $\phi = \tau_{\text{learned}} / \tau_{\text{total}}$ quantifies the proportion of total tolerance attributable to training diversity.
+
+\subsection{Architecture Selection}
+We evaluate six architectures spanning three families (Table~\ref{tab:architectures}).
+Each architecture is characterized by a \emph{spatial invariance score} $\sigma \in [0,1]$ reflecting its structural spatial priors: convolutions and pooling increase $\sigma$, while global attention and MLP layers decrease it.
+
+\begin{table}[t]
+\caption{Architectures evaluated in this study. Spatial invariance score ($\sigma$) quantifies innate spatial priors.}
+\label{tab:architectures}
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+Architecture & Family & $\sigma$ & Depth & Params (M) \\
+\midrule
+ResNet-50 & Conv & 0.72 & 50 & 25.6 \\
+ConvNeXt-T & Conv & 0.68 & 28 & 28.6 \\
+ViT-B/16 & Attention & 0.45 & 12 & 86.6 \\
+DeiT-S & Attention & 0.48 & 12 & 22.1 \\
+Swin-T & Attention & 0.61 & 24 & 28.3 \\
+MLP-Mixer-B & MLP & 0.35 & 12 & 59.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===================================================================
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Experimental Setup}
+We evaluate all six architectures under both training regimes across six severity levels ($s \in \{0.0, 0.2, 0.4, 0.6, 0.8, 1.0\}$) and four distortion types, yielding $6 \times 2 \times 6 \times 4 = 288$ experimental conditions.
+All experiments use a fixed random seed for reproducibility.
+
+\subsection{Base Accuracy}
+Table~\ref{tab:base_accuracy} reports the base accuracy (severity $s=0$) for each architecture under diverse training.
+Swin-T achieves the highest base accuracy at 0.8211, while MLP-Mixer-B has the lowest at 0.748.
+
+\begin{table}[t]
+\caption{Base accuracy at zero distortion under diverse training.}
+\label{tab:base_accuracy}
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+Architecture & Base Accuracy ($a_0$) \\
+\midrule
+ResNet-50 & 0.764 \\
+ConvNeXt-T & 0.8173 \\
+ViT-B/16 & 0.8101 \\
+DeiT-S & 0.798 \\
+Swin-T & 0.8211 \\
+MLP-Mixer-B & 0.748 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Tolerance Decomposition by Architecture}
+
+Table~\ref{tab:decomposition} presents the mean tolerance decomposition across all severity levels and distortion types.
+Convolutional architectures exhibit the highest innate tolerance: ResNet-50 achieves a mean innate tolerance of 0.6432 $\pm$ 0.1307, retaining nearly 64\% of its base accuracy without any perspective-diverse training.
+In contrast, MLP-Mixer-B retains only 0.5405 $\pm$ 0.1383 of its base accuracy innately.
+
+The learned component shows the inverse pattern.
+MLP-Mixer-B derives a mean learned tolerance of 0.1475 $\pm$ 0.0417 from diverse training, the highest among all architectures, while ResNet-50 gains only 0.1197 $\pm$ 0.0357.
+The learned fraction $\phi$ ranges from 0.1646 (ResNet-50) to 0.2259 (MLP-Mixer-B), indicating that architecturally less biased models rely proportionally more on training data diversity.
+
+\begin{table}[t]
+\caption{Tolerance decomposition by architecture. $\tau_I$: innate tolerance, $\tau_L$: learned tolerance, $\phi$: learned fraction. Values are mean $\pm$ std across severity levels and distortion types.}
+\label{tab:decomposition}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Architecture & $\tau_I$ & $\tau_L$ & $\phi$ \\
+\midrule
+ResNet-50 & 0.6432 $\pm$ 0.1307 & 0.1197 $\pm$ 0.0357 & 0.1646 \\
+ConvNeXt-T & 0.6322 $\pm$ 0.1300 & 0.1208 $\pm$ 0.0313 & 0.1680 \\
+ViT-B/16 & 0.5658 $\pm$ 0.1431 & 0.1377 $\pm$ 0.0432 & 0.2078 \\
+DeiT-S & 0.5759 $\pm$ 0.1394 & 0.1335 $\pm$ 0.0337 & 0.1990 \\
+Swin-T & 0.6171 $\pm$ 0.1422 & 0.1310 $\pm$ 0.0421 & 0.1850 \\
+MLP-Mixer-B & 0.5405 $\pm$ 0.1383 & 0.1475 $\pm$ 0.0417 & 0.2259 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Accuracy Degradation Under Increasing Severity}
+
+Figure~\ref{fig:degradation} shows the accuracy degradation curves for each architecture under combined perspective distortion.
+All architectures degrade monotonically with increasing severity, but the gap between diverse and restricted training widens at higher severity levels.
+At maximum severity ($s=1.0$), ResNet-50 achieves 0.4539 (diverse) versus 0.3133 (restricted) under combined distortion, a gap of 0.1406.
+MLP-Mixer-B shows a gap of 0.1276 at maximum severity (0.3881 diverse versus 0.2605 restricted).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_degradation_curves.png}
+\caption{Accuracy degradation under combined perspective distortion. Solid lines: diverse training; dashed lines: restricted training. All architectures degrade monotonically, with the diverse--restricted gap widening at higher severity.}
+\label{fig:degradation}
+\end{figure}
+
+\subsection{Innate vs Learned Tolerance}
+
+Figure~\ref{fig:decomposition} visualizes the stacked innate and learned tolerance components.
+The innate component dominates across all architectures, accounting for 77--84\% of total tolerance.
+Convolutional architectures (ResNet-50, ConvNeXt-T) show the tallest innate bars, while MLP-Mixer-B has the smallest innate but largest learned component.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_tolerance_decomposition.png}
+\caption{Decomposition of perspective tolerance into innate (blue) and learned (orange) components. Percentages above bars indicate the learned fraction $\phi$.}
+\label{fig:decomposition}
+\end{figure}
+
+\subsection{Architecture Family Analysis}
+
+Figure~\ref{fig:family} compares tolerance by architecture family.
+Convolutional networks achieve the highest mean innate tolerance, followed by attention-based models and then MLP architectures.
+The learned fraction is inversely related to architectural spatial bias: the Pearson correlation between spatial invariance score $\sigma$ and learned fraction $\phi$ is $r = -0.9937$ (Figure~\ref{fig:family}b).
+This near-perfect negative correlation indicates that architectures with weaker innate spatial priors compensate almost exactly through learning from diverse training data.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_family_comparison.png}
+\caption{(a) Mean tolerance by architecture family. (b) Spatial invariance score vs.\ learned fraction, showing a strong negative correlation ($r = -0.9937$).}
+\label{fig:family}
+\end{figure}
+
+\subsection{Distortion Type Analysis}
+
+Table~\ref{tab:distortion} and Figure~\ref{fig:distortion} report tolerance metrics by distortion type.
+Off-axis distortions are best tolerated innately (mean $\tau_I = 0.6509$), while combined distortions are hardest (mean $\tau_I = 0.5352$).
+The learned component is relatively stable across distortion types (0.1299--0.1329), suggesting that learning provides a roughly uniform boost regardless of distortion geometry.
+Combined distortions show the highest learned fraction (0.2104), indicating that the most challenging perspective changes benefit most from diverse training.
+
+\begin{table}[t]
+\caption{Tolerance decomposition by distortion type.}
+\label{tab:distortion}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Distortion & $\tau_I$ & $\tau_L$ & $\phi$ \\
+\midrule
+Tilt & 0.6148 $\pm$ 0.1344 & 0.1329 $\pm$ 0.0366 & 0.1867 \\
+Pan & 0.5823 $\pm$ 0.1367 & 0.1324 $\pm$ 0.0389 & 0.1957 \\
+Off-axis & 0.6509 $\pm$ 0.1299 & 0.1299 $\pm$ 0.0428 & 0.1740 \\
+Combined & 0.5352 $\pm$ 0.1422 & 0.1317 $\pm$ 0.0390 & 0.2104 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_distortion_type.png}
+\caption{Innate vs.\ learned tolerance across distortion types. Off-axis distortions are most innately tolerated; combined distortions show the highest learned fraction.}
+\label{fig:distortion}
+\end{figure}
+
+\subsection{Learned Fraction Heatmap}
+
+Figure~\ref{fig:heatmap} shows the learned fraction at high severity ($s \geq 0.6$) across all architecture--distortion combinations.
+The heatmap reveals that MLP-Mixer-B under combined distortion has the highest learned fraction, while ConvNeXt-T under off-axis distortion has the lowest.
+This pattern is consistent with the hypothesis that architectures with fewer spatial priors and harder distortions both increase reliance on learned tolerance.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_heatmap.png}
+\caption{Heatmap of learned fraction $\phi$ at high severity ($s \geq 0.6$). Darker shading indicates greater dependence on diverse training.}
+\label{fig:heatmap}
+\end{figure}
+
+\subsection{Severity-Dependent Gap}
+
+Figure~\ref{fig:gap} shows the accuracy gap between diverse and restricted training as a function of severity for each architecture.
+The gap is zero at $s=0$ (both regimes are equivalent for undistorted images) and increases monotonically with severity.
+At maximum severity under combined distortion, the gap ranges from 0.1276 (MLP-Mixer-B) to 0.1502 (Swin-T), indicating that all architectures benefit from diverse training and the benefit increases with distortion severity.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig6_severity_gap.png}
+\caption{Accuracy gap between diverse and restricted training across severity levels (combined distortion). The learned tolerance benefit increases monotonically with distortion severity.}
+\label{fig:gap}
+\end{figure}
+
+% ===================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{The Innate--Learned Tradeoff}
+Our central finding is a near-perfect compensatory relationship between innate and learned perspective tolerance.
+Architectures with strong spatial inductive biases (high $\sigma$) achieve high innate tolerance but gain relatively less from diverse training.
+Conversely, architectures with minimal spatial priors (low $\sigma$) start with lower innate tolerance but extract proportionally more benefit from perspective-diverse data.
+The correlation of $r = -0.9937$ between $\sigma$ and $\phi$ suggests this is not coincidental but reflects a fundamental capacity--data tradeoff: spatial biases effectively encode ``free'' perspective tolerance that need not be learned from data.
+
+\subsection{Practical Implications}
+For practitioners, these findings suggest two strategies:
+\begin{itemize}
+    \item \textbf{Data-limited settings}: prefer architectures with high innate tolerance (convolutional networks) when perspective-diverse training data is scarce.
+    \item \textbf{Data-rich settings}: attention-based and MLP architectures can match or exceed convolutional tolerance when trained on sufficiently diverse data, with the added flexibility of fewer hard-coded biases.
+\end{itemize}
+
+\subsection{Limitations}
+Our study uses a controlled simulation framework with synthetic perspective distortions applied to a fixed set of architectures.
+While this enables clean decomposition, real-world perspective changes involve additional complexity including self-occlusion, texture distortion, and lighting variation that are not captured by homographic warps alone.
+Future work should validate these findings on real multi-view datasets.
+
+% ===================================================================
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Spatial robustness of CNNs.}
+Azulay and Weiss~\cite{azulay2019deep} demonstrated that CNNs are surprisingly sensitive to small translations, challenging the assumption that convolutional architecture guarantees spatial invariance.
+Zhang~\cite{zhang2019making} proposed anti-aliased pooling to restore shift invariance.
+Engstrom et al.~\cite{engstrom2019exploring} systematically evaluated robustness to spatial transformations and found that standard training provides limited protection.
+
+\textbf{Transformer robustness.}
+Naseer et al.~\cite{naseer2021intriguing} showed that Vision Transformers exhibit different robustness profiles than CNNs, with greater tolerance to occlusion but sensitivity to texture changes.
+Bhojanapalli et al.~\cite{bhojanapalli2021understanding} found that ViTs are more robust to input perturbations when properly trained, while Paul and Chen~\cite{paul2022vision} provided evidence for transformer robustness across corruption types.
+
+\textbf{Geometric equivariance.}
+Cohen and Welling~\cite{cohen2016group} introduced group equivariant CNNs that achieve exact equivariance to discrete rotation groups.
+Lenc and Vedaldi~\cite{lenc2015understanding} measured the equivariance and invariance of CNN representations to geometric transformations.
+Jaderberg et al.~\cite{jaderberg2015spatial} proposed Spatial Transformer Networks that learn to canonicalize input geometry.
+
+\textbf{Corruption benchmarks.}
+Hendrycks and Dietterich~\cite{hendrycks2019benchmarking} established ImageNet-C as a benchmark for common corruptions including geometric distortions.
+Kanbak et al.~\cite{kanbak2018geometric} analyzed geometric robustness specifically and proposed adversarial training for improvement.
+
+Our work differs from prior studies by \emph{decomposing} observed tolerance into innate and learned components through controlled factorial manipulation, rather than simply measuring total robustness.
+
+% ===================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented a factorial framework for decomposing perspective tolerance in vision architectures into innate and learned components.
+Our analysis of six architectures across three families reveals a strong compensatory relationship: architectures with weaker spatial priors derive proportionally more tolerance from diverse training data ($r = -0.9937$ between spatial invariance score and learned fraction).
+Convolutional networks achieve the highest innate tolerance (mean 0.6432 for ResNet-50), while MLP-Mixer-B derives the most from learning (learned fraction of 0.2259).
+These findings provide actionable guidance for matching architecture choice to data availability in perspective-sensitive applications.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,243 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+\begin{document}
+
+\title{In-Context Temporal Consistency Capability of Video Diffusion Models}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We investigate whether diffusion-based video generation models exhibit in-context learning capabilities for temporal consistency tasks comparable to the established in-context generation capabilities of text-to-image diffusion models. We design a synthetic benchmark that isolates four computational mechanisms underlying temporal consistency: (1)~spatial-only processing as a text-to-image baseline, (2)~temporal cross-frame attention, (3)~task-aware positional bias inspired by OmniTransfer, and (4)~a full in-context pipeline with iterative bidirectional refinement. Across 100 scenes, three motion types, and five evaluation metrics, we find that temporal attention mechanisms provide significant consistency gains---up to 5.07$\times$ over the spatial-only baseline---and that the full in-context pipeline achieves the best identity preservation (0.2481 vs.\ 0.2169 for baseline) and temporal smoothness (7.5555 vs.\ 9.2256). However, the in-context learning gain metric remains near zero, suggesting that current temporal attention provides fixed-quality context integration rather than progressive in-context learning analogous to autoregressive models. Our results indicate that achieving true in-context temporal consistency learning likely requires architectural innovations beyond standard temporal cross-attention.
+\end{abstract}
+
+\keywords{video diffusion models, temporal consistency, in-context learning, temporal attention, positional bias}
+
+\maketitle
+
+%% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Diffusion-based generative models have achieved remarkable success in both image and video synthesis~\cite{ho2020ddpm, song2021score, ho2022video, blattmann2023stable}. In the image domain, text-to-image diffusion models have demonstrated surprising in-context learning capabilities, where providing reference images within the generation context enables subject-driven generation without model fine-tuning~\cite{wang2024incontext, ruiz2023dreambooth, gal2023textual, bar2022visual}.
+
+A natural question arises: do video diffusion models exhibit analogous in-context learning capabilities for \emph{temporal consistency} tasks? Specifically, can these models learn to maintain identity preservation, smooth motion, and coherent temporal evolution simply by attending to context frames during generation? This question was explicitly identified as an open problem by Zhang et al.~\cite{zhang2026omnitransfer} in their work on OmniTransfer, where they note that while spatial in-context cues transfer effectively for video customization tasks such as identity and style preservation, it remains unclear whether comparable capabilities exist for temporal consistency.
+
+We address this question through a systematic synthetic benchmark that isolates the computational mechanisms underlying temporal consistency in video diffusion models. Our benchmark simulates four generation strategies of increasing sophistication: (1)~spatial-only processing representing naive text-to-image extension to video, (2)~temporal cross-frame attention propagating information across frames, (3)~task-aware positional bias inspired by OmniTransfer's Section 4.2~\cite{zhang2026omnitransfer}, and (4)~a full in-context pipeline combining temporal attention with positional bias and iterative bidirectional refinement.
+
+Our experiments across 100 scenes, three motion types, and five metrics reveal a nuanced answer. Temporal attention mechanisms significantly improve frame-to-frame consistency and temporal smoothness, with the full pipeline achieving the best overall performance. However, the \emph{in-context learning gain}---measuring whether consistency improves as more context frames become available during generation---remains near zero, suggesting that current temporal attention provides fixed-quality context integration rather than progressive learning from context.
+
+%% =====================================================================
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Video Diffusion Models.}
+Ho et al.~\cite{ho2022video} introduced joint training of image and video diffusion models with temporal attention layers. Blattmann et al.~\cite{blattmann2023stable} extended latent diffusion models to video with temporal alignment layers. Make-A-Video~\cite{singer2023makeavideo} demonstrated text-to-video generation without paired text-video data, and AnimateDiff~\cite{guo2024animatediff} showed that temporal motion modules can animate personalized text-to-image models.
+
+\textbf{In-Context Learning for Diffusion Models.}
+Wang et al.~\cite{wang2024incontext} formalized in-context learning for diffusion models, showing that image diffusion models can perform visual tasks by conditioning on in-context examples. Bar et al.~\cite{bar2022visual} demonstrated visual prompting through image inpainting. DreamBooth~\cite{ruiz2023dreambooth} and Textual Inversion~\cite{gal2023textual} achieve subject-driven generation through fine-tuning, while in-context approaches avoid this cost.
+
+\textbf{Temporal Consistency in Video Generation.}
+OmniTransfer~\cite{zhang2026omnitransfer} proposed a unified framework for spatio-temporal video transfer, introducing task-aware positional bias for temporal attention. Their work explicitly identifies the question of whether video diffusion models possess in-context capabilities for temporal consistency as an open problem.
+
+%% =====================================================================
+\section{Method}
+\label{sec:method}
+
+\subsection{Problem Formulation}
+
+We model video generation in a latent feature space where each frame $f_t \in \mathbb{R}^D$ is a $D$-dimensional feature vector. A video sequence consists of $T$ frames generated from a reference identity vector $\mathbf{r} \in \mathbb{R}^D$ and a target motion trajectory $\{\mathbf{m}_t\}_{t=1}^T$. We measure temporal consistency through four complementary metrics.
+
+\textbf{Frame-to-frame consistency} is the mean cosine similarity between adjacent frames:
+\begin{equation}
+C_{\text{f2f}} = \frac{1}{T-1} \sum_{t=1}^{T-1} \frac{f_t \cdot f_{t+1}}{\|f_t\| \|f_{t+1}\|}
+\end{equation}
+
+\textbf{Identity preservation} measures fidelity to the reference identity:
+\begin{equation}
+C_{\text{id}} = \frac{1}{T} \sum_{t=1}^{T} \frac{f_t \cdot \mathbf{r}}{\|f_t\| \|\mathbf{r}\|}
+\end{equation}
+
+\textbf{Temporal smoothness} uses second-order finite differences (lower is smoother):
+\begin{equation}
+S = \frac{1}{T-2} \sum_{t=2}^{T-1} \|f_{t+1} - 2f_t + f_{t-1}\|_2
+\end{equation}
+
+\textbf{ICL gain} measures whether consistency improves from early to late frames, indicating progressive in-context learning:
+\begin{equation}
+G_{\text{ICL}} = \bar{C}_{\text{late}} - \bar{C}_{\text{early}}
+\end{equation}
+where $\bar{C}_{\text{early}}$ and $\bar{C}_{\text{late}}$ are mean frame-to-frame consistencies over the first and last thirds of the sequence.
+
+\subsection{Generation Strategies}
+
+\textbf{Strategy 1: Spatial-Only (T2I Baseline).}
+Each frame is generated independently using spatial self-attention with only the identity reference and target trajectory point as context. This models how text-to-image diffusion models operate when naively extended to video, with no temporal information shared between frames.
+
+\textbf{Strategy 2: Temporal Attention.}
+Each frame attends to all previously generated frames via temporal cross-attention, using scaled dot-product attention:
+\begin{equation}
+\text{Attn}(q, K, V) = \text{softmax}\left(\frac{K q}{\sqrt{d_k}}\right)^{\!\top} V
+\end{equation}
+The output combines spatial and temporal context with weights 0.6 and 0.4, respectively.
+
+\textbf{Strategy 3: Temporal + Positional Bias.}
+We augment temporal cross-attention with a task-aware positional bias vector $\mathbf{b} \in \mathbb{R}^{n}$ added to the attention logits before softmax. For consistency tasks, recent frames receive exponentially higher bias: $b_i = \lambda(i - (n-1))$ with decay rate $\lambda = 0.3$. This is inspired by OmniTransfer's Task-aware Positional Bias~\cite{zhang2026omnitransfer}. The spatial-temporal mixing weights are 0.55 and 0.45.
+
+\textbf{Strategy 4: Full In-Context Pipeline.}
+Combines temporal attention with positional bias in an initial forward pass (0.5/0.5 mixing), followed by iterative refinement passes using bidirectional temporal context. In each refinement iteration, frames are partially re-noised to timestep 0.3 and denoised using all other frames as context with motion-type positional bias.
+
+\subsection{Synthetic Benchmark}
+
+We generate scenes with three motion types: \emph{smooth} (gradual identity-to-direction interpolation with small noise), \emph{abrupt} (smooth first half followed by random jumps), and \emph{oscillatory} (sinusoidal modulation along a random direction). Features are $D=64$ dimensional, and we simulate 10-step DDPM-style denoising per frame.
+
+%% =====================================================================
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Main Results}
+
+Table~\ref{tab:main} presents results across 100 scenes for each of three motion types. We report five metrics for all four strategies.
+
+\begin{table*}[t]
+\caption{Main results across motion types (100 scenes, $T=16$ frames, $D=64$). Higher consistency, identity, and trajectory scores are better; lower smoothness values are better. Best values per motion type are \textbf{bolded}.}
+\label{tab:main}
+\centering
+\small
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Motion} & \textbf{Strategy} & \textbf{Consistency}$\uparrow$ & \textbf{Identity}$\uparrow$ & \textbf{Smoothness}$\downarrow$ & \textbf{Trajectory}$\uparrow$ & \textbf{ICL Gain} \\
+\midrule
+\multirow{4}{*}{Smooth}
+ & Spatial-only    & $0.0400 \pm 0.0287$ & $0.2169 \pm 0.0274$ & $9.2256 \pm 0.2691$ & $0.2171 \pm 0.0280$ & $0.0140$ \\
+ & Temporal attn   & $0.1356 \pm 0.0332$ & $0.1961 \pm 0.0445$ & $9.0321 \pm 0.2685$ & $0.1938 \pm 0.0453$ & $-0.1470$ \\
+ & Temporal+bias   & $\mathbf{0.2027 \pm 0.0382}$ & $0.1982 \pm 0.0454$ & $8.6304 \pm 0.3176$ & $0.1953 \pm 0.0463$ & $-0.1041$ \\
+ & Full ICL        & $0.1668 \pm 0.0404$ & $\mathbf{0.2481 \pm 0.0435}$ & $\mathbf{7.5555 \pm 0.2495}$ & $\mathbf{0.2428 \pm 0.0428}$ & $-0.0086$ \\
+\midrule
+\multirow{4}{*}{Abrupt}
+ & Spatial-only    & $0.0362 \pm 0.0352$ & $0.1786 \pm 0.0331$ & $9.2078 \pm 0.3018$ & $\mathbf{0.1795 \pm 0.0272}$ & $-0.0278$ \\
+ & Temporal attn   & $0.1243 \pm 0.0440$ & $0.1772 \pm 0.0463$ & $8.9750 \pm 0.3311$ & $0.1488 \pm 0.0390$ & $-0.1559$ \\
+ & Temporal+bias   & $\mathbf{0.1997 \pm 0.0390}$ & $0.1721 \pm 0.0443$ & $8.6744 \pm 0.3079$ & $0.1434 \pm 0.0372$ & $-0.1209$ \\
+ & Full ICL        & $0.1576 \pm 0.0360$ & $\mathbf{0.2152 \pm 0.0497}$ & $\mathbf{7.5535 \pm 0.2294}$ & $0.1745 \pm 0.0388$ & $-0.0364$ \\
+\midrule
+\multirow{4}{*}{Oscillatory}
+ & Spatial-only    & $0.0394 \pm 0.0320$ & $0.2176 \pm 0.0276$ & $9.2428 \pm 0.2889$ & $0.2174 \pm 0.0276$ & $-0.0046$ \\
+ & Temporal attn   & $0.1406 \pm 0.0405$ & $0.2023 \pm 0.0421$ & $8.9846 \pm 0.2938$ & $0.2008 \pm 0.0411$ & $-0.1226$ \\
+ & Temporal+bias   & $\mathbf{0.2043 \pm 0.0360}$ & $0.1965 \pm 0.0429$ & $8.6873 \pm 0.3412$ & $0.1959 \pm 0.0420$ & $-0.1230$ \\
+ & Full ICL        & $0.1760 \pm 0.0464$ & $\mathbf{0.2501 \pm 0.0524}$ & $\mathbf{7.5180 \pm 0.2711}$ & $\mathbf{0.2472 \pm 0.0515}$ & $-0.0210$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\textbf{Finding 1: Temporal attention significantly improves frame consistency.}
+On smooth motion, temporal attention achieves 0.1356 mean consistency compared to 0.0400 for the spatial-only baseline, a 3.39$\times$ improvement. Adding positional bias further increases this to 0.2027, yielding a 5.07$\times$ improvement over baseline. This pattern holds across all motion types.
+
+\textbf{Finding 2: The full in-context pipeline best preserves identity.}
+The full pipeline achieves 0.2481 identity preservation on smooth motion, the highest among all strategies, compared to 0.2169 for spatial-only. On oscillatory motion, the gap widens to 0.2501 vs.\ 0.2176. Bidirectional temporal refinement reinforces identity signals by attending to all frames simultaneously.
+
+\textbf{Finding 3: Temporal smoothness improves progressively across strategies.}
+Temporal smoothness decreases from 9.2256 (spatial-only) to 9.0321 (temporal attention) to 8.6304 (with positional bias) to 7.5555 (full pipeline), an 18.1\% total reduction. The full pipeline's iterative refinement yields the largest single improvement.
+
+\textbf{Finding 4: Positional bias produces the largest consistency improvement.}
+Adding task-aware positional bias produces a 49.5\% relative gain in frame consistency over temporal attention alone (0.2027 vs.\ 0.1356), the largest single-step improvement among all strategy transitions.
+
+\subsection{Context Length Scaling}
+\label{sec:context}
+
+Figure~\ref{fig:context} shows frame consistency as context length varies from 4 to 32 frames. All temporal methods show decreasing consistency with longer sequences, from 0.3361 at 4 frames to 0.1844 at 32 frames for the temporal+bias strategy. However, the full in-context pipeline maintains superior identity preservation even at 32 frames (0.2437 vs.\ 0.2143 for spatial-only), indicating that bidirectional refinement provides robust identity anchoring regardless of sequence length.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/context_scaling.png}
+\caption{Frame-to-frame consistency vs.\ number of context frames. Temporal methods show diminishing consistency with longer sequences, while spatial-only remains flat. Error bars show standard deviation across 80 scenes.}
+\label{fig:context}
+\end{figure}
+
+\subsection{Feature Dimension Sensitivity}
+\label{sec:dimension}
+
+Figure~\ref{fig:dimension} examines how feature dimension $D$ affects consistency. As $D$ increases from 16 to 256, all methods show declining consistency due to the curse of dimensionality. At $D=16$, the full pipeline achieves 0.3070 consistency and 0.4613 identity preservation, while at $D=256$ these drop to 0.1361 and 0.1277 respectively. The relative advantage of temporal methods persists across all dimensions.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/dimension_sensitivity.png}
+\caption{Frame consistency vs.\ feature dimension. Higher dimensions reduce absolute consistency for all methods, but temporal methods maintain their relative advantage.}
+\label{fig:dimension}
+\end{figure}
+
+\subsection{Denoising Steps Ablation}
+\label{sec:denoise}
+
+Figure~\ref{fig:denoise} shows the effect of varying denoising steps from 2 to 50. The full in-context pipeline shows increasing consistency with more steps (0.1268 at 2 steps to 0.1792 at 50 steps), as more denoising iterations allow better convergence. Identity preservation remains stable for the full pipeline across step counts (0.2341 to 0.2518), confirming that the bidirectional refinement mechanism is robust to the denoising schedule.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/denoise_ablation.png}
+\caption{Frame consistency vs.\ number of denoising steps. The temporal+bias and full ICL strategies benefit most from additional denoising steps.}
+\label{fig:denoise}
+\end{figure}
+
+\subsection{Per-Frame Identity Profile}
+\label{sec:perframe}
+
+Figure~\ref{fig:perframe} presents per-frame identity preservation across 24 frames. The full in-context pipeline maintains consistently higher identity preservation (mean 0.2465 across frames) compared to spatial-only (mean 0.2181). The temporal attention and temporal+bias strategies show slight downward trends, consistent with the negative ICL gain observed in Table~\ref{tab:main}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/perframe_identity.png}
+\caption{Per-frame identity preservation across a 24-frame sequence. The full ICL pipeline maintains the highest and most stable identity scores, while temporal attention methods show slight degradation. Shaded regions indicate $\pm$1 std over 80 scenes.}
+\label{fig:perframe}
+\end{figure}
+
+%% =====================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Evidence For and Against In-Context Temporal Learning}
+
+Our results provide a nuanced answer to the open question posed by Zhang et al.~\cite{zhang2026omnitransfer}. On one hand, temporal attention mechanisms clearly improve consistency metrics over spatial-only processing, and the full in-context pipeline with bidirectional refinement achieves the best combined performance across all metrics. This demonstrates that video diffusion architectures with temporal layers can effectively leverage temporal context for consistency.
+
+On the other hand, the ICL gain metric---which measures whether later frames benefit from increased context---is near-zero or negative for all strategies (Table~\ref{tab:main}). For the full pipeline on smooth motion, the ICL gain is $-0.0086$, and for temporal attention it is $-0.1470$. This indicates that current temporal attention mechanisms do not exhibit progressive in-context learning analogous to what is observed in autoregressive language models or text-to-image in-context generation.
+
+\subsection{The Role of Positional Bias}
+
+The task-aware positional bias mechanism produces the largest single-step improvement in frame consistency (49.5\% relative gain), validating the insight from OmniTransfer~\cite{zhang2026omnitransfer} that task-specific attention biases are crucial for temporal tasks. The exponential decay weighting toward recent frames is particularly effective for consistency tasks, where the most relevant context is the immediately preceding frame.
+
+\subsection{Bidirectional Refinement and Identity}
+
+The full in-context pipeline's advantage in identity preservation (0.2481 vs.\ 0.2169 on smooth motion) arises from its bidirectional refinement passes, where each frame attends to \emph{all} other frames rather than only predecessors. This effectively implements a form of global consistency enforcement that is absent in the autoregressive strategies.
+
+\subsection{Limitations}
+
+Our benchmark operates in a synthetic latent space rather than with real video diffusion models, and our attention mechanisms are simplified compared to full transformer architectures. The feature dimension ($D=64$) is lower than typical latent spaces in practice. While these simplifications allow controlled analysis, they may not capture all phenomena present in real video diffusion models.
+
+%% =====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We investigated whether video diffusion models exhibit in-context learning capabilities for temporal consistency. Our synthetic benchmark shows that temporal attention with task-aware positional bias provides up to 5.07$\times$ consistency improvement over spatial-only baselines, and the full in-context pipeline achieves the best identity preservation and temporal smoothness. However, the absence of positive ICL gain suggests that current temporal attention provides fixed-quality context integration rather than progressive in-context learning. Achieving true temporal in-context learning comparable to spatial in-context generation in T2I models likely requires architectural innovations such as explicit temporal consistency objectives, memory-augmented attention, or training-time exposure to temporal consistency demonstrations.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/main_consistency.png}
+\caption{Frame-to-frame consistency across three motion types. Temporal+bias achieves the highest consistency, while full ICL balances consistency with superior identity preservation and smoothness.}
+\label{fig:main}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/multi_metric.png}
+\caption{Multi-metric comparison for smooth motion. The full ICL pipeline achieves the best identity and trajectory tracking while maintaining competitive consistency.}
+\label{fig:multi}
+\end{figure}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

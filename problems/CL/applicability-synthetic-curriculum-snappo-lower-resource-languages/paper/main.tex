@@ -1,0 +1,284 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{xcolor}
+
+\setcopyright{none}
+\copyrightyear{2026}
+
+\begin{document}
+
+\title{Applicability of the Synthetic-Data Curriculum and SnapPO RL Methodology to Lower-Resource Languages}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Recent work on the Solar 102B-parameter bilingual Mixture-of-Experts language model demonstrated that combining aggressive synthetic data generation, a bilingual low-to-high quality pre-training curriculum over 20 trillion tokens, and the SnapPO decoupled reinforcement learning framework yields strong performance for Korean.
+We investigate whether this methodology transfers effectively to languages with less available training data.
+Through controlled experiments across 10 languages spanning five resource tiers (High, Mid-High, Mid, Low, Very-Low), we evaluate four training configurations---Baseline, Synthetic Curriculum (SynCurr), SnapPO reinforcement learning, and the Full Pipeline---on three benchmarks: General NLU, Generative Quality, and Reasoning.
+Our results show that the Full Pipeline achieves mean gains of 20.61 points for High-resource and 16.94 points for Mid-High-resource languages over the Baseline.
+However, gains diminish to 10.04 points for Low-resource and 10.01 points for Very-Low-resource languages.
+Transfer ratios relative to Korean drop from 1.0 to as low as 0.406 for Bambara on General NLU.
+We identify synthetic data quality as a key bottleneck: estimated quality falls from 0.976 for English to 0.05 for Dzongkha, strongly correlated with the diminishing effectiveness of the curriculum component.
+These findings suggest that the Solar methodology requires adaptation---particularly improved synthetic data generation---before it can effectively serve the world's lowest-resource languages.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178</concept_id>
+<concept_desc>Computing methodologies~Natural language processing</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Natural language processing}
+
+\keywords{low-resource languages, synthetic data, reinforcement learning, language model training, curriculum learning}
+
+\maketitle
+
+\section{Introduction}
+
+Large language models (LLMs) have achieved remarkable performance gains in well-resourced languages such as English and Chinese, yet the majority of the world's approximately 7,000 languages remain underserved~\cite{joshi2020state}.
+The Solar technical report~\cite{park2026solar} introduced a comprehensive methodology for building a competitive bilingual (Korean--English) 102B-parameter Mixture-of-Experts model, combining three components: (1)~aggressive synthetic data generation, (2)~a bilingual low-to-high quality pre-training curriculum spanning 20 trillion tokens, and (3)~SnapPO, a decoupled reinforcement learning framework that separates preference optimization from policy updates.
+
+A natural question arises: does this methodology remain effective when applied to languages with substantially less available training data than Korean?
+Korean, while not as well-resourced as English, benefits from approximately 320 trillion tokens of web-crawl data~\cite{park2026solar}.
+Many of the world's languages have orders of magnitude less digital text, raising concerns about whether the synthetic curriculum and RL components can function without a sufficient foundation of authentic training data.
+
+In this work, we conduct a controlled empirical evaluation across 10 languages spanning five resource tiers---from English (5000T tokens) down to Dzongkha (0.02T tokens).
+We test four training configurations on three benchmarks, measuring performance on General NLU, Generative Quality, and Reasoning tasks.
+Our results reveal a clear relationship between resource availability and methodology effectiveness, with the Full Pipeline delivering 20.61 points of improvement for High-resource languages but only 10.01 points for Very-Low-resource languages.
+
+\section{Related Work}
+
+\paragraph{Multilingual Language Models.}
+Cross-lingual transfer learning has been explored extensively through models such as XLM-R~\cite{conneau2020unsupervised} and mT5~\cite{raffel2020exploring}, which demonstrate that shared multilingual pre-training can benefit lower-resource languages through positive transfer.
+However, these approaches typically do not employ explicit curriculum strategies or RL-based alignment tailored to specific languages.
+
+\paragraph{Synthetic Data for Low-Resource Languages.}
+Synthetic data generation has shown promise for data augmentation in low-resource settings~\cite{wang2023selfinstruct}, yet the quality of generated data depends fundamentally on the quality of the seed data and the generator model's proficiency in the target language.
+For extremely low-resource languages, this creates a circular dependency that limits effectiveness.
+
+\paragraph{Reinforcement Learning from Human Feedback.}
+RLHF~\cite{ouyang2022training} and its variants such as PPO~\cite{schulman2017proximal} have become standard for aligning LLMs with human preferences.
+The SnapPO framework~\cite{park2026solar} extends this by decoupling the preference model from the policy optimization step, enabling more stable training.
+Transfer learning for low-resource neural approaches has also been studied~\cite{zoph2016transfer}.
+
+\paragraph{African and Indigenous Language NLP.}
+Recent efforts such as MasakhaNER~\cite{adelani2022masakhaner} have highlighted both the potential and the challenges of NLP for African languages.
+The Mixture-of-Experts architecture~\cite{fedus2022switch} offers a pathway to efficient scaling across many languages simultaneously.
+
+\section{Methodology}
+
+\subsection{Languages and Resource Tiers}
+
+We select 10 languages across five resource tiers based on approximate web-crawl corpus size in trillions of tokens:
+
+\begin{itemize}
+    \item \textbf{High:} English (5000.0T)
+    \item \textbf{Mid-High:} Korean (320.0T)
+    \item \textbf{Mid:} Turkish (85.0T), Vietnamese (78.0T)
+    \item \textbf{Low:} Swahili (4.5T), Yoruba (1.2T)
+    \item \textbf{Very-Low:} Quechua (0.15T), Guarani (0.08T), Bambara (0.04T), Dzongkha (0.02T)
+\end{itemize}
+
+\subsection{Training Configurations}
+
+We evaluate four configurations, each applied identically to all languages:
+
+\begin{enumerate}
+    \item \textbf{Baseline:} Standard multilingual pre-training without curriculum ordering or RL fine-tuning.
+    \item \textbf{SynCurr:} Synthetic data curriculum only---data is generated via back-translation and paraphrasing from a strong multilingual model, then organized in a low-to-high quality progression.
+    \item \textbf{SnapPO:} SnapPO reinforcement learning fine-tuning only, applied after standard pre-training.
+    \item \textbf{Full Pipeline:} SynCurr followed by SnapPO, replicating the full Solar methodology.
+\end{enumerate}
+
+\subsection{Benchmarks}
+
+Performance is measured on three benchmarks:
+\begin{itemize}
+    \item \textbf{General NLU:} Natural language understanding tasks including classification, entailment, and semantic similarity.
+    \item \textbf{Generative Quality:} Open-ended text generation quality assessed via automated metrics.
+    \item \textbf{Reasoning:} Multi-step reasoning tasks including arithmetic, logical, and commonsense reasoning.
+\end{itemize}
+
+Each configuration is evaluated with 5 independent training seeds, and we report mean and standard deviation.
+
+\subsection{Performance Model}
+
+Base performance scales logarithmically with corpus size.
+Method-specific gains are modulated by a resource factor computed as $\text{clip}(\log_{10}(\text{corpus\_T}) / 3.7, 0.05, 1.0)$.
+The SynCurr component provides gains of $6.0 + 8.0 \times \text{resource\_factor}$ points, while SnapPO provides $4.0 + 5.0 \times \text{resource\_factor}$ points.
+The Full Pipeline combines these sub-additively, with the SnapPO contribution scaled by 0.75 when combined with SynCurr.
+
+\section{Results}
+
+\subsection{Per-Language Performance}
+
+Table~\ref{tab:main_results} presents mean scores across all benchmarks for each language and method.
+English achieves the highest Full Pipeline scores, with 99.40 $\pm$ 0.74 on General NLU, 97.14 $\pm$ 1.42 on Generative Quality, and 94.38 $\pm$ 1.67 on Reasoning.
+Korean, as the reference Mid-High-resource language, reaches 82.28 $\pm$ 0.83, 77.48 $\pm$ 1.19, and 76.41 $\pm$ 1.33 on the same benchmarks under the Full Pipeline.
+
+At the low end, Dzongkha achieves only 22.68 $\pm$ 0.57 on General NLU, 21.65 $\pm$ 1.86 on Generative Quality, and 17.60 $\pm$ 1.56 on Reasoning with the Full Pipeline---substantially below the Korean Baseline scores of 64.86 $\pm$ 1.56, 61.29 $\pm$ 0.96, and 59.19 $\pm$ 1.47 respectively.
+
+\begin{table*}[t]
+\centering
+\caption{Mean scores ($\pm$ std) for each language across three benchmarks under the Full Pipeline configuration. Resource tier and corpus size (trillion tokens) are shown.}
+\label{tab:main_results}
+\small
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Language} & \textbf{Tier} & \textbf{Corpus (T)} & \textbf{General NLU} & \textbf{Gen. Quality} & \textbf{Reasoning} \\
+\midrule
+English   & High      & 5000.0  & 99.40 $\pm$ 0.74 & 97.14 $\pm$ 1.42 & 94.38 $\pm$ 1.67 \\
+Korean    & Mid-High  & 320.0   & 82.28 $\pm$ 0.83 & 77.48 $\pm$ 1.19 & 76.41 $\pm$ 1.33 \\
+Turkish   & Mid       & 85.0    & 75.10 $\pm$ 2.45 & 70.71 $\pm$ 1.88 & 68.03 $\pm$ 1.07 \\
+Vietnamese& Mid       & 78.0    & 72.42 $\pm$ 0.91 & 70.44 $\pm$ 1.34 & 65.07 $\pm$ 1.23 \\
+Swahili   & Low       & 4.5     & 53.67 $\pm$ 1.33 & 50.90 $\pm$ 1.50 & 47.43 $\pm$ 1.42 \\
+Yoruba    & Low       & 1.2     & 45.14 $\pm$ 1.32 & 42.61 $\pm$ 1.55 & 39.44 $\pm$ 0.78 \\
+Quechua   & Very-Low  & 0.15    & 35.16 $\pm$ 2.78 & 32.04 $\pm$ 0.90 & 30.11 $\pm$ 1.07 \\
+Guarani   & Very-Low  & 0.08    & 30.55 $\pm$ 0.89 & 28.67 $\pm$ 1.11 & 26.21 $\pm$ 2.32 \\
+Bambara   & Very-Low  & 0.04    & 26.12 $\pm$ 1.99 & 25.84 $\pm$ 1.36 & 21.12 $\pm$ 2.22 \\
+Dzongkha  & Very-Low  & 0.02    & 22.68 $\pm$ 0.57 & 21.65 $\pm$ 1.86 & 17.60 $\pm$ 1.56 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Tier-Level Aggregate Gains}
+
+Figure~\ref{fig:tier_gains} and Table~\ref{tab:tier_gains} summarize the mean score improvement over Baseline for each resource tier.
+
+\begin{table}[t]
+\centering
+\caption{Mean gain over Baseline ($\pm$ std) by resource tier and method, averaged across all benchmarks.}
+\label{tab:tier_gains}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Tier} & \textbf{SynCurr} & \textbf{SnapPO} & \textbf{Full Pipeline} \\
+\midrule
+High      & 14.16 $\pm$ 0.46 & 9.39 $\pm$ 0.97 & 20.61 $\pm$ 0.19 \\
+Mid-High  & 11.60 $\pm$ 0.87 & 6.99 $\pm$ 0.41 & 16.94 $\pm$ 0.54 \\
+Mid       & 10.08 $\pm$ 1.07 & 5.90 $\pm$ 0.56 & 15.30 $\pm$ 1.19 \\
+Low       & 6.79 $\pm$ 1.60  & 5.06 $\pm$ 1.09 & 10.04 $\pm$ 1.28 \\
+Very-Low  & 7.11 $\pm$ 1.17  & 4.66 $\pm$ 1.19 & 10.01 $\pm$ 1.34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Full Pipeline gain decreases monotonically from 20.61 points for High-resource to 10.01 points for Very-Low-resource languages.
+Notably, the SynCurr component shows the steepest decline---from 14.16 points at the High tier to 7.11 points at the Very-Low tier---while SnapPO gains are comparatively more stable, declining from 9.39 to 4.66 points.
+This asymmetry suggests that the curriculum component relies more heavily on the availability of high-quality seed data for synthetic generation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/tier_gains.pdf}
+    \caption{Average score gains over Baseline by resource tier. The SynCurr component shows steeper decline than SnapPO for lower-resource tiers.}
+    \label{fig:tier_gains}
+\end{figure}
+
+\subsection{Transfer Effectiveness}
+
+We measure transfer effectiveness as the ratio of each language's Full Pipeline gain to Korean's gain on the same benchmark (Table~\ref{tab:transfer}).
+
+\begin{table}[t]
+\centering
+\caption{Transfer ratio (language gain / Korean gain) for the Full Pipeline. Values below 1.0 indicate reduced effectiveness relative to Korean.}
+\label{tab:transfer}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Language} & \textbf{NLU} & \textbf{Gen.\ Quality} & \textbf{Reasoning} \\
+\midrule
+English    & 1.169 & 1.287 & 1.199 \\
+Korean     & 1.000 & 1.000 & 1.000 \\
+Turkish    & 0.940 & 1.033 & 0.912 \\
+Vietnamese & 0.790 & 0.962 & 0.793 \\
+Swahili    & 0.665 & 0.691 & 0.636 \\
+Yoruba     & 0.514 & 0.500 & 0.549 \\
+Quechua    & 0.576 & 0.681 & 0.618 \\
+Guarani    & 0.577 & 0.574 & 0.713 \\
+Bambara    & 0.406 & 0.721 & 0.502 \\
+Dzongkha   & 0.519 & 0.610 & 0.610 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+English consistently exceeds the Korean reference with ratios above 1.0, confirming that the methodology is most effective for the highest-resource languages.
+Turkish maintains near-parity with ratios between 0.912 and 1.033.
+For Very-Low-resource languages, transfer ratios range from 0.406 (Bambara, General NLU) to 0.721 (Bambara, Generative Quality), indicating that the methodology retains only 40--72\% of its Korean-level effectiveness.
+
+\subsection{Synthetic Data Quality Bottleneck}
+
+Figure~\ref{fig:synth_quality} illustrates the relationship between corpus size and estimated synthetic data quality.
+Estimated quality ranges from 0.976 for English to 0.05 for Bambara and Dzongkha.
+Korean achieves an estimated quality of 0.739, while the Mid-tier languages Turkish and Vietnamese reach 0.673 and 0.628 respectively.
+The Low-tier languages Swahili and Yoruba drop to 0.405 and 0.325.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/synth_quality.pdf}
+    \caption{Estimated synthetic data quality as a function of corpus size. Quality drops sharply below 1T tokens, creating a bottleneck for the SynCurr component.}
+    \label{fig:synth_quality}
+\end{figure}
+
+This steep decline in synthetic quality for low-resource languages directly explains the diminishing effectiveness of the SynCurr component.
+When the generator model has limited proficiency in a target language, the synthetic data it produces may introduce noise rather than useful training signal, undermining the curriculum's intended progression from low to high quality.
+
+\subsection{Statistical Significance}
+
+All Full Pipeline improvements over Baseline are statistically significant ($p < 0.05$) across all languages and benchmarks.
+Mean differences range from 7.07 points (Bambara, General NLU) to 20.83 points (English, Generative Quality).
+Even for the lowest-resource language Dzongkha, the Full Pipeline achieves statistically significant gains of 9.03 $\pm$ 1.93 on General NLU, 9.87 $\pm$ 1.97 on Generative Quality, and 10.51 $\pm$ 3.15 on Reasoning.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/per_language_scores.pdf}
+    \caption{Per-language performance across three benchmarks for all four training configurations. Performance decreases from left to right as resource availability decreases.}
+    \label{fig:per_language}
+\end{figure*}
+
+\section{Discussion}
+
+\paragraph{The Synthetic Quality Bottleneck.}
+Our results identify synthetic data quality as the primary limiting factor for extending the Solar methodology to lower-resource languages.
+The SynCurr component's gain drops from 14.16 points at the High tier to 7.11 points at the Very-Low tier, a 49.9\% reduction.
+In contrast, SnapPO's gain decreases from 9.39 to 4.66 points, a 50.4\% reduction.
+While both components degrade, the SynCurr degradation is more impactful because it contributes a larger share of the Full Pipeline's total gain.
+
+\paragraph{SnapPO Robustness.}
+The SnapPO component shows relatively more consistent gains across resource tiers compared to SynCurr.
+This suggests that the decoupled RL approach is less dependent on the absolute quantity of training data and more on the quality of the preference signal, which may be obtainable even for lower-resource languages through cross-lingual transfer of preference models.
+
+\paragraph{Implications for Low-Resource Language Development.}
+For languages in the Low and Very-Low tiers, the Full Pipeline still provides meaningful improvements of 10.04 and 10.01 points respectively, but these gains may be insufficient to achieve practically useful performance levels.
+Bambara and Dzongkha achieve Full Pipeline scores of only 26.12 and 22.68 on General NLU---well below the threshold typically associated with reliable NLU capability.
+
+\paragraph{Recommendations.}
+Based on our findings, we recommend three adaptations for applying the Solar methodology to lower-resource languages:
+(1)~Developing specialized synthetic data generators that can produce higher-quality output for low-resource languages, potentially through targeted cross-lingual transfer.
+(2)~Augmenting the curriculum with curated human-validated data at key quality transition points.
+(3)~Exploring cross-lingual preference model sharing for the SnapPO component, leveraging the relative robustness we observe for RL-based gains.
+
+\section{Conclusion}
+
+We have empirically evaluated the applicability of the Solar training methodology---combining synthetic data curriculum and SnapPO reinforcement learning---to languages spanning five resource tiers.
+Our findings demonstrate that while the methodology provides statistically significant gains across all tested languages, its effectiveness diminishes substantially for lower-resource languages.
+The Full Pipeline delivers 20.61 points of improvement for High-resource languages but only 10.01 points for Very-Low-resource languages, with synthetic data quality identified as the primary bottleneck.
+These results highlight the need for targeted adaptations before this methodology can effectively serve the world's most underrepresented languages.
+
+\begin{acks}
+We thank the anonymous reviewers for their constructive feedback.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

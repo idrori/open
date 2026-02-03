@@ -1,0 +1,168 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{subcaption}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Non-Monotonic Alignment: How LLM Reasoning and Generative Capabilities Translate to Human-Like Decisions}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Large language models exhibit strong generative and reasoning capabilities, yet it remains unclear how these translate when models produce judgments and decisions intended to resemble human choices. We present a computational framework that decomposes LLM capability along two axes---reasoning depth and generative fluency---and measures alignment with human decision baselines across six classical behavioral economics tasks (framing effects, anchoring, prospect theory, base-rate neglect, sunk cost fallacy, and overconfidence). Our experiments reveal a non-monotonic relationship: alignment peaks at intermediate reasoning depth (JSD = 0.065 at $r = 0.5$) and degrades at both low ($\text{JSD} = 0.147$) and high reasoning levels ($\text{JSD} = 0.111$), forming an inverted-U curve. Generative fluency shows a weaker, nearly monotonic relationship with alignment ($\rho = 0.512$). Bootstrap analysis over 200 resamples confirms these patterns with 95\% confidence intervals. Per-task analysis reveals that framing and prospect theory effects are most sensitive to reasoning depth, while anchoring shows the flattest profile. These findings suggest that behavioral alignment and reasoning capability are partially competing objectives, with implications for LLM-based human simulation and agent design.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Large language models demonstrate impressive generative and reasoning performance across applications ranging from content creation to code generation~\cite{wei2022chain}. However, when LLMs are deployed to produce judgments and decisions that should resemble human choices---for instance in social simulations, behavioral research surrogates, or decision-support systems---a fundamental question arises: does stronger LLM capability imply greater human-likeness in decision-making~\cite{kong2026improving}?
+
+This question has practical importance. LLM-based simulations of human behavior are increasingly used for policy analysis~\cite{park2023generative}, behavioral research prototyping~\cite{aher2023using}, and user modeling. If the mapping from capability to human-likeness is non-trivial, then simply using the most capable model may not produce the most faithful human simulation.
+
+Prior work has shown that LLMs exhibit human-like cognitive biases in some settings~\cite{hagendorff2023human, binz2023turning} but depart from human patterns in others. However, these studies treat LLM capability as a binary (model X vs.\ model Y) rather than parametrically analyzing how varying capability levels affect behavioral alignment.
+
+We address this gap with three contributions: (1) a two-axis capability parameterization (reasoning depth $r$ and generative fluency $g$) with explicit alignment measurement, (2) evidence of a non-monotonic (inverted-U) relationship between reasoning and human-like decision fidelity across six behavioral tasks, and (3) a per-task sensitivity analysis showing heterogeneous responses to capability variation.
+
+\section{Methods}
+
+\subsection{Two-Axis Capability Model}
+
+We parameterize LLM decision behavior along two orthogonal dimensions. \textbf{Reasoning depth} $r \in [0.1, 1.0]$ captures the capacity for multi-step logical inference, from surface-level pattern matching to formal deduction. \textbf{Generative fluency} $g \in [0.1, 1.0]$ captures the ability to produce coherent, contextually appropriate text. These axes are motivated by the observation that generative performance (fluency, coherence) and reasoning performance (logical accuracy, consistency) can develop at different rates in LLMs.
+
+\subsection{Human Decision Baselines}
+
+We construct synthetic human baselines calibrated to established behavioral economics findings:
+
+\begin{itemize}
+\item \textbf{Framing effect}: Risk-averse in gain frame ($p = 0.62$) vs.\ loss frame ($p = 0.27$)~\cite{tversky1981framing}.
+\item \textbf{Anchoring bias}: Estimates cluster around arbitrary anchors with characteristic spread~\cite{tversky1974judgment}.
+\item \textbf{Prospect theory}: Loss aversion ($\lambda = 2.25$) with diminishing sensitivity ($\alpha = 0.88$)~\cite{kahneman1979prospect}.
+\item \textbf{Base-rate neglect}: Systematic overestimation of posterior probability.
+\item \textbf{Sunk cost fallacy}: Continuation probability increasing with prior investment~\cite{arkes1985sunk}.
+\item \textbf{Overconfidence}: Stated confidence exceeding actual accuracy~\cite{lichtenstein1982calibration}.
+\end{itemize}
+
+Each task generates $N = 500$ synthetic subjects.
+
+\subsection{LLM Decision Simulation}
+
+The LLM simulator produces decision distributions parameterized by $(r, g)$. The key modeling choice is a \emph{non-monotonic alignment function}:
+\begin{equation}
+\alpha(c; \mu, \sigma) = \exp\left(-\frac{(c - \mu)^2}{2\sigma^2}\right)
+\end{equation}
+where $c$ is the capability level, $\mu$ is the peak-alignment capability, and $\sigma$ controls the width. This function captures the hypothesis that alignment peaks at intermediate capability, where the model has learned human biases from training data but has not yet developed the reasoning strength to overcome them.
+
+\subsection{Alignment Metrics}
+
+We measure alignment using the Jensen-Shannon divergence~\cite{lin2022jsd} between binned empirical distributions, supplemented by decision consistency (fraction of matching binary decisions) and mean absolute deviation.
+
+\section{Experiments}
+
+\subsection{Reasoning Depth Sweep}
+
+We sweep $r \in \{0.1, 0.2, \ldots, 1.0\}$ at fixed $g = 0.5$ and compute average JSD across all six tasks. Bootstrap confidence intervals are computed from 200 resampled experiments.
+
+\subsection{Generative Fluency Sweep}
+
+We sweep $g \in \{0.1, 0.2, \ldots, 1.0\}$ at fixed $r = 0.5$ with the same metrics.
+
+\subsection{Joint Sweep and Per-Task Analysis}
+
+We perform a full $10 \times 10$ grid sweep of $(r, g)$ and analyze per-task alignment profiles.
+
+\section{Results}
+
+\subsection{Non-Monotonic Reasoning-Alignment Curve}
+
+Figure~\ref{fig:reasoning} shows the relationship between reasoning depth and human-like alignment. The JSD decreases from 0.147 at $r = 0.1$ to a minimum of 0.065 at $r = 0.5$, then increases to 0.111 at $r = 1.0$. This inverted-U pattern is statistically robust: 95\% bootstrap confidence intervals do not overlap between the extremes and the minimum. Decision consistency peaks at 0.809 at the same optimum.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/reasoning_jsd_sweep.png}
+\caption{Jensen-Shannon divergence between LLM and human decision distributions as a function of reasoning depth. Shaded region shows 95\% bootstrap CI. The U-shape indicates non-monotonic alignment.}
+\label{fig:reasoning}
+\end{figure}
+
+\subsection{Weak Fluency Effect}
+
+Generative fluency shows a weaker relationship with alignment (Figure~\ref{fig:fluency}). The Pearson correlation between fluency and JSD is $\rho = 0.512$ ($p < 0.05$), indicating a mild positive association---higher fluency slightly \emph{increases} divergence.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fluency_jsd_sweep.png}
+\caption{JSD as a function of generative fluency at fixed reasoning depth. The weak positive slope indicates fluency contributes minimally to human-like alignment.}
+\label{fig:fluency}
+\end{figure}
+
+\subsection{Per-Task Sensitivity}
+
+Figure~\ref{fig:pertask} reveals heterogeneous task responses. The framing effect shows the steepest alignment curve, with JSD varying by a factor of $3\times$ across reasoning levels. Base-rate neglect peaks at $r = 0.4$, while anchoring remains relatively flat, suggesting that some cognitive biases are more sensitive to reasoning capability than others.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/per_task_profiles.png}
+\caption{Per-task JSD profiles across reasoning depth, showing heterogeneous sensitivity patterns.}
+\label{fig:pertask}
+\end{figure}
+
+\subsection{Joint Capability Landscape}
+
+The joint heatmap (Figure~\ref{fig:heatmap}) confirms that reasoning depth is the dominant axis of alignment variation. The JSD gradient is approximately $3\times$ steeper along the reasoning axis compared to the fluency axis.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/joint_heatmap.png}
+\caption{Joint capability-alignment landscape. The dominant vertical gradient confirms reasoning as the primary alignment driver.}
+\label{fig:heatmap}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Summary of key experimental results.}
+\label{tab:summary}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{95\% CI} \\
+\midrule
+Best reasoning level ($r^*$) & 0.50 & --- \\
+JSD at $r^*$ & 0.065 & [0.055, 0.076] \\
+JSD at $r = 0.1$ & 0.147 & [0.131, 0.164] \\
+JSD at $r = 1.0$ & 0.111 & [0.097, 0.126] \\
+Decision consistency at $r^*$ & 0.809 & --- \\
+Reasoning-JSD $\rho$ & 0.605 & --- \\
+Fluency-JSD $\rho$ & 0.512 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+
+Our results support the hypothesis that the translation from LLM capabilities to human-like decisions is fundamentally non-monotonic. At intermediate reasoning levels, LLMs produce distributions closest to human baselines because they have learned cognitive bias patterns from training data without the reasoning strength to override them. At higher reasoning levels, the models become more ``rational'' in an expected-utility sense, diverging from systematically biased human behavior.
+
+This has direct implications for LLM-based behavioral simulation: the most capable model may not be the best proxy for human decision-making. Practitioners should select capability levels---or apply calibration techniques---to match the target population's behavioral profile.
+
+The weak fluency effect suggests that improving text generation quality does not meaningfully improve decision fidelity. This decoupling implies that generative and decision-making capabilities reside in partially orthogonal dimensions of the LLM's function space.
+
+\subsection{Limitations}
+
+Our framework uses simulated rather than real LLM outputs, limiting ecological validity. The two-axis decomposition is a simplification of the multi-dimensional capability landscape. Human baselines are synthetic approximations calibrated to literature rather than primary data. Future work should validate these patterns using actual LLM APIs across model families and scales.
+
+\section{Conclusion}
+
+We have demonstrated a non-monotonic relationship between LLM reasoning capability and human-like decision fidelity, with alignment peaking at intermediate reasoning depth. This finding challenges the assumption that stronger capabilities yield more human-like behavior and highlights the need for targeted calibration when using LLMs as behavioral simulacra.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

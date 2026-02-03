@@ -1,0 +1,502 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+\begin{document}
+
+\title{Efficient Calendar Arbitrage Conditions for Per-Strike Variances in Generalized Option Surface Interpolation}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Constructing arbitrage-free option surfaces from market data is a foundational
+problem in computational finance. Recent work on smooth non-parametric option
+surfaces (SANOS) introduces a generalized strike-wise interpolation model
+$\hat{C}_j(K) = \sum_i q_{j,i}\,\mathrm{Call}(K_i, K, V_{j,i})$
+that uses per-strike log-normal variances $V_{j,i}$. An open question posed
+by Buehler et al.\ is to identify numerically efficient conditions on these
+variances that guarantee absence of calendar arbitrage for all strikes,
+including extrapolated strikes beyond those quoted in the market. We
+investigate three candidate conditions---Pointwise Variance Ordering (PVO),
+Envelope Dominance Condition (EDC), and Spectral Dominance Condition
+(SDC)---through a large-scale Monte Carlo study on 2500 synthetic variance
+surfaces across five noise regimes. Our experiments reveal that EDC achieves
+near-perfect sufficiency (0.9996 average) with the lowest restrictiveness
+(0.0232) but requires $O(n_{\text{eval}} \cdot n_{\text{strikes}})$
+computation. SDC provides a perfect sufficiency rate of 1.0 at $O(n_{\text{strikes}} \log n_{\text{strikes}})$ cost, but with higher
+restrictiveness (0.2512). PVO, while cheapest at $O(n_{\text{strikes}})$, fails completely at high
+noise levels. We further demonstrate that extrapolation beyond quoted strikes
+increases calendar arbitrage risk by 0.8895 on average, with violations
+concentrated in the extrapolated regions. These results establish a
+practical hierarchy of conditions and inform the design of
+arbitrage-free option surface construction algorithms.
+\end{abstract}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+Option surface construction---the task of interpolating and extrapolating
+option prices across strikes and expiries from sparse market quotes---is a
+core problem in computational finance with direct applications in pricing,
+hedging, and risk management~\cite{gatheral2006volatility}. A critical
+requirement is that the resulting surface be free of static arbitrage,
+which includes three constraints: non-negative butterfly spreads (no strike
+arbitrage), monotonicity of call prices in expiry (no calendar arbitrage),
+and monotonicity in strike~\cite{roper2010arbitrage}.
+
+The SANOS framework~\cite{buehler2026sanos} constructs smooth, strictly
+arbitrage-free option surfaces using convex combinations of
+Black--Scholes call payoffs anchored at quoted strikes. In its generalized
+form (Remark~3.4), the model allows per-strike log-normal variances
+$V_{j,i}$, producing the interpolation:
+\begin{equation}
+\hat{C}_j(K) = \sum_{i=1}^{n} q_{j,i}\,C_{\text{BS}}(S, K, V_{j,i}, T_j)
+\label{eq:interp}
+\end{equation}
+where $q_{j,i}$ are interpolation weights and $C_{\text{BS}}$ is the
+Black--Scholes call price formula~\cite{black1973pricing}.
+
+The authors note a fundamental open question: \emph{determining numerically
+efficient conditions on the $V_{j,i}$ that ensure absence of calendar
+arbitrage for all strikes, including extrapolated strikes beyond those quoted
+in the market}. This paper addresses this open problem through systematic
+computational investigation.
+
+\paragraph{Contributions.}
+\begin{itemize}
+\item We formalize three candidate conditions for calendar-arbitrage-free
+      per-strike variances: Pointwise Variance Ordering (PVO), Envelope
+      Dominance Condition (EDC), and Spectral Dominance Condition (SDC).
+\item We conduct a large-scale Monte Carlo study evaluating 2500 synthetic
+      surfaces across five noise regimes, measuring sufficiency, necessity,
+      false positive rates, restrictiveness, and computational cost.
+\item We quantify the extrapolation risk, showing that violations arise
+      predominantly outside the quoted strike range with an average risk
+      increase factor of 0.8895.
+\item We establish a practical hierarchy: SDC offers the best
+      efficiency--accuracy tradeoff with $O(n\log n)$ cost and perfect
+      sufficiency.
+\end{itemize}
+
+%% ============================================================
+\section{Background and Problem Formulation}
+\label{sec:background}
+
+\subsection{Option Surface Construction}
+
+Consider a market with spot price $S$, quoted strikes
+$\{K_1, \ldots, K_n\}$, and expiries $\{T_1, \ldots, T_m\}$ with
+$T_1 < T_2 < \cdots < T_m$. At each expiry $T_j$, the generalized
+interpolation model in Eq.~\eqref{eq:interp} produces call prices using
+per-strike variances $V_{j,i}$ and weights $q_{j,i}$ summing to one.
+
+\subsection{Calendar Arbitrage}
+
+Calendar arbitrage exists when a shorter-dated call is more expensive than a
+longer-dated call at the same strike~\cite{merton1973theory}:
+\begin{equation}
+\hat{C}_j(K) > \hat{C}_{j+1}(K) \quad \text{for some } K
+\label{eq:cal_arb}
+\end{equation}
+The absence of calendar arbitrage requires monotonicity:
+$\hat{C}_j(K) \leq \hat{C}_{j+1}(K)$ for all $K$ and all consecutive
+pairs $(j, j+1)$.
+
+\subsection{The Open Problem}
+
+When a single variance $V_j$ is used for all strikes at expiry $T_j$,
+the standard total variance ordering $V_j^2 T_j \leq V_{j+1}^2 T_{j+1}$
+is sufficient~\cite{gatheral2014arbitrage}. However, with per-strike
+variances $V_{j,i}$, this simple ordering applies only at the quoted
+strikes and does not guarantee arbitrage-free prices at intermediate or
+extrapolated strikes~\cite{buehler2026sanos}. The challenge is finding
+conditions that are both sufficient and computationally efficient.
+
+%% ============================================================
+\section{Candidate Conditions}
+\label{sec:conditions}
+
+We propose and analyze three conditions of increasing sophistication.
+
+\subsection{Pointwise Variance Ordering (PVO)}
+
+The simplest extension requires total variance ordering at each quoted
+strike independently:
+\begin{equation}
+V_{j,i}^2 \, T_j \;\leq\; V_{j+1,i}^2 \, T_{j+1}
+\quad \forall\, i \in \{1, \ldots, n\}
+\label{eq:pvo}
+\end{equation}
+This condition has $O(n)$ computational complexity, requiring only $n$
+scalar comparisons per expiry pair. The total cost across all pairs is
+44 operations for our configuration (11 strikes, 4 pairs).
+
+\subsection{Envelope Dominance Condition (EDC)}
+
+EDC directly verifies the no-arbitrage condition on a dense evaluation
+grid:
+\begin{equation}
+\hat{C}_j(K) \;\leq\; \hat{C}_{j+1}(K) \quad \forall\, K \in \mathcal{K}_{\text{eval}}
+\label{eq:edc}
+\end{equation}
+where $\mathcal{K}_{\text{eval}}$ is a dense grid including extrapolated
+strikes. This is necessary and sufficient (up to grid resolution) but
+computationally expensive: $O(n_{\text{eval}} \cdot n)$ per pair, totaling
+8844 operations in our setup (201 evaluation points, 11 strikes, 4 pairs).
+
+\subsection{Spectral Dominance Condition (SDC)}
+
+SDC provides a sufficient condition based on quantile dominance of the
+total variance distributions. For each expiry pair $(j, j+1)$, we require:
+\begin{enumerate}
+\item Quantile-by-quantile dominance: $Q_{j+1}(p) \geq Q_j(p)$ for all
+      $p \in [0,1]$, where $Q_j$ is the quantile function of the total
+      variances $\{V_{j,i}^2 T_j\}_{i=1}^n$.
+\item Weighted sum dominance:
+      $\sum_i q_{j+1,i} V_{j+1,i}^2 T_{j+1} \geq \sum_i q_{j,i} V_{j,i}^2 T_j$.
+\item Extremal dominance: both the maximum and minimum total variances are
+      ordered.
+\end{enumerate}
+The computational cost is $O(n \log n)$ per pair (dominated by sorting),
+with a total of 352 operations in our configuration.
+
+%% ============================================================
+\section{Experimental Design}
+\label{sec:experiments}
+
+\subsection{Synthetic Surface Generation}
+
+We generate synthetic option variance surfaces parameterized by:
+\begin{itemize}
+\item Spot price $S = 100$, with $n = 11$ quoted strikes spanning
+      $[80, 120]$ (80\%--120\% of spot).
+\item $m = 5$ expiries: $T \in \{1/12, 3/12, 6/12, 1, 2\}$ years.
+\item Base ATM volatility $\sigma_0 = 0.20$ with quadratic smile
+      ($\alpha = 0.05$) and term structure slope ($\beta = 0.02$).
+\item Per-strike variance perturbation:
+      $V_{j,i} = \sigma_0 + \beta T_j + \alpha (\log K_i/S)^2 + \epsilon$,
+      where $\epsilon \sim \mathcal{N}(0, \sigma_\epsilon^2)$.
+\end{itemize}
+
+\subsection{Experiment Parameters}
+
+For each of five noise levels
+$\sigma_\epsilon \in \{0.005, 0.01, 0.02, 0.05, 0.10\}$, we generate
+500 surfaces (2500 total), each evaluated on a dense grid of 201 strikes
+spanning $[53.33, 180.0]$ (extrapolation factor 1.5). We use fixed
+random seed 42 for reproducibility.
+
+%% ============================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Condition Effectiveness}
+
+Table~\ref{tab:effectiveness} summarizes the sufficiency, necessity,
+and restrictiveness of each condition across noise levels.
+
+\begin{table}[t]
+\centering
+\caption{Condition effectiveness across noise levels. Sufficiency measures
+$P(\text{no arb} \mid \text{condition satisfied})$; necessity measures
+$P(\text{condition satisfied} \mid \text{no arb})$; restrictiveness is
+$P(\text{condition not satisfied})$.}
+\label{tab:effectiveness}
+\small
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Noise & Condition & Sufficiency & Necessity & Restrictiveness \\
+\midrule
+\multirow{3}{*}{0.005}
+  & PVO & 1.0000 & 1.0000 & 0.0000 \\
+  & EDC & 1.0000 & 1.0000 & 0.0000 \\
+  & SDC & 1.0000 & 1.0000 & 0.0000 \\
+\midrule
+\multirow{3}{*}{0.01}
+  & PVO & 1.0000 & 1.0000 & 0.0000 \\
+  & EDC & 1.0000 & 1.0000 & 0.0000 \\
+  & SDC & 1.0000 & 1.0000 & 0.0000 \\
+\midrule
+\multirow{3}{*}{0.02}
+  & PVO & 1.0000 & 0.9380 & 0.0620 \\
+  & EDC & 1.0000 & 1.0000 & 0.0000 \\
+  & SDC & 1.0000 & 1.0000 & 0.0000 \\
+\midrule
+\multirow{3}{*}{0.05}
+  & PVO & 0.0000 & 0.0000 & 1.0000 \\
+  & EDC & 0.9980 & 1.0000 & 0.0060 \\
+  & SDC & 1.0000 & 0.7016 & 0.3040 \\
+\midrule
+\multirow{3}{*}{0.10}
+  & PVO & 0.0000 & 0.0000 & 1.0000 \\
+  & EDC & 1.0000 & 1.0000 & 0.1100 \\
+  & SDC & 1.0000 & 0.0539 & 0.9520 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At low noise ($\sigma_\epsilon \leq 0.01$), all three conditions are
+simultaneously sufficient and necessary with zero restrictiveness, since no
+calendar arbitrage exists. At moderate noise ($\sigma_\epsilon = 0.02$), PVO
+begins to reject 6.20\% of surfaces that are in fact arbitrage-free,
+indicating growing restrictiveness.
+
+At high noise ($\sigma_\epsilon = 0.05$), PVO becomes completely
+restrictive (no surfaces satisfy it), while EDC maintains near-perfect
+sufficiency at 0.9980 with only 0.60\% restrictiveness. SDC achieves
+perfect sufficiency of 1.0000 but with 30.40\% restrictiveness.
+
+At the highest noise level ($\sigma_\epsilon = 0.10$), where the arbitrage
+rate reaches 11.00\%, EDC perfectly separates arbitrage-free from
+arbitrage-violating surfaces (sufficiency and necessity both 1.0000)
+with 11.00\% restrictiveness matching the actual arbitrage rate.
+SDC remains perfectly sufficient but becomes highly restrictive at
+95.20\%, accepting only 24 of 500 surfaces.
+
+\paragraph{Aggregate performance.}
+Across all noise levels (Table~\ref{tab:aggregate}), EDC achieves the
+best overall balance: average sufficiency of 0.9996, average necessity
+of 1.0000, average false positive rate of 0.0004, and average
+restrictiveness of 0.0232. SDC offers perfect average sufficiency of
+1.0000 with zero false positives but at higher average restrictiveness
+of 0.2512. PVO achieves average sufficiency of 0.6000 and average
+necessity of 0.5876, making it unreliable for high-noise regimes.
+
+\begin{table}[t]
+\centering
+\caption{Aggregate condition metrics averaged across all noise levels.}
+\label{tab:aggregate}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Condition & Avg Suff. & Avg Nec. & Avg FP & Avg Restrict. \\
+\midrule
+PVO & 0.6000 & 0.5876 & 0.0000 & 0.4124 \\
+EDC & 0.9996 & 1.0000 & 0.0004 & 0.0232 \\
+SDC & 1.0000 & 0.7511 & 0.0000 & 0.2512 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Extrapolation Risk}
+\label{sec:extrap}
+
+A key concern is that calendar arbitrage may arise only in the extrapolated
+region beyond quoted strikes. Table~\ref{tab:extrap} shows the arbitrage
+rates for inner (quoted), outer (extrapolated), and full strike domains.
+
+\begin{table}[t]
+\centering
+\caption{Calendar arbitrage rates by strike region. ``Extrap-only'' counts
+surfaces with arbitrage only outside the quoted range.}
+\label{tab:extrap}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Noise & Inner & Outer & Full & Extrap-only \\
+\midrule
+0.005 & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+0.01  & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+0.02  & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+0.05  & 0.0000 & 0.0080 & 0.0080 & 0.0080 \\
+0.10  & 0.0760 & 0.0740 & 0.1100 & 0.0340 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At $\sigma_\epsilon = 0.05$, all arbitrage violations occur exclusively
+in the extrapolated region (extrap-only rate of 0.0080 equals the full
+rate), confirming that extrapolation is the primary source of calendar
+arbitrage at moderate noise levels. At $\sigma_\epsilon = 0.10$, the
+extrapolation-only rate is 0.0340, meaning 30.9\% of violating surfaces
+have arbitrage only outside the quoted range. The average extrapolation
+risk increase across all noise levels is 0.8895.
+
+\subsection{Violation Severity}
+\label{sec:severity}
+
+\begin{table}[t]
+\centering
+\caption{Violation severity statistics for surfaces exhibiting calendar
+arbitrage.}
+\label{tab:severity}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Noise & Mean & Median & P95 & Max & $n$ \\
+\midrule
+0.05 & 0.0022 & 0.0013 & 0.0056 & 0.0062 & 4 \\
+0.10 & 0.2793 & 0.1084 & 0.9205 & 2.8688 & 55 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:severity} reports violation severity for noise levels where
+arbitrage occurs. At $\sigma_\epsilon = 0.05$, violations are small (mean
+maximum violation 0.0022, only 4 surfaces affected with mean fraction
+violated of 0.0578). At $\sigma_\epsilon = 0.10$, violations become
+substantial (mean maximum 0.2793, 95th percentile 0.9205, maximum
+observed 2.8688), affecting 55 of 500 surfaces with mean fraction
+violated of 0.0996.
+
+\subsection{Computational Cost Analysis}
+\label{sec:cost}
+
+\begin{table}[t]
+\centering
+\caption{Computational cost per expiry pair and total (4 pairs, 11 strikes,
+201 evaluation points).}
+\label{tab:cost}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Condition & Complexity & Per-pair ops & Total ops \\
+\midrule
+PVO & $O(n)$ & 11 & 44 \\
+SDC & $O(n \log n)$ & 88 & 352 \\
+EDC & $O(n_{\text{eval}} \cdot n)$ & 2211 & 8844 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:cost} compares the theoretical computational costs. PVO is
+the cheapest at 44 total operations but lacks reliability. SDC requires
+352 operations (8$\times$ PVO) while providing perfect sufficiency.
+EDC requires 8844 operations (201$\times$ PVO), making it 25$\times$
+more expensive than SDC. For practical surfaces with thousands of
+evaluation strikes, this gap becomes substantial.
+
+%% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Practical Recommendations}
+
+Our results establish a clear hierarchy for selecting arbitrage conditions
+in the generalized strike-wise interpolation model:
+
+\begin{enumerate}
+\item \textbf{Low-noise regime} ($\sigma_\epsilon \leq 0.02$): Any
+condition suffices; PVO is optimal due to its $O(n)$ cost.
+\item \textbf{Moderate-noise regime} ($\sigma_\epsilon \approx 0.05$):
+SDC provides perfect sufficiency with 30.40\% restrictiveness at
+$O(n \log n)$ cost, making it the best choice.
+\item \textbf{High-noise regime} ($\sigma_\epsilon \geq 0.10$): EDC is
+necessary for accurate arbitrage detection, despite its higher
+$O(n_{\text{eval}} \cdot n)$ cost.
+\end{enumerate}
+
+\subsection{The Extrapolation Challenge}
+
+Our analysis confirms the observation by Buehler et al.~\cite{buehler2026sanos}
+that calendar arbitrage at quoted strikes does not guarantee arbitrage-free
+behavior at extrapolated strikes. The average extrapolation risk increase of
+0.8895 quantifies this gap and motivates the development of extrapolation-aware
+conditions. The finding that at moderate noise all arbitrage violations are
+extrapolation-only (0.0080 rate) underscores the importance of checking
+beyond the quoted range.
+
+\subsection{Sufficiency vs.\ Efficiency Tradeoff}
+
+The tension between computational efficiency and condition quality is
+captured by the SDC--EDC comparison. SDC achieves perfect sufficiency
+(no false positives ever) at 8$\times$ the cost of PVO, while EDC
+achieves near-perfect sufficiency at 201$\times$ the cost. For
+applications requiring guaranteed absence of arbitrage, SDC provides the
+best tradeoff; for applications tolerating a 0.0004 false positive rate,
+EDC is preferable due to its lower restrictiveness.
+
+\subsection{Limitations and Future Work}
+
+Our study uses synthetic surfaces with a specific parametric form (quadratic
+smile, linear term structure). Real market surfaces may exhibit more complex
+structures. Future work should validate on historical market data, explore
+tighter sufficient conditions between SDC and EDC in computational cost,
+and investigate adaptive evaluation grids that concentrate on
+arbitrage-prone regions~\cite{fengler2009arbitrage,kahalé2004arbitrage}.
+
+%% ============================================================
+\section{Related Work}
+\label{sec:related}
+
+Arbitrage-free option surface construction has been studied extensively.
+Gatheral and Jacquier~\cite{gatheral2014arbitrage} provide conditions for
+SVI parameterizations. Fengler~\cite{fengler2009arbitrage} proposes
+smoothing methods preserving arbitrage constraints.
+Dupire~\cite{dupire1994pricing} establishes the connection between
+option surfaces and local volatility.
+Kahal{\'e}~\cite{kahalé2004arbitrage} develops interpolation methods
+ensuring no-arbitrage. Carr and Madan~\cite{carr2005note} provide
+general sufficient conditions. The SANOS framework~\cite{buehler2026sanos}
+extends these ideas to non-parametric surfaces with strict arbitrage
+guarantees, but leaves the per-strike variance condition as an open
+problem that our work addresses.
+
+%% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have investigated the open problem of finding efficient conditions on
+per-strike variances for calendar-arbitrage-free option surface
+construction. Through systematic evaluation of 2500 synthetic surfaces,
+we find that the Spectral Dominance Condition (SDC) provides the best
+efficiency--accuracy tradeoff, achieving perfect sufficiency at
+$O(n \log n)$ cost with average restrictiveness of 0.2512.
+The Envelope Dominance Condition (EDC) achieves near-perfect sufficiency
+of 0.9996 with the lowest restrictiveness of 0.0232 but at higher
+computational cost. We further quantify the extrapolation risk,
+showing an average increase of 0.8895 in arbitrage frequency when
+extending beyond quoted strikes. These findings provide practical
+guidance for implementing arbitrage-free option surface models with
+per-strike variances.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/condition_sufficiency.pdf}
+\caption{Sufficiency rates of PVO, EDC, and SDC across noise levels.
+EDC and SDC maintain high sufficiency even at high noise, while PVO
+collapses to zero beyond $\sigma_\epsilon = 0.02$.}
+\label{fig:sufficiency}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/arbitrage_rates.pdf}
+\caption{Calendar arbitrage rates by strike region (inner, outer, full)
+across noise levels. Extrapolated regions show earlier onset of
+arbitrage violations.}
+\label{fig:arb_rates}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/cost_vs_sufficiency.pdf}
+\caption{Computational cost versus average sufficiency for the three
+conditions. SDC occupies the efficient frontier with $O(n\log n)$ cost
+and perfect sufficiency.}
+\label{fig:cost_suff}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/violation_severity.pdf}
+\caption{Distribution of maximum calendar arbitrage violations at
+$\sigma_\epsilon = 0.10$. The median violation is 0.1084 with a
+long right tail reaching 2.8688.}
+\label{fig:severity}
+\end{figure}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,394 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Implicit Adam Updates Accelerate Dead Primitive Formation\\in 3D Gaussian Splatting: A Simulation Study}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+3D Gaussian Splatting (3DGS) optimizes a population of Gaussian primitives using the Adam optimizer, where each training step renders from a single viewpoint and only visible primitives receive nonzero gradients.
+Under standard Adam, invisible primitives still receive implicit parameter updates because the optimizer's first- and second-moment estimates carry forward information from prior steps.
+We investigate the conjecture that these implicit updates accelerate the transition of primitives to dead states (opacity below the pruning threshold), thereby inflating the count of dead primitives relative to Sparse Adam, which skips updates for zero-gradient parameters.
+Through analytical characterization and stochastic lifecycle simulations of 2{,}000 primitives over 3{,}000 training steps, we demonstrate that standard Adam produces 59.95\% dead primitives compared to 41.5\% under Sparse Adam---a difference of 369 primitives (18.45 percentage points).
+The implicit drift decays as $(\beta_1/\sqrt{\beta_2})^k \approx 0.9005^k$ per invisible step with a half-life of 6.61 steps.
+We further identify a positive feedback loop: lower-opacity primitives are less visible, accumulate more implicit drift (18.84 vs.\ 17.66 mean drift across quartiles), and die faster.
+Multi-seed experiments confirm robustness with Adam producing $386.3 \pm 37.1$ more dead primitives across 10 seeds ($p < 0.001$).
+Our findings provide mechanistic evidence supporting the conjecture and inform the design of optimizers for point-based neural rendering.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178.10010224</concept_id>
+<concept_desc>Computing methodologies~Computer vision</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257.10010293</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Computer vision}
+\ccsdesc[300]{Computing methodologies~Machine learning}
+
+\keywords{3D Gaussian Splatting, Adam Optimizer, Sparse Adam, Dead Primitives, Implicit Updates, Neural Rendering}
+
+\maketitle
+
+% ============================================================================
+\section{Introduction}
+\label{sec:intro}
+
+3D Gaussian Splatting (3DGS)~\cite{kerbl20233d} has emerged as a leading approach for real-time novel view synthesis, representing scenes as collections of 3D Gaussian primitives optimized via gradient descent.
+Each primitive carries parameters for position, covariance, opacity, and color, and the scene is rendered by splatting these Gaussians onto the image plane from a given camera viewpoint.
+
+A critical aspect of 3DGS training is that each optimization step renders only one viewpoint, producing nonzero gradients solely for primitives visible in that view.
+Under the standard Adam optimizer~\cite{kingma2015adam}, however, \emph{all} primitives receive parameter updates because Adam's exponentially weighted moment estimates carry information from prior steps even when the current gradient is zero.
+These \emph{implicit updates} arise from the momentum decay of Adam's first and second moments.
+
+Ding et al.~\cite{ding2026step} observed that standard Adam produces significantly more \emph{dead primitives}---Gaussians whose opacity falls below a pruning threshold---compared to Sparse Adam, which restricts updates to parameters with nonzero gradients.
+They conjectured that implicit updates accelerate the death of primitives by continuing to push opacity downward during invisible steps.
+
+In this paper, we investigate this conjecture through a combination of analytical characterization and large-scale stochastic simulation.
+Our contributions are:
+\begin{enumerate}
+    \item We derive the decay rate of implicit updates as $(\beta_1/\sqrt{\beta_2})^k \approx 0.9005^k$, showing a half-life of 6.61 steps.
+    \item We simulate 2{,}000 Gaussian primitives under both Adam and Sparse Adam across 3{,}000 training steps, demonstrating that Adam produces 59.95\% dead primitives versus 41.5\% for Sparse Adam.
+    \item We identify a positive feedback loop linking opacity, visibility, and implicit drift.
+    \item We validate robustness across 10 random seeds, 8 gradient bias levels, and 6 learning rates.
+\end{enumerate}
+
+% ============================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{3D Gaussian Splatting.}
+3DGS~\cite{kerbl20233d} achieves real-time rendering by representing scenes as explicit 3D Gaussians optimized through differentiable rasterization.
+The training procedure periodically prunes dead primitives (those with opacity below a threshold) and densifies the scene by splitting or cloning active primitives.
+Ding et al.~\cite{ding2026step} proposed decoupling the optimization to avoid pathological implicit updates, introducing Sparse Adam for 3DGS.
+
+\paragraph{Adam Optimizer.}
+Adam~\cite{kingma2015adam} maintains exponentially decaying estimates of the first moment (mean) and second moment (variance) of gradients.
+The bias-corrected update rule produces nonzero updates even when the current gradient is zero, a property that is benign in dense optimization but potentially harmful when gradients are structurally sparse, as in viewpoint-dependent rendering.
+Recent work has characterized Adam's implicit bias near minimizer manifolds~\cite{chen2024implicit} and explored alternative optimizers with different implicit biases~\cite{jordan2024muon}.
+
+\paragraph{Sparse Optimization.}
+Sparse Adam~\cite{ding2026step} modifies Adam to skip updates for parameters receiving zero gradients.
+This eliminates implicit updates for invisible primitives, preserving their opacity until they next contribute to a rendered view.
+The trade-off is that Sparse Adam forgoes the regularizing effect of momentum decay, which can be beneficial in some optimization landscapes.
+
+% ============================================================================
+\section{Problem Formulation}
+\label{sec:formulation}
+
+\subsection{3DGS Opacity Optimization}
+
+Each Gaussian primitive $i$ has an opacity parameter $\alpha_i \in (0, 1)$ parameterized in logit space as $\alpha_i = \sigma(r_i)$ where $\sigma$ is the sigmoid function and $r_i$ is the unconstrained raw parameter.
+At training step $t$, a viewpoint $v_t$ is sampled uniformly, and primitive $i$ is visible with probability:
+\begin{equation}
+    p_{\mathrm{vis}}(i, v_t) = \left(p_{\mathrm{base}} + w_{\mathrm{op}} \cdot \alpha_i\right) \cdot a_{i, v_t}
+    \label{eq:visibility}
+\end{equation}
+where $p_{\mathrm{base}} = 0.25$, $w_{\mathrm{op}} = 0.55$, and $a_{i,v_t} \in [0.2, 1.0]$ is a viewpoint-dependent geometric affinity.
+
+Visible primitives receive a stochastic gradient $g_i^{(t)} \sim \mathcal{N}(\mu_g, \sigma_g^2)$ for the raw parameter $r_i$, with $\mu_g = 0.005$ encoding mild redundancy pressure (positive gradient pushes $r_i$ downward under Adam's subtract rule, decreasing opacity).
+Invisible primitives receive $g_i^{(t)} = 0$.
+
+\subsection{Adam vs.\ Sparse Adam Updates}
+
+Under standard Adam, the update at step $t$ is:
+\begin{align}
+    m_i^{(t)} &= \beta_1 m_i^{(t-1)} + (1 - \beta_1) g_i^{(t)} \label{eq:adam_m} \\
+    v_i^{(t)} &= \beta_2 v_i^{(t-1)} + (1 - \beta_2) (g_i^{(t)})^2 \label{eq:adam_v} \\
+    r_i^{(t)} &= r_i^{(t-1)} - \eta \cdot \frac{\hat{m}_i^{(t)}}{\sqrt{\hat{v}_i^{(t)}} + \epsilon} \label{eq:adam_update}
+\end{align}
+where $\hat{m} = m/(1 - \beta_1^t)$ and $\hat{v} = v/(1 - \beta_2^t)$ are bias-corrected estimates, $\eta = 0.05$ is the learning rate, $\beta_1 = 0.9$, $\beta_2 = 0.999$, and $\epsilon = 10^{-15}$.
+
+When $g_i^{(t)} = 0$ (invisible step), the moments decay as $m_i^{(t)} = \beta_1 m_i^{(t-1)}$ and $v_i^{(t)} = \beta_2 v_i^{(t-1)}$, but the bias-corrected update $\hat{m}/(\sqrt{\hat{v}} + \epsilon)$ remains nonzero---this is the \emph{implicit update}.
+
+Under Sparse Adam, no update is applied when $g_i^{(t)} = 0$: the moments and parameter are frozen until the next visible step.
+
+\subsection{Dead Primitive Definition}
+
+A primitive is classified as \emph{dead} when its opacity falls below the pruning threshold $\alpha_{\mathrm{dead}} = 0.005$.
+
+% ============================================================================
+\section{Analytical Characterization}
+\label{sec:analytical}
+
+\subsection{Implicit Drift Decay Rate}
+
+After a visible step at time $t_0$ with gradient $g_{\mathrm{last}}$, consider $K$ consecutive invisible steps.
+The one-step moment contribution is $m_0 = (1 - \beta_1) g_{\mathrm{last}}$ and $v_0 = (1 - \beta_2) g_{\mathrm{last}}^2$.
+After $k$ invisible steps:
+\begin{equation}
+    m_k = \beta_1^k m_0, \quad v_k = \beta_2^k v_0
+    \label{eq:moment_decay}
+\end{equation}
+
+The ratio of the bias-corrected update magnitude at step $k$ relative to step 1 scales as:
+\begin{equation}
+    \frac{|\Delta r_k|}{|\Delta r_1|} \approx \left(\frac{\beta_1}{\sqrt{\beta_2}}\right)^{k-1}
+    \label{eq:decay_ratio}
+\end{equation}
+
+With $\beta_1 = 0.9$ and $\beta_2 = 0.999$, the decay ratio is $\beta_1/\sqrt{\beta_2} = 0.9005$.
+The half-life is:
+\begin{equation}
+    k_{1/2} = \frac{\ln 0.5}{\ln(\beta_1/\sqrt{\beta_2})} = 6.61 \text{ steps}
+    \label{eq:half_life}
+\end{equation}
+
+\subsection{Cumulative Drift Bound}
+
+The cumulative implicit drift over $K$ invisible steps is:
+\begin{equation}
+    D(K) = \sum_{k=1}^{K} \eta \cdot \frac{|\hat{m}_k|}{\sqrt{\hat{v}_k} + \epsilon}
+    \label{eq:cum_drift}
+\end{equation}
+
+Table~\ref{tab:analytical_drift} shows the cumulative drift for different gradient magnitudes and invisible run lengths.
+For a representative gradient of $g = 0.05$, the cumulative drift reaches 0.2929 after 10 invisible steps and converges toward 0.4613 as $K \to \infty$.
+
+\begin{table}[t]
+\caption{Cumulative implicit drift $D(K)$ for varying gradient magnitude $g$ and invisible run length $K$.}
+\label{tab:analytical_drift}
+\centering
+\begin{tabular}{lrrrrr}
+\toprule
+$g$ & $K=5$ & $K=10$ & $K=20$ & $K=50$ & $K=100$ \\
+\midrule
+0.01 & 0.1824 & 0.2929 & 0.4000 & 0.4584 & 0.4613 \\
+0.03 & 0.1824 & 0.2929 & 0.4000 & 0.4584 & 0.4613 \\
+0.05 & 0.1824 & 0.2929 & 0.4000 & 0.4584 & 0.4613 \\
+0.10 & 0.1824 & 0.2929 & 0.4000 & 0.4584 & 0.4613 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Simulation Framework}
+
+We simulate a population of $N = 2{,}000$ Gaussian primitives over $T = 3{,}000$ training steps with $V = 50$ viewpoints.
+Each primitive's raw opacity parameter is initialized as $r_i \sim \mathcal{N}(-1.0, 0.8^2)$, corresponding to initial opacities centered around $\sigma(-1.0) \approx 0.27$.
+Per-primitive viewpoint affinities are drawn uniformly from $[0.2, 1.0]$ and held fixed throughout training.
+
+At each step, a viewpoint is sampled uniformly, visibility masks are computed via Equation~\eqref{eq:visibility}, gradients are drawn for visible primitives, and Adam (or Sparse Adam) updates all (or only visible) raw parameters.
+
+\subsection{Experiments}
+
+We conduct seven experiments:
+\begin{enumerate}
+    \item \textbf{Main comparison}: Adam vs.\ Sparse Adam under default parameters.
+    \item \textbf{Analytical drift}: Characterize per-step and cumulative implicit drift.
+    \item \textbf{Gradient bias sweep}: Vary redundancy pressure ($\mu_g \in [0.005, 0.15]$).
+    \item \textbf{Feedback loop analysis}: Quartile-stratified drift and visibility.
+    \item \textbf{Reactivation}: Test recoverability of dead primitives.
+    \item \textbf{Multi-seed robustness}: 10 random seeds.
+    \item \textbf{Learning rate sensitivity}: $\eta \in \{0.01, 0.02, 0.05, 0.1, 0.15, 0.2\}$.
+\end{enumerate}
+
+% ============================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Main Comparison}
+
+Table~\ref{tab:main_comparison} presents the primary results.
+Standard Adam produces 1{,}199 dead primitives (59.95\%) compared to 830 (41.5\%) under Sparse Adam, a difference of 369 primitives.
+Adam accumulates a total implicit drift of 36{,}382.81 (mean 18.19 per primitive), while Sparse Adam has zero implicit drift by construction.
+
+\begin{table}[t]
+\caption{Main comparison of Adam vs.\ Sparse Adam after 3{,}000 training steps with 2{,}000 primitives.}
+\label{tab:main_comparison}
+\centering
+\begin{tabular}{lrr}
+\toprule
+Metric & Adam & Sparse Adam \\
+\midrule
+Final dead count & 1{,}199 & 830 \\
+Dead percentage & 59.95\% & 41.5\% \\
+Peak dead count & 1{,}202 & 830 \\
+Mean final opacity & 0.0205 & 0.026 \\
+Median final opacity & 0.0025 & 0.0073 \\
+Total implicit drift & 36{,}382.81 & 0.0 \\
+Mean drift per primitive & 18.19 & 0.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:dead_counts} shows the evolution of dead primitive counts over training.
+Adam's dead count rises more steeply and plateaus at a higher level than Sparse Adam, with the gap widening progressively.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_dead_counts.png}
+    \caption{Dead primitive accumulation over 3{,}000 training steps.  Standard Adam (red) consistently produces more dead primitives than Sparse Adam (green).}
+    \label{fig:dead_counts}
+\end{figure}
+
+\subsection{Opacity Distribution}
+
+Figure~\ref{fig:opacity_dist} shows the final opacity distributions.
+Adam exhibits a sharper concentration near zero, with the median opacity at 0.0025 versus 0.0073 for Sparse Adam.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_opacity_dist.png}
+    \caption{Final opacity distributions.  Adam shows a more pronounced spike near zero, indicating stronger drift toward the dead threshold.}
+    \label{fig:opacity_dist}
+\end{figure}
+
+\subsection{Analytical Drift Characterization}
+
+The implicit update magnitude decays geometrically with a ratio of 0.9005 per invisible step (Figure~\ref{fig:drift_analysis}, left).
+The cumulative drift converges rapidly: 63\% of the total drift occurs within the first 10 invisible steps, and 87\% within 20 steps (Figure~\ref{fig:drift_analysis}, right).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_drift_analysis.png}
+    \caption{Left: Per-step implicit drift decay on log scale for different gradient magnitudes.  Right: Cumulative drift vs.\ consecutive invisible steps ($g=0.05$).}
+    \label{fig:drift_analysis}
+\end{figure}
+
+\subsection{Gradient Bias Sweep}
+
+Figure~\ref{fig:bias_sweep} shows dead primitive counts under varying redundancy pressure.
+The conjecture is supported at mild bias levels ($\mu_g \leq 0.01$): at $\mu_g = 0.005$, Adam produces 369 more dead primitives than Sparse Adam.
+At stronger biases ($\mu_g \geq 0.02$), both optimizers drive all primitives to death, and the difference vanishes.
+This indicates that implicit updates are most consequential in the moderate-redundancy regime where the explicit gradient alone is insufficient to kill all primitives.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_bias_sweep.png}
+    \caption{Dead primitives under varying gradient bias.  The conjecture is supported at mild redundancy pressure where Adam (red) exceeds Sparse Adam (green).}
+    \label{fig:bias_sweep}
+\end{figure}
+
+\subsection{Opacity--Visibility Feedback Loop}
+
+Table~\ref{tab:feedback} and Figure~\ref{fig:feedback_loop} reveal a positive feedback mechanism.
+Primitives in the lowest opacity quartile (Q1) experience the highest mean implicit drift (18.84) and lowest mean visibility count (493.06), while the highest quartile (Q4) has drift of 17.66 and visibility of 623.34.
+The feedback loop operates as: lower opacity $\rightarrow$ lower visibility probability $\rightarrow$ longer invisible runs $\rightarrow$ more cumulative implicit drift $\rightarrow$ further opacity decrease.
+
+\begin{table}[t]
+\caption{Opacity--visibility feedback analysis by final opacity quartile (Adam).}
+\label{tab:feedback}
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Quartile & Opacity Range & Mean Drift & Mean Visibility & Dead \\
+\midrule
+Q1 (lowest) & [0.0, 0.0005) & 18.84 & 493.06 & 500 \\
+Q2 & [0.0005, 0.0025) & 18.39 & 514.43 & 500 \\
+Q3 & [0.0025, 0.014) & 17.88 & 552.92 & 199 \\
+Q4 (highest) & [0.014, 0.7877] & 17.66 & 623.34 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_feedback_loop.png}
+    \caption{Left: Mean implicit drift by opacity quartile.  Right: Mean visibility count.  Lower-opacity primitives accumulate more drift and have less visibility, demonstrating the positive feedback loop.}
+    \label{fig:feedback_loop}
+\end{figure}
+
+\subsection{Multi-Seed Robustness}
+
+Figure~\ref{fig:multiseed} shows results across 10 random seeds.
+Adam consistently produces more dead primitives than Sparse Adam, with a mean difference of $386.3 \pm 37.1$ (all 10 seeds positive; $p < 0.001$ by one-sample $t$-test).
+The mean dead count is $1{,}201.4 \pm 22.0$ for Adam and $815.1 \pm 19.4$ for Sparse Adam.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_multiseed.png}
+    \caption{Dead primitive counts across 10 random seeds.  Adam (red) consistently exceeds Sparse Adam (green), with the shaded region showing the gap.}
+    \label{fig:multiseed}
+\end{figure}
+
+\subsection{Learning Rate Sensitivity}
+
+Figure~\ref{fig:lr_sensitivity} shows that the dead-primitive gap is largest at moderate learning rates ($\eta = 0.05$: difference of 369) and diminishes at extremes.
+At $\eta = 0.01$, neither optimizer produces dead primitives; at $\eta = 0.2$, both produce near-total death (Adam: 1{,}918, Sparse Adam: 1{,}887, difference: 31).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_lr_sensitivity.png}
+    \caption{Dead primitives vs.\ learning rate.  The gap between Adam and Sparse Adam is largest at moderate learning rates.}
+    \label{fig:lr_sensitivity}
+\end{figure}
+
+\subsection{Implicit Drift vs.\ Final Opacity}
+
+Figure~\ref{fig:drift_scatter} shows the per-primitive relationship between cumulative implicit drift and final opacity under Adam.
+Dead primitives (left of the dashed threshold) exhibit a wide range of drift values, while surviving primitives cluster at lower drift, confirming that higher implicit drift is associated with opacity collapse.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_drift_scatter.png}
+    \caption{Per-primitive scatter of cumulative implicit drift vs.\ final opacity under Adam.  The dead threshold is shown as a dashed line.}
+    \label{fig:drift_scatter}
+\end{figure}
+
+% ============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Mechanism of Implicit Death Acceleration}
+
+Our results provide strong evidence for the conjectured mechanism.
+When a visible-step gradient pushes a primitive toward lower opacity (positive gradient in raw space), the subsequent implicit updates continue this downward push during invisible steps.
+The decay ratio of 0.9005 per step means that after the half-life of 6.61 steps, the implicit update still retains half its initial magnitude---sufficient to push borderline primitives past the death threshold.
+
+\subsection{Regime Dependence}
+
+The gradient bias sweep reveals that the conjecture holds most strongly in the moderate-redundancy regime.
+When redundancy pressure is too weak ($\mu_g \to 0$), implicit updates are small and few primitives approach the death threshold.
+When pressure is too strong ($\mu_g \gg 0$), explicit gradients alone suffice to kill all primitives, and the implicit contribution is masked.
+This regime dependence has practical implications: real 3DGS scenes likely operate in the moderate regime where some but not all primitives are redundant.
+
+\subsection{Implications for Optimizer Design}
+
+Our findings suggest that Sparse Adam is preferable for 3DGS opacity optimization, as it avoids the pathological implicit drift without sacrificing convergence for visible primitives.
+More generally, any adaptive optimizer applied to structurally sparse gradient settings should consider whether implicit updates from momentum decay are desirable.
+
+\subsection{Limitations}
+
+Our simulation abstracts several aspects of real 3DGS training:
+(1)~we model gradients as i.i.d.\ draws rather than from a differentiable renderer;
+(2)~we omit densification and periodic opacity resets;
+(3)~our visibility model is simplified relative to actual ray--Gaussian intersection.
+These simplifications enable controlled experimentation but limit direct quantitative transfer to production 3DGS pipelines.
+
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We investigated the conjecture that implicit Adam updates accelerate dead primitive formation in 3D Gaussian Splatting.
+Through analytical derivation and stochastic simulation, we showed that standard Adam produces 59.95\% dead primitives compared to 41.5\% for Sparse Adam, with a robust difference of $386.3 \pm 37.1$ across 10 seeds.
+We identified the decay ratio of 0.9005 per invisible step, a half-life of 6.61 steps, and a positive feedback loop linking opacity, visibility, and implicit drift.
+These results support the conjecture and motivate the adoption of sparse optimization strategies for point-based neural rendering.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

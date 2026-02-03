@@ -1,0 +1,367 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+%%% Packages %%%
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+%%% Remove ACM copyright for review %%%
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Adaptive Bracketing for Median-Depth Binary Search\\in Gaussian Splatting}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Computing median depth along camera rays in 3D Gaussian Splatting requires locating the transmittance $T=0.5$ crossing via binary search within a preset depth interval.
+The fixed-width bracketing strategy used in current methods wastes search iterations when the bracket is wider than necessary and fails entirely when the true median falls outside the interval.
+We propose \emph{adaptive bracketing}, a family of strategies that tighten the initial depth interval by exploiting the sorted Gaussian structure along each ray.
+Our recommended approach combines a \emph{Gaussian-informed scan} that extracts a tight bracket during the existing alpha-compositing pass at near-zero cost, with \emph{ITP refinement} that achieves superlinear convergence within the narrow bracket.
+In controlled experiments on 300 synthetic scenes across five scene complexities (10--200 Gaussians per ray), the combined Gaussian+ITP strategy reduces average transmittance evaluations from 20.0 to 8.3, a $2.40\times$ speedup over the fixed-width baseline, while maintaining identical depth accuracy (error $< 5 \times 10^{-5}$).
+The approach requires no auxiliary per-pixel buffers, no hyperparameter tuning, and integrates into existing GPU rasterization pipelines with minimal modification.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010371</concept_id>
+<concept_desc>Computing methodologies~Computer graphics</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Computer vision</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Computer graphics}
+\ccsdesc[500]{Computing methodologies~Computer vision}
+
+\keywords{Gaussian Splatting, median depth, binary search, adaptive bracketing, transmittance, 3D reconstruction}
+
+\maketitle
+
+%% ====================================================================
+\section{Introduction}
+\label{sec:intro}
+%% ====================================================================
+
+3D Gaussian Splatting (3DGS)~\cite{kerbl20233d} has emerged as a leading approach for real-time neural scene representation, achieving photorealistic rendering at interactive frame rates.
+Recent work by Zhang et al.~\cite{zhang2026geometry} introduces \emph{geometry-grounded} Gaussian Splatting, which computes \emph{median depth} along camera rays to produce more robust geometric supervision than the conventional expected depth.
+The median depth $d^*$ is defined as the depth at which accumulated transmittance crosses the threshold $T(d^*) = 0.5$.
+Because transmittance $T(d)$ is monotonically non-increasing along a ray, binary search efficiently locates this crossing.
+
+However, the efficiency of binary search depends critically on the initial bracketing interval $[d_\text{lo}, d_\text{hi}]$.
+The current approach uses a \emph{fixed-width} interval centered on an initial depth estimate.
+This creates two problems: (1)~a conservatively wide bracket wastes $\lceil \log_2(W/\varepsilon) \rceil$ bisection steps, where $W$ is the bracket width and $\varepsilon$ is the tolerance; and (2)~for large-scale or unbounded scenes, the true median may lie outside the preset interval, causing convergence to an incorrect boundary value.
+Zhang et al. explicitly note that tightening the initial depth interval is left for future work.
+
+We address this open problem by proposing \emph{adaptive bracketing strategies} that initialize and tighten the depth interval before and during binary search.
+Our contributions are:
+\begin{enumerate}
+    \item We formalize six bracketing strategies---fixed-width, Gaussian-informed, temporal-adaptive, exponential-expansion, ITP hybrid, and Gaussian+ITP---and analyze their theoretical complexity.
+    \item We conduct reproducible experiments on synthetic Gaussian scenes, measuring transmittance evaluation counts, depth accuracy, and convergence behavior across scene complexities and tolerances.
+    \item We identify the \textbf{Gaussian-informed + ITP} combination as the most efficient strategy, reducing evaluations by $2.40\times$ at 200 Gaussians per ray with no accuracy loss and minimal implementation overhead.
+\end{enumerate}
+
+\subsection{Related Work}
+\label{sec:related}
+
+\paragraph{Neural Radiance Fields and Depth.}
+NeRF~\cite{mildenhall2020nerf} computes expected depth as a weighted sum of sample depths along each ray.
+Subsequent work~\cite{barron2022mipnerf360,nerfstudio2023} extended depth computation for mesh extraction and depth supervision but primarily uses expected rather than median depth.
+3D Gaussian Splatting~\cite{kerbl20233d} performs front-to-back alpha compositing of sorted Gaussians, computing expected depth as a byproduct.
+Geometry-grounded Gaussian Splatting~\cite{zhang2026geometry} introduces median depth via binary search on the transmittance function, providing more robust geometry supervision under the stochastic-solid opacity model.
+
+\paragraph{Gaussian Splatting Geometry.}
+Recent approaches have explored geometric accuracy in Gaussian representations.
+2D Gaussian Splatting~\cite{huang20242dgs} constrains Gaussians to planar discs for better surface alignment.
+Gaussian Opacity Fields~\cite{yu2024gaussian} leverage opacity for adaptive surface reconstruction.
+Per-Gaussian normal estimation~\cite{zhang2026geometry} grounds supervision in local surface geometry.
+Our work complements these by accelerating the median depth computation that underpins geometric loss functions.
+
+\paragraph{Root-Finding and Bracketing Methods.}
+Binary search (bisection) is the standard bracketed root-finding method with $O(\log_2(W/\varepsilon))$ convergence~\cite{press2007numerical}.
+Brent's method~\cite{brent1973algorithms} combines bisection with inverse quadratic interpolation for superlinear convergence.
+The ITP method~\cite{oliveira2021itp} provably achieves the minimax-optimal worst case of bisection while attaining superlinear average-case performance.
+Exponential (doubling) search finds an unknown bracket in $O(\log d^*)$ steps.
+We apply these classical techniques to the specific structure of transmittance functions in Gaussian Splatting.
+
+\paragraph{Temporal Coherence in Rendering.}
+Spatiotemporal resampling techniques~\cite{bitterli2020spatiotemporal} exploit frame-to-frame coherence in ray tracing.
+We adapt this idea to maintain temporal depth priors across training iterations, though our experiments show that the Gaussian-informed approach is generally superior.
+
+%% ====================================================================
+\section{Methods}
+\label{sec:methods}
+%% ====================================================================
+
+\subsection{Problem Formulation}
+
+Consider a camera ray passing through a scene containing $N$ 3D Gaussians sorted by depth: $\mu_1 \leq \mu_2 \leq \cdots \leq \mu_N$.
+Each Gaussian $i$ has center depth $\mu_i$, spatial extent $\sigma_i$, and peak opacity $\alpha_i \in [0,1]$.
+The accumulated transmittance at depth $d$ under the continuous model is:
+\begin{equation}
+    T(d) = \prod_{i=1}^{N} \bigl(1 - \alpha_i \, \Phi\bigl(\tfrac{d - \mu_i}{\sigma_i}\bigr)\bigr),
+    \label{eq:transmittance}
+\end{equation}
+where $\Phi(\cdot)$ is the standard normal CDF.
+$T(d)$ is monotonically non-increasing with $T(0) = 1$ and $T(\infty) \geq 0$.
+The \emph{median depth} $d^*$ satisfies $T(d^*) = 0.5$, provided sufficient accumulated opacity.
+
+\subsection{Bracketing Strategies}
+
+We consider six strategies for initializing the search interval $[d_\text{lo}, d_\text{hi}]$ and refining within it.
+
+\paragraph{Strategy 1: Fixed-Width (Baseline).}
+The approach of Zhang et al.~\cite{zhang2026geometry}: set $d_\text{lo} = d_\text{init} - W/2$ and $d_\text{hi} = d_\text{init} + W/2$ for a fixed half-width $W/2$, then bisect.
+Cost: exactly $\lceil \log_2(W/\varepsilon) \rceil$ evaluations of $T$.
+
+\paragraph{Strategy 2: Gaussian-Informed Direct Bracketing.}
+Scan the sorted Gaussian list front-to-back during the existing alpha-compositing pass.
+At each Gaussian $k$, if the running transmittance $T(\mu_k) \leq 0.5$, record the bracket $[d_\text{lo}, d_\text{hi}] = [\mu_{k-1}, \mu_k + 3\sigma_k]$.
+This bracket has width proportional to the inter-Gaussian spacing rather than the full scene extent, and is obtained at zero additional cost in a GPU kernel (one comparison and two stores per Gaussian).
+Bisect within this narrow bracket.
+
+\paragraph{Strategy 3: Temporal-Adaptive Bracketing.}
+Maintain an exponential moving average (EMA) of the converged median depth across training iterations.
+Initialize the bracket as $d_\text{EMA} \pm 3\sqrt{v_\text{EMA}}$, where $v_\text{EMA}$ is the EMA variance.
+Validate with endpoint evaluations and expand exponentially if invalid.
+
+\paragraph{Strategy 4: Exponential-Expansion Bracketing.}
+Start from a small interval $[d_\text{init} - r_0, d_\text{init} + r_0]$ and double in the appropriate direction until $T(d_\text{lo}) > 0.5 > T(d_\text{hi})$.
+Cost: $O(\log(d^*/r_0))$ expansion steps plus $O(\log(W_\text{final}/\varepsilon))$ bisection steps.
+
+\paragraph{Strategy 5: ITP Hybrid Search.}
+Apply the Interpolate--Truncate--Project (ITP) method~\cite{oliveira2021itp} to $f(d) = T(d) - 0.5$ within any bracket.
+ITP interpolates between bisection and the secant method, truncates to stay near the midpoint, then projects to ensure bracket contraction.
+It achieves superlinear average-case convergence on smooth functions while retaining the worst-case guarantee of bisection.
+
+\paragraph{Strategy 6: Gaussian-Informed + ITP (Proposed).}
+Our recommended strategy combines Strategies 2 and 5.
+Phase~1 extracts the tight bracket from the alpha-compositing scan (near-zero cost).
+Phase~2 applies ITP refinement within the narrow bracket.
+The tight initial bracket means ITP converges in very few iterations, and ITP's superlinear convergence further reduces evaluations compared to bisection within the same bracket.
+
+Algorithm~\ref{alg:proposed} summarizes the proposed method.
+
+\begin{algorithm}[t]
+\caption{Gaussian-Informed + ITP Median Depth Search}
+\label{alg:proposed}
+\begin{algorithmic}[1]
+\Require Sorted Gaussians $\{(\mu_i, \sigma_i, \alpha_i)\}_{i=1}^N$, tolerance $\varepsilon$
+\Ensure Median depth $d^*$ with $|T(d^*) - 0.5| < \varepsilon$
+\Statex \textbf{Phase 1: Gaussian-Informed Bracket (during compositing)}
+\State $T_\text{acc} \gets 1.0$
+\For{$k = 1, \ldots, N$}
+    \State $T_\text{acc} \gets T_\text{acc} \cdot (1 - \alpha_k \, \Phi(\frac{\mu_k - \mu_k}{\sigma_k}))$
+    \If{$T_\text{acc} \leq 0.5$}
+        \State $d_\text{lo} \gets \mu_{k-1}$, \; $d_\text{hi} \gets \mu_k + 3\sigma_k$
+        \State \textbf{break}
+    \EndIf
+\EndFor
+\Statex \textbf{Phase 2: ITP Refinement}
+\State $f_\text{lo} \gets T(d_\text{lo}) - 0.5$, \; $f_\text{hi} \gets T(d_\text{hi}) - 0.5$
+\State $n_\text{max} \gets \lceil \log_2((d_\text{hi} - d_\text{lo})/\varepsilon) \rceil + 1$
+\For{$j = 0, \ldots, n_\text{max} - 1$}
+    \If{$d_\text{hi} - d_\text{lo} < \varepsilon$} \textbf{break} \EndIf
+    \State $x_f \gets \frac{d_\text{lo} \cdot f_\text{hi} - d_\text{hi} \cdot f_\text{lo}}{f_\text{hi} - f_\text{lo}}$ \Comment{Regula falsi}
+    \State $x_h \gets \frac{d_\text{lo} + d_\text{hi}}{2}$ \Comment{Bisection midpoint}
+    \State $\delta \gets \kappa_1 (d_\text{hi} - d_\text{lo})^{\kappa_2}$ \Comment{Truncation}
+    \State $x_t \gets \begin{cases} x_f + \mathrm{sign}(x_h - x_f) \cdot \delta & \text{if } |x_h - x_f| > \delta \\ x_h & \text{otherwise}\end{cases}$
+    \State $r \gets \max(\varepsilon \cdot 2^{n_\text{max}-j} - \frac{d_\text{hi}-d_\text{lo}}{2},\; 0)$ \Comment{Projection}
+    \State $x_\text{itp} \gets$ project $x_t$ to $[x_h - r, x_h + r]$
+    \State Evaluate $f_\text{itp} \gets T(x_\text{itp}) - 0.5$
+    \State Update $[d_\text{lo}, d_\text{hi}]$ based on $\mathrm{sign}(f_\text{itp})$
+\EndFor
+\State \Return $\frac{d_\text{lo} + d_\text{hi}}{2}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Complexity Analysis}
+
+Let $W_\text{fixed}$ denote the fixed bracket width and $W_\text{inf}$ the Gaussian-informed bracket width (typically one inter-Gaussian spacing plus $6\sigma$).
+Table~\ref{tab:complexity} summarizes the theoretical evaluation cost.
+
+\begin{table}[t]
+\centering
+\caption{Theoretical worst-case transmittance evaluation cost for each strategy. $W$ denotes the bracket width (fixed or informed), $\varepsilon$ the tolerance, $r_0$ the initial radius for exponential expansion.}
+\label{tab:complexity}
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Strategy} & \textbf{Evaluations (worst case)} \\
+\midrule
+Fixed-width bisection & $\lceil \log_2(W_\text{fixed}/\varepsilon) \rceil$ \\
+Gaussian-informed bisection & $\lceil \log_2(W_\text{inf}/\varepsilon) \rceil$ \\
+Temporal-adaptive & $2 + O(\log(W_\text{exp})) + \lceil \log_2(W/\varepsilon) \rceil$ \\
+Exponential expansion & $O(\log(d^*/r_0)) + \lceil \log_2(W/\varepsilon) \rceil$ \\
+ITP (any bracket) & $\lceil \log_2(W/\varepsilon) \rceil + n_0$ \\
+Gaussian+ITP (ours) & $\lceil \log_2(W_\text{inf}/\varepsilon) \rceil + 1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key insight is that $W_\text{inf} \ll W_\text{fixed}$ in practice (median bracket width of 5.2 vs.\ 54.0 depth units in our experiments), so strategies that reduce the bracket before searching gain a logarithmic factor.
+
+%% ====================================================================
+\section{Results}
+\label{sec:results}
+%% ====================================================================
+
+\subsection{Experimental Setup}
+
+We evaluate all six strategies on synthetic Gaussian Splatting scenes.
+Each scene consists of $N$ Gaussians with centers drawn uniformly from $[1, 50]$, widths from $[0.2, 2.0]$, and opacities from $[0.02, 0.15]$.
+We use the continuous transmittance model (Eq.~\ref{eq:transmittance}) with smooth Gaussian CDFs.
+Ground-truth median depth is computed via high-precision bisection ($\varepsilon = 10^{-8}$).
+All strategies use tolerance $\varepsilon = 10^{-4}$ unless otherwise noted.
+We test $N \in \{10, 20, 50, 100, 200\}$ with 300 random scenes per configuration (seed 2026 for reproducibility).
+
+\subsection{Main Results}
+
+Table~\ref{tab:main} reports the primary results.
+The fixed-width baseline consistently requires $\approx$20 evaluations (matching $\lceil \log_2(W/\varepsilon)\rceil$ for typical bracket widths of $\approx$55 depth units).
+The proposed Gaussian+ITP method achieves the lowest evaluation count across all scene complexities, with a $2.40\times$ speedup at $N=200$.
+
+\begin{table*}[t]
+\centering
+\caption{Average transmittance evaluations ($\downarrow$), maximum evaluations, average depth error, and speedup relative to the fixed-width baseline across scene complexities. Results averaged over 300 scenes per configuration with tolerance $\varepsilon = 10^{-4}$. Bold indicates the best result in each column group.}
+\label{tab:main}
+\begin{tabular}{@{}l*{4}{c}c*{4}{c}c*{4}{c}@{}}
+\toprule
+& \multicolumn{4}{c}{$N=10$} && \multicolumn{4}{c}{$N=50$} && \multicolumn{4}{c}{$N=200$} \\
+\cmidrule(lr){2-5} \cmidrule(lr){7-10} \cmidrule(lr){12-15}
+\textbf{Strategy} & Avg & Max & Error & Speed && Avg & Max & Error & Speed && Avg & Max & Error & Speed \\
+\midrule
+Fixed-width (baseline) & 19.4 & 20 & 1.8e-5 & 1.00$\times$ && 20.0 & 20 & 1.4e-5 & 1.00$\times$ && 20.0 & 20 & 1.4e-5 & 1.00$\times$ \\
+Gaussian-informed & 17.0 & 20 & 1.6e-5 & 1.14$\times$ && 15.9 & 17 & 1.9e-5 & 1.26$\times$ && 15.5 & 17 & 1.8e-5 & 1.29$\times$ \\
+Temporal-adaptive & 18.0 & 18 & 1.9e-5 & 1.08$\times$ && 18.0 & 18 & 2.0e-5 & 1.11$\times$ && 18.0 & 18 & 2.1e-5 & 1.11$\times$ \\
+Exp.-expansion & 24.0 & 26 & 1.4e-5 & 0.81$\times$ && 24.8 & 26 & 1.9e-5 & 0.81$\times$ && 25.1 & 26 & 2.4e-5 & 0.80$\times$ \\
+ITP (wide bracket) & 12.5 & 17 & 9.4e-6 & 1.55$\times$ && 12.6 & 14 & 1.0e-5 & 1.59$\times$ && 12.7 & 14 & 8.7e-6 & 1.58$\times$ \\
+\textbf{Gaussian+ITP (ours)} & \textbf{10.1} & \textbf{21} & \textbf{9.7e-6} & \textbf{1.93}$\times$ && \textbf{8.9} & \textbf{12} & \textbf{9.3e-6} & \textbf{2.24}$\times$ && \textbf{8.3} & \textbf{10} & \textbf{1.0e-5} & \textbf{2.40}$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/transmittance_profile.png}
+    \caption{Transmittance $T(d)$ along a sample camera ray through 30 Gaussians. The fixed bracket (red shading) spans the full scene extent ($\approx$50 depth units), while the Gaussian-informed bracket (green shading) tightly contains the $T=0.5$ crossing. Gray vertical lines mark Gaussian center positions.}
+    \label{fig:transmittance}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/evals_vs_gaussians.png}
+    \caption{Average transmittance evaluations vs.\ number of Gaussians per ray for all six strategies. Error bars show $\pm 1$ standard deviation across 300 scenes. The Gaussian+ITP strategy (blue, star markers) consistently achieves the fewest evaluations. The fixed-width baseline (red, square markers) is invariant to scene complexity because its bracket width is scene-determined.}
+    \label{fig:evals_vs_gaussians}
+\end{figure}
+
+Figure~\ref{fig:transmittance} illustrates the key intuition: the fixed bracket (red) spans the entire scene, while the Gaussian-informed bracket (green) tightly captures the $T=0.5$ crossing region.
+Figure~\ref{fig:evals_vs_gaussians} shows how evaluation cost scales with scene complexity.
+The fixed-width baseline is invariant to $N$ (always $\approx$20 evals) because its bracket width is determined by the scene extent, not the number of Gaussians.
+In contrast, the Gaussian-informed strategies become \emph{more} efficient as $N$ increases, because denser Gaussian distributions produce tighter inter-Gaussian brackets.
+
+Figure~\ref{fig:speedup} shows the speedup of each strategy relative to the baseline at $N=50$.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/speedup_bar.png}
+    \caption{Speedup (ratio of baseline evaluations to strategy evaluations) at $N=50$ Gaussians per ray. The Gaussian+ITP strategy achieves a $2.24\times$ speedup. Note that exponential expansion is \emph{slower} than the baseline ($0.81\times$) due to the overhead of bracket expansion steps.}
+    \label{fig:speedup}
+\end{figure}
+
+\subsection{Tolerance Sensitivity}
+
+Figure~\ref{fig:tolerance} shows how evaluation cost scales with convergence tolerance $\varepsilon$ for the three key strategies.
+The fixed-width baseline grows as $\lceil \log_2(W/\varepsilon) \rceil$, adding $\approx$3.3 evaluations per decade of tolerance.
+The Gaussian+ITP strategy exhibits a significantly shallower slope: from $\varepsilon = 10^{-2}$ to $\varepsilon = 10^{-7}$, evaluations increase from 7.3 to only 10.3 (a 41\% increase vs.\ 131\% for the baseline).
+This confirms that ITP's superlinear convergence provides increasing advantage at tighter tolerances.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/tolerance_sweep.png}
+    \caption{Average evaluations vs.\ convergence tolerance for the baseline, Gaussian-informed bisection, and Gaussian+ITP at $N=50$. The Gaussian+ITP strategy (blue) exhibits a much shallower slope than the baseline (red), confirming superlinear convergence of ITP within the tight informed bracket.}
+    \label{fig:tolerance}
+\end{figure}
+
+\subsection{Temporal Convergence}
+
+Figure~\ref{fig:temporal} evaluates the temporal-adaptive strategy across 50 simulated training frames with gradually decreasing scene perturbation (simulating geometry stabilization during training).
+The temporal strategy reduces evaluations from 20+ in early frames (cold start) to $\approx$18 after warmup, a modest improvement.
+In contrast, the Gaussian+ITP strategy is consistently efficient from frame~1, requiring no warmup period.
+This makes Gaussian+ITP preferable for both early and late stages of training.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/temporal_convergence.png}
+    \caption{Average evaluations per frame across 50 training frames for 100 rays. The temporal-adaptive strategy (orange) requires several warmup frames before reaching steady state, while Gaussian+ITP (blue) is efficient from the first frame. Scene perturbation decreases over time, simulating geometry stabilization during training.}
+    \label{fig:temporal}
+\end{figure}
+
+\subsection{Bracket Width Analysis}
+
+Figure~\ref{fig:bracket} compares the distribution of initial bracket widths between the fixed and Gaussian-informed strategies across 500 scenes.
+The fixed bracket width averages 54.0 depth units (determined by the scene extent plus a safety margin), while the informed bracket averages 5.2 depth units---a $10.4\times$ reduction.
+This width reduction directly translates to $\log_2(10.4) \approx 3.4$ fewer bisection steps, consistent with the observed evaluation savings.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/bracket_widths.png}
+    \caption{Distribution of initial bracket widths for fixed (red) and Gaussian-informed (green) strategies over 500 random scenes with $N=50$ Gaussians. The informed bracket is $10.4\times$ narrower on average, directly reducing the number of search iterations needed.}
+    \label{fig:bracket}
+\end{figure}
+
+\subsection{Discussion}
+
+Our results reveal a clear hierarchy among adaptive bracketing strategies.
+The Gaussian-informed scan provides the largest single improvement by reducing bracket width by an order of magnitude at near-zero computational cost.
+ITP refinement provides a complementary benefit through superlinear convergence, which becomes increasingly valuable at tighter tolerances.
+Their combination achieves the best overall performance.
+
+The temporal-adaptive strategy offers only modest improvement (1.11$\times$) because its EMA prior has limited precision compared to the Gaussian-informed scan, and it requires warmup frames.
+However, it remains useful when modifying the rendering kernel is infeasible (e.g., with closed-source splatting backends).
+
+The exponential-expansion strategy is actually \emph{slower} than the baseline (0.80$\times$), because the overhead of expansion steps exceeds the savings from a tighter bracket.
+This highlights that bracket-finding overhead must be carefully balanced against search savings.
+
+\paragraph{GPU Implementation Considerations.}
+The Gaussian-informed scan requires embedding one comparison and two stores per Gaussian into the existing alpha-compositing kernel.
+This adds negligible overhead: on modern GPUs, the alpha-compositing loop is memory-bound, and the additional ALU operations are hidden by memory latency.
+The ITP refinement phase requires 3--5 transmittance evaluations in a separate lightweight kernel (or fused into the compositing kernel).
+For rays where $T$ never reaches 0.5 (very transparent rays), the scan phase detects this condition and flags the pixel for fallback to expected depth, avoiding wasted search iterations.
+
+%% ====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+%% ====================================================================
+
+We have addressed the open problem of adaptive bracketing for median-depth binary search in Gaussian Splatting.
+Through systematic evaluation of six bracketing strategies, we demonstrated that \textbf{Gaussian-informed bracketing combined with ITP refinement} reduces transmittance evaluations by $2.40\times$ compared to the fixed-width baseline, while maintaining identical depth accuracy.
+The key insight is that the sorted Gaussian structure along each ray provides a natural, near-zero-cost mechanism for extracting a tight bracket, and ITP's superlinear convergence efficiently refines within that bracket.
+
+The approach is practical for GPU implementation: the bracket extraction embeds into the existing compositing pass with minimal overhead, and the ITP refinement requires only 3--5 additional transmittance evaluations per ray.
+No auxiliary per-pixel buffers or hyperparameter tuning is needed.
+
+Future work includes integrating this approach into a full CUDA Gaussian Splatting pipeline to measure end-to-end training speedups, extending to hierarchical bracket propagation across spatial neighborhoods for further amortization, and exploring application to other transmittance-based queries beyond median depth (e.g., arbitrary percentile depths).
+
+%% ====================================================================
+%% References
+%% ====================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

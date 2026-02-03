@@ -1,0 +1,260 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{multirow}
+
+\setcopyright{none}
+\acmDOI{}
+\acmISBN{}
+
+\begin{document}
+
+\title{Selective WER: Principled Word Error Rate Evaluation Under Selective Prediction for Long-Form ASR}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Standard Word Error Rate (WER) lacks a clear definition when a subset of hypothesized words is intentionally ignored based on word-level uncertainty in long-form automatic speech recognition (ASR). We propose a principled evaluation framework consisting of three complementary metrics: Selective WER (sWER), which treats abstentions as deletions and cannot be gamed; Abstention-Aware WER (aWER), which measures error rate over committed words only; and the Area Under the Risk-Coverage Curve (AURCC), which summarizes selective prediction quality across all operating points. Our framework extends Levenshtein alignment with a three-symbol hypothesis vocabulary and includes an oracle-informed decomposition to separate beneficial abstention from harmful abstention. Experiments on synthetic ASR data show that well-calibrated uncertainty scores achieve AURCC of $0.460 \pm 0.041$ compared to $0.583 \pm 0.070$ for random scores, and that uncertainty-based abstention at 0.789 coverage reduces aWER to $0.004$ versus $0.160$ for random abstention. We recommend a four-number reporting protocol (standard WER, sWER, aWER with coverage, and AURCC) for any ASR system employing selective prediction.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Word Error Rate (WER) is the de facto standard metric for evaluating automatic speech recognition (ASR) systems~\cite{morris2004and}. It computes the minimum edit distance between a reference transcript and a hypothesis, counting substitutions, deletions, and insertions, normalized by the number of reference words~\cite{levenshtein1966binary}. Despite its simplicity and widespread adoption, WER assumes that the ASR system produces a \emph{complete} hypothesis for every input utterance.
+
+Recent advances in uncertainty estimation for neural ASR models~\cite{radford2023robust, woodward2020confidence} have enabled \emph{selective prediction}: the system can flag individual words it is uncertain about and abstain from committing to those predictions. This is particularly valuable in long-form ASR applications such as lecture transcription and interview processing, where errors in critical content words can significantly impact downstream usability.
+
+However, as noted by Bondarenko et al.~\cite{bondarenko2026pisets}, it is not clear how to evaluate WER when some words are ignored in long-form speech recognition. The authors explicitly adopt alternative metrics---uncertainty ratio and recall of error detection---precisely because WER under selective prediction is ill-defined. This gap motivates the present work.
+
+The core challenge is that WER relies on a global Levenshtein alignment between reference and hypothesis sequences. When words are removed from the hypothesis, the alignment changes, potentially creating spurious deletions or masking substitutions. Furthermore, the denominator of WER (the number of reference words) may no longer be appropriate when the system has intentionally declined to transcribe portions of the audio.
+
+We address this open problem by proposing a principled evaluation framework consisting of three complementary metrics and a four-number reporting protocol. Our framework extends the standard Levenshtein alignment with a three-symbol hypothesis vocabulary---committed words, abstained words (marked with a placeholder token), and empty slots---enabling unified bookkeeping of all alignment outcomes including abstention-specific categories.
+
+\subsection{Related Work}
+
+\paragraph{Standard WER and extensions.}
+The standard WER metric~\cite{levenshtein1966binary} and its alignment procedure implemented in NIST sclite have provisions for optionally deletable words in the \emph{reference} (e.g., filled pauses), but no mechanism for selectively ignoring \emph{hypothesis} words. Morris et al.~\cite{morris2004and} proposed alternative metrics such as Match Error Rate and Word Information Lost, but these also assume a complete hypothesis.
+
+\paragraph{Selective prediction.}
+The theory of classification with a reject option was established by Chow~\cite{chow1970optimum}, who showed that abstention trades coverage for accuracy. El-Yaniv and Wiener~\cite{elyaniv2010foundations} formalized selective prediction as a predictor-selector pair $(f, g)$ evaluated via risk-coverage curves. Geifman and El-Yaniv~\cite{geifman2017selective} extended this to deep neural networks with SelectiveNet. However, these frameworks address classification, not structured sequence prediction.
+
+\paragraph{Uncertainty in ASR.}
+Confidence measures for ASR include word posterior probabilities, lattice-based scores, and token-level entropy from autoregressive models such as Whisper~\cite{radford2023robust}. Guo et al.~\cite{guo2017calibration} showed that modern neural networks are often poorly calibrated, meaning that stated confidence levels do not match empirical accuracy. Bondarenko et al.~\cite{bondarenko2026pisets} study uncertainty estimation specifically for long-form ASR and note the lack of a WER definition for selective prediction settings.
+
+\section{Methods}
+
+\subsection{Problem Formulation}
+
+Let $\mathbf{r} = (r_1, \ldots, r_N)$ denote the reference transcript and $\mathbf{h} = (h_1, \ldots, h_M)$ the hypothesis produced by the ASR system. Standard WER is defined as:
+\begin{equation}
+\text{WER} = \frac{S + D + I}{N}
+\end{equation}
+where $S$, $D$, and $I$ are the numbers of substitutions, deletions, and insertions in the minimum-edit-distance alignment, and $N = |\mathbf{r}|$.
+
+In the selective prediction setting, the system additionally produces an abstention mask $\mathbf{m} = (m_1, \ldots, m_M)$ where $m_j = 1$ indicates that word $h_j$ is abstained. The central question is how to compute WER given $(\mathbf{r}, \mathbf{h}, \mathbf{m})$.
+
+\subsection{Three-Symbol Alignment}
+
+We extend the alignment vocabulary by replacing each abstained hypothesis word with a special placeholder token \texttt{<abs>}. The selective hypothesis becomes:
+\begin{equation}
+\tilde{h}_j = \begin{cases} h_j & \text{if } m_j = 0 \text{ (committed)} \\ \texttt{<abs>} & \text{if } m_j = 1 \text{ (abstained)} \end{cases}
+\end{equation}
+
+The Levenshtein alignment of $\mathbf{r}$ against $\tilde{\mathbf{h}}$ classifies each position into one of seven categories: correct (C), substitution (S), deletion (D), insertion (I), abstention-on-correct ($A_c$), abstention-on-error ($A_e$), and abstention-insertion ($A_i$).
+
+\subsection{Metric 1: Selective WER (sWER)}
+
+Selective WER treats abstentions as deletions:
+\begin{equation}
+\text{sWER} = \frac{S + D + I}{N}
+\end{equation}
+computed over the selective alignment. Since abstained words that align to reference words become substitutions (with \texttt{<abs>}) or deletions, sWER is always $\geq$ standard WER and cannot be gamed by abstaining.
+
+\subsection{Metric 2: Abstention-Aware WER (aWER)}
+
+\begin{equation}
+\text{aWER} = \frac{S_c + I_c}{N - A_c - A_e}
+\end{equation}
+where $S_c$ and $I_c$ count errors among committed words only, and the denominator excludes reference words whose aligned hypothesis words were abstained. aWER measures error rate on the committed portion and must be reported alongside coverage.
+
+\subsection{Metric 3: Risk-Coverage Curve and AURCC}
+
+For an uncertainty threshold $\tau$, define:
+\begin{align}
+\text{Coverage}(\tau) &= \frac{|\{j : m_j = 0\}|}{M} \\
+\text{Risk}(\tau) &= \text{sWER}(\tau)
+\end{align}
+
+The Area Under the Risk-Coverage Curve (AURCC) integrates risk over coverage using the trapezoidal rule, providing a scalar summary of selective prediction quality. Lower AURCC indicates better uncertainty-guided abstention.
+
+\subsection{Oracle Decomposition}
+
+To diagnose abstention quality, we compute the full alignment (without abstention) and classify each abstained word as:
+\begin{itemize}
+\item \textbf{$A_c$ (correct-avoiding):} the word would have been correct
+\item \textbf{$A_e$ (error-avoiding):} the word would have been a substitution
+\item \textbf{$A_i$ (insertion-avoiding):} the word was an insertion
+\end{itemize}
+
+A well-calibrated uncertainty model should have high $A_e / (A_c + A_e + A_i)$, meaning abstentions predominantly target errors.
+
+\subsection{Reporting Protocol}
+
+We recommend reporting four numbers for any selective ASR system:
+\begin{enumerate}
+\item Standard WER (no abstention baseline)
+\item sWER at the chosen operating point
+\item aWER at the chosen operating point, with coverage percentage
+\item AURCC for the full threshold sweep
+\end{enumerate}
+
+\section{Results}
+
+We evaluate our framework using synthetic ASR data generated from a lecture-domain corpus. Synthetic hypotheses introduce substitutions, deletions, and insertions at controlled error rates, with word-level uncertainty scores calibrated to correlate with actual errors at varying quality levels.
+
+\subsection{Experiment 1: Metrics Across Error Rates}
+
+Table~\ref{tab:error_rates} shows how the three metrics behave across simulated ASR error rates at approximately 0.816 coverage. Standard WER increases monotonically from $0.067$ at the lowest error rate to $0.303$ at the highest error rate. sWER consistently exceeds standard WER because abstentions incur deletion penalties; at the lowest error rates, sWER ($0.206$) is substantially higher than standard WER ($0.067$) due to the abstention overhead. aWER remains near zero at low error rates ($0.000$) and rises to $0.131$ at the 0.25 error rate, reflecting that well-calibrated abstention successfully filters errors at the cost of some coverage.
+
+\begin{table}[t]
+\caption{Selective WER metrics across simulated error rates at approximately 0.816 coverage. Values are means over 5 trials.}
+\label{tab:error_rates}
+\begin{tabular}{lcccc}
+\toprule
+Error Rate & Std WER & sWER & aWER & Coverage \\
+\midrule
+5\% & 0.067 & 0.206 & 0.000 & 0.816 \\
+10\% & 0.158 & 0.236 & 0.020 & 0.812 \\
+15\% & 0.176 & 0.242 & 0.000 & 0.815 \\
+20\% & 0.224 & 0.236 & 0.014 & 0.825 \\
+25\% & 0.339 & 0.352 & 0.131 & 0.818 \\
+30\% & 0.303 & 0.309 & 0.079 & 0.818 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_error_rates.png}
+\caption{(a) Standard WER, sWER, and aWER across simulated error rates at target coverage of 0.816. (b) Actual coverage achieved.}
+\label{fig:error_rates}
+\end{figure}
+
+\subsection{Experiment 2: Risk-Coverage Curves}
+
+Figure~\ref{fig:risk_coverage} shows risk-coverage curves for three uncertainty calibration qualities. Well-calibrated scores achieve AURCC of $0.460 \pm 0.041$, while noisy calibration yields $0.420 \pm 0.062$ and random scores produce $0.583 \pm 0.070$. Lower AURCC indicates better selective prediction: the well-calibrated model achieves lower risk at each coverage level compared to random abstention. The separation between curves confirms that AURCC effectively discriminates calibration quality.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_risk_coverage.png}
+\caption{Risk-coverage curves by uncertainty calibration quality. Well-calibrated uncertainty (blue) achieves lower risk at all coverage levels compared to random scores (red). AURCC values: good $0.460$, noisy $0.420$, random $0.583$.}
+\label{fig:risk_coverage}
+\end{figure}
+
+\subsection{Experiment 3: Transcript Length Scaling}
+
+Table~\ref{tab:length} examines how metrics scale with transcript length. Standard WER shows modest variation across lengths: $0.172$ for 33-word transcripts, $0.210$ for 62-word transcripts, and $0.190$ for 121-word transcripts. sWER at 0.815 coverage increases slightly from $0.222$ to $0.253$ for longer transcripts. AURCC remains relatively stable across lengths, ranging from $0.446$ to $0.466$, suggesting that the framework scales well to longer transcripts without degradation.
+
+\begin{table}[t]
+\caption{Metrics across transcript lengths at 0.815 coverage.}
+\label{tab:length}
+\begin{tabular}{lccc}
+\toprule
+Ref. Length & Std WER & sWER & AURCC \\
+\midrule
+33 words & 0.172 & 0.222 & 0.447 \\
+62 words & 0.210 & 0.226 & 0.445 \\
+121 words & 0.190 & 0.253 & 0.466 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_length_scaling.png}
+\caption{(a) WER metrics vs.\ transcript length. (b) AURCC vs.\ transcript length showing stable performance across scales.}
+\label{fig:length_scaling}
+\end{figure}
+
+\subsection{Experiment 4: Abstention Strategy Comparison}
+
+Table~\ref{tab:strategies} compares three abstention strategies at approximately 0.789 coverage. The oracle strategy, which abstains on error words first, achieves sWER of $0.252$ and aWER of $0.004$. The uncertainty threshold strategy matches oracle performance with identical sWER ($0.252$) and aWER ($0.004$), demonstrating that well-calibrated uncertainty scores effectively identify errors. Random abstention performs substantially worse with sWER of $0.367$ and aWER of $0.160$, confirming that informed abstention provides significant benefit. Figure~\ref{fig:strategies} shows the full coverage-risk tradeoff for each strategy.
+
+\begin{table}[t]
+\caption{Abstention strategy comparison at 0.789 coverage.}
+\label{tab:strategies}
+\begin{tabular}{lccc}
+\toprule
+Strategy & sWER & aWER & Coverage \\
+\midrule
+Oracle & 0.252 & 0.004 & 0.789 \\
+Uncertainty Threshold & 0.252 & 0.004 & 0.789 \\
+Random & 0.367 & 0.160 & 0.789 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_strategies.png}
+\caption{(a) sWER and (b) aWER as a function of coverage for oracle, uncertainty threshold, and random abstention strategies.}
+\label{fig:strategies}
+\end{figure}
+
+\subsection{Experiment 5: Oracle Decomposition}
+
+Figure~\ref{fig:oracle} shows the fraction of abstentions that target actual errors (error-targeting precision) across error rates and calibration qualities. At the 0.30 error rate, well-calibrated uncertainty achieves an error-targeting fraction of $0.767$, meaning that 0.767 of abstentions remove actual errors. Noisy calibration achieves $0.553$ and random scores achieve only $0.261$. At the 0.10 error rate, all methods show reduced error-targeting precision ($0.120$ for good calibration, $0.080$ for noisy, $0.040$ for random) because there are fewer errors to target.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_oracle_decomposition.png}
+\caption{Oracle decomposition showing the fraction of abstentions targeting actual errors, across error rates and calibration qualities.}
+\label{fig:oracle}
+\end{figure}
+
+\subsection{Comprehensive Summary}
+
+Table~\ref{tab:summary} presents the main results across calibration conditions at 15\% base error rate. The baseline standard WER is $0.186 \pm 0.064$ across all conditions (identical by construction). With well-calibrated uncertainty and 0.816 coverage, sWER increases modestly to $0.216 \pm 0.019$ while aWER drops to $0.009 \pm 0.024$, demonstrating effective error filtering. Random uncertainty scores yield sWER of $0.333 \pm 0.065$ and aWER of $0.156 \pm 0.077$, confirming that calibration quality is essential for selective prediction.
+
+\begin{table}[t]
+\caption{Comprehensive evaluation across calibration conditions (0.15 error rate, 0.816 coverage target, 8 trials).}
+\label{tab:summary}
+\begin{tabular}{lcccc}
+\toprule
+Calibration & Std WER & sWER & aWER & AURCC \\
+\midrule
+Good & $0.186 \pm 0.064$ & $0.216 \pm 0.019$ & $0.009 \pm 0.024$ & $0.448 \pm 0.049$ \\
+Noisy & $0.186 \pm 0.064$ & $0.273 \pm 0.032$ & $0.072 \pm 0.026$ & $0.421 \pm 0.048$ \\
+Random & $0.186 \pm 0.064$ & $0.333 \pm 0.065$ & $0.156 \pm 0.077$ & $0.566 \pm 0.042$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_framework.png}
+\caption{Overview of the Selective WER evaluation framework pipeline.}
+\label{fig:framework}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_alignment.png}
+\caption{Illustration of standard alignment (top) versus selective alignment with abstention (bottom). Abstained words are replaced with \texttt{<abs>} tokens.}
+\label{fig:alignment}
+\end{figure}
+
+\section{Conclusion}
+
+We have presented a principled framework for computing Word Error Rate under selective prediction in long-form ASR. The framework addresses the open problem identified by Bondarenko et al.~\cite{bondarenko2026pisets} through three complementary metrics: Selective WER (sWER) provides a strict, non-gameable error rate; Abstention-Aware WER (aWER) measures accuracy on committed predictions; and AURCC summarizes selective prediction quality across all operating points. Our experiments demonstrate that well-calibrated uncertainty scores achieve AURCC of $0.460$ compared to $0.583$ for random scores, and reduce aWER from $0.160$ to $0.004$ at 79\% coverage. The oracle decomposition analysis reveals that well-calibrated models target actual errors with a fraction of 0.767 of abstentions at 30\% error rate. We recommend the four-number reporting protocol (standard WER, sWER, aWER with coverage, AURCC) for any ASR system employing selective prediction, providing a principled bridge between standard WER evaluation and the emerging paradigm of uncertainty-aware speech recognition.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

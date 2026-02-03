@@ -1,0 +1,426 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+
+%% Remove ACM-specific metadata for preprint
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+%% Math shortcuts
+\newcommand{\Mpl}{M_{\mathrm{Pl}}}
+\newcommand{\Lpl}{L_{\mathrm{Pl}}}
+\newcommand{\RFD}{R_{\mathrm{FD}}}
+\newcommand{\calC}{\mathcal{C}}
+
+\begin{document}
+
+%% Title
+\title{Scale-Dependent Classification of Einstein's Field Theory\\in the Statistical-Mechanical Hierarchy}
+
+%% ------------------------------------------------------------------
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+The placement of general relativity (GR) within the three-level hierarchy of statistical mechanics---microscopic, mesoscopic, macroscopic---remains an open problem highlighted by Maes (2026).
+We address this question computationally using three complementary frameworks:
+(i)~the functional renormalization group (FRG) for quantum Einstein gravity in the Einstein--Hilbert truncation, which tracks the running of Newton's constant $G(k)$ and the cosmological constant $\Lambda(k)$ across momentum scales;
+(ii)~a thermodynamic classification scheme based on a classicality parameter $\calC(k)$, spectral entropy density $s(k)$, and fluctuation-dissipation ratio $\RFD(k)$;
+and (iii)~the Einstein--Langevin framework of stochastic gravity, which characterizes the mesoscopic regime via noise and dissipation kernels.
+Our numerical analysis reveals a scale-dependent classification: GR is \emph{macroscopic} for $k \ll \Mpl$ (classicality $\calC \gg 1$, equilibrium $\RFD \approx 1$), \emph{mesoscopic} near $k \sim \Mpl$ ($\calC \sim 1$, $\RFD$ deviates from unity), and potentially \emph{microscopic} for $k \gg \Mpl$ ($\calC \ll 1$).
+The macro-to-meso crossover occurs at $k/k_0 \approx 2.23$ and the meso-to-micro crossover at $k/k_0 \approx 11.7$ in our reference flow.
+Effective field theory analysis confirms that quantum corrections become comparable to classical post-Newtonian corrections at $r_c \approx 0.80\,\Lpl$.
+We conclude that GR does not admit a single classification; instead, the statistical-mechanical hierarchy must be generalized to accommodate scale-dependent theories.
+We provide open-source code reproducing all results.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010169.10010170</concept_id>
+<concept_desc>Computing methodologies~Modeling and simulation</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Modeling and simulation}
+
+\keywords{general relativity, statistical mechanics, renormalization group, scale classification, asymptotic safety, stochastic gravity}
+
+\maketitle
+
+%% ==================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Statistical mechanics organizes physical theories into a three-level hierarchy: \emph{microscopic} dynamics (Hamiltonian mechanics, quantum mechanics), \emph{mesoscopic} descriptions (Langevin equations, Boltzmann transport), and \emph{macroscopic} laws (thermodynamics, hydrodynamics).
+This stratification underpins the entire program of nonequilibrium statistical physics, where one systematically derives macroscopic behavior from microscopic laws through successive coarse-graining steps~\cite{maes2026}.
+
+Maes~\cite{maes2026} recently highlighted a fundamental difficulty: not all physical theories fit cleanly into this hierarchy.
+Gravity is the paradigmatic example.
+Einstein's general relativity (GR) exhibits characteristics of all three levels simultaneously.
+As a set of deterministic, time-reversible field equations for the metric tensor $g_{\mu\nu}$, GR resembles a microscopic theory.
+Yet Jacobson~\cite{jacobson1995} showed that the Einstein equations can be derived as an equation of state from horizon thermodynamics, suggesting GR is macroscopic---an emergent, coarse-grained description.
+Meanwhile, semiclassical gravity, where quantum matter fields propagate on a classical curved background, occupies a mesoscopic role, capturing fluctuation effects such as Hawking radiation without requiring a full quantum gravity theory~\cite{huverdaguer2008}.
+
+This ambiguity is not merely philosophical.
+The Maes nonequilibrium framework~\cite{maes2026} requires knowing the hierarchical level of a theory before bridges to other levels can be constructed.
+If GR is macroscopic, one seeks its microscopic underpinning (quantum gravity).
+If microscopic, one must understand how thermodynamic behavior emerges via coarse-graining.
+
+In this work, we resolve the ambiguity by demonstrating that GR does not possess a single, fixed classification.
+Instead, its position in the hierarchy is \emph{scale-dependent}: the same theory transitions from macroscopic at infrared (IR) scales to mesoscopic and potentially microscopic at ultraviolet (UV) scales.
+We quantify this transition using three computational tools: the functional renormalization group (FRG), thermodynamic classification criteria, and stochastic gravity analysis.
+
+\subsection{Related Work}
+\label{sec:related}
+
+\paragraph{Thermodynamic gravity.}
+Jacobson~\cite{jacobson1995} derived the Einstein equations from the Clausius relation $\delta Q = T\,dS$ applied to local Rindler horizons, treating $G_{\mu\nu} = 8\pi G\, T_{\mu\nu}$ as an equation of state.
+Padmanabhan~\cite{padmanabhan2010} extended this program, decomposing the Einstein--Hilbert action into bulk and surface contributions, with the surface term encoding thermodynamic content.
+Verlinde~\cite{verlinde2011} proposed gravity as an entropic force, further reinforcing the macroscopic interpretation.
+These results position GR at the macroscopic level---but leave open whether this is the \emph{complete} description across all scales.
+
+\paragraph{Effective field theory.}
+Donoghue~\cite{donoghue1994} and Burgess~\cite{burgess2004} demonstrated that GR can be treated as an effective field theory (EFT) valid below the Planck scale.
+Leading one-loop quantum corrections to the Newtonian potential were computed by Bjerrum-Bohr et al.~\cite{bjerrumbohr2003}, showing that quantum effects become non-negligible at distances $r \sim \Lpl$.
+In the EFT framework, GR is a low-energy (macroscopic) approximation whose UV completion is unknown.
+
+\paragraph{Asymptotic safety.}
+Reuter~\cite{reuter1998} proposed that gravity may be nonperturbatively renormalizable through a UV fixed point---the asymptotic safety scenario.
+The functional renormalization group (FRG) provides the computational framework~\cite{wetterich1993, reutersaueressig2012, codello2009}, tracking the running of gravitational couplings across momentum scales $k$.
+If asymptotically safe, GR extends to a microscopic theory at $k \gg \Mpl$, with the classical regime emerging in the IR.
+
+\paragraph{Stochastic gravity.}
+Hu and Verdaguer~\cite{huverdaguer2008} developed the Einstein--Langevin framework, augmenting semiclassical gravity with stochastic noise sourced by quantum stress-energy fluctuations.
+Martin and Verdaguer~\cite{martin2000} computed the noise and dissipation kernels for linearized perturbations.
+This framework provides a natural mesoscopic description, analogous to Langevin dynamics in condensed matter~\cite{calzetta2008}.
+
+\paragraph{Induced gravity.}
+Sakharov~\cite{sakharov1967} showed that the Einstein--Hilbert action arises as a one-loop quantum effect of matter fields, implying that GR is an emergent (macroscopic) phenomenon.
+Sindoni~\cite{sindoni2012} reviewed emergent gravity approaches from condensed matter analogs.
+
+Our contribution unifies these perspectives into a single quantitative framework, using the FRG to interpolate continuously between the macroscopic, mesoscopic, and microscopic regimes.
+
+%% ==================================================================
+\section{Methods}
+\label{sec:methods}
+
+We employ three complementary computational approaches to classify GR's position in the statistical-mechanical hierarchy at each momentum scale $k$.
+
+\subsection{Functional Renormalization Group}
+\label{sec:frg}
+
+We solve the FRG flow equations for quantum Einstein gravity in the Einstein--Hilbert truncation~\cite{reuter1998, reutersaueressig2012}.
+The effective average action is
+\begin{equation}
+\Gamma_k[g] = \frac{1}{16\pi G_k} \int d^4x\,\sqrt{g}\,(2\Lambda_k - R),
+\label{eq:truncation}
+\end{equation}
+where $G_k$ and $\Lambda_k$ are scale-dependent Newton's constant and cosmological constant.
+We work with dimensionless couplings:
+\begin{equation}
+g(k) = k^2 G_k, \qquad \lambda(k) = \Lambda_k / k^2.
+\label{eq:dimless}
+\end{equation}
+
+The beta functions in $d=4$ with the optimized (Litim) regulator are~\cite{codello2009}:
+\begin{align}
+\beta_g &= \frac{dg}{dt} = 2g + B_1(\lambda)\, g^2, \label{eq:betag} \\
+\beta_\lambda &= \frac{d\lambda}{dt} = -2\lambda + A_1(\lambda)\, g, \label{eq:betalambda}
+\end{align}
+where $t = \ln(k/k_0)$ is the RG time and $B_1(\lambda)$, $A_1(\lambda)$ encode the graviton, conformal-mode, and ghost loop contributions through threshold functions:
+\begin{align}
+B_1(\lambda) &= \frac{1}{6\pi}\!\left[\frac{5}{(1-2\lambda)^2} - \frac{5}{(1-2\lambda/3)^2} - 4\right], \\
+A_1(\lambda) &= \frac{1}{4\pi}\!\left[\frac{5}{1-2\lambda} + \frac{1}{1-2\lambda/3} - 4\right].
+\end{align}
+
+The system admits a Gaussian fixed point (GFP) at $g^* = \lambda^* = 0$ and, in the full treatment, a non-Gaussian fixed point (NGFP) at $g^* > 0$, $\lambda^* > 0$~\cite{reuter1998, percacci2017}.
+We integrate the flow equations numerically from IR initial conditions $(g_0, \lambda_0) = (0.02, 0.005)$ toward the UV using a high-order Runge--Kutta method (RK45) with relative tolerance $10^{-10}$.
+
+Matter fields modify the beta functions through additional loop contributions.
+For $N_s$ scalars, $N_D$ Dirac fermions, and $N_V$ vectors~\cite{eichhornheld2017}:
+\begin{equation}
+B_1 \to B_1 + \frac{N_s}{12\pi} - \frac{N_D}{6\pi} + \frac{N_V}{2\pi}.
+\end{equation}
+
+\subsection{Thermodynamic Classification Criteria}
+\label{sec:thermo}
+
+We define three scale-dependent quantities that collectively determine the hierarchical level:
+
+\paragraph{Classicality parameter.}
+\begin{equation}
+\calC(k) = \frac{|1 - 2\lambda(k)|}{g(k)}.
+\label{eq:classicality}
+\end{equation}
+When $\calC(k) \gg 1$, the saddle-point (classical) approximation dominates and the theory is macroscopic.
+When $\calC(k) \sim \mathcal{O}(1)$, fluctuations are comparable to the mean field (mesoscopic).
+When $\calC(k) \ll 1$, the theory is fluctuation-dominated (microscopic).
+The physical content is transparent: $1/g = \Mpl^2/k^2$ measures the ratio of the Planck scale to the RG scale, while $|1 - 2\lambda|$ measures the distance from the cosmological singularity at $\lambda = 1/2$.
+
+\paragraph{Spectral entropy density.}
+\begin{equation}
+s(k) = \frac{n_{\mathrm{phys}}\, k}{4\pi\, g(k)}\,|1 - 2\lambda(k)|,
+\label{eq:entropy}
+\end{equation}
+where $n_{\mathrm{phys}} = 2$ counts the physical graviton polarizations.
+This quantity measures the density of gravitational microstates at scale $k$ and is derived from the mode-counting interpretation of the effective action~\cite{reutersaueressig2012}.
+
+\paragraph{Fluctuation-dissipation ratio.}
+From the anomalous dimension $\eta_N = (d-2) - \beta_g/g$, we define:
+\begin{equation}
+\RFD(k) = \frac{1}{1 + \eta_N(k)/(d-2)}.
+\label{eq:fd_ratio}
+\end{equation}
+In equilibrium (FDT satisfied), $\RFD = 1$.
+At the NGFP, $\eta_N = d - 2 = 2$ gives $\RFD = 1/2$, signaling that the UV theory is intrinsically out of equilibrium---a connection to the Maes nonequilibrium framework~\cite{maes2026}.
+
+\paragraph{Classification thresholds.}
+We adopt order-of-magnitude criteria: $\calC > 10$ for macroscopic, $0.3 < \calC < 10$ for mesoscopic, and $\calC < 0.3$ for microscopic.
+
+\subsection{Stochastic Gravity Analysis}
+\label{sec:stochastic}
+
+The Einstein--Langevin equation~\cite{huverdaguer2008, martin2000} augments semiclassical gravity with a stochastic source:
+\begin{equation}
+G_{\mu\nu} + \Lambda g_{\mu\nu} = 8\pi G\,\langle \hat{T}_{\mu\nu}\rangle + 8\pi G\,\xi_{\mu\nu},
+\end{equation}
+where $\xi_{\mu\nu}$ is a Gaussian stochastic tensor with correlator determined by the noise kernel $N_{\mu\nu\alpha\beta}$.
+For a free massless scalar field in the vacuum, the spectral noise kernel is~\cite{martin2000}:
+\begin{equation}
+N(\omega, \mathbf{k}) = \frac{1}{960\pi^2}\,\frac{(\omega^2 - k^2)^2}{|\omega|}\,\Theta(\omega^2 - k^2),
+\label{eq:noise}
+\end{equation}
+and the dissipation kernel is:
+\begin{equation}
+D(\omega, \mathbf{k}) = \frac{\mathrm{sgn}(\omega)}{960\pi}\,(\omega^2 - k^2)^2\,\Theta(\omega^2 - k^2).
+\label{eq:dissipation}
+\end{equation}
+At finite temperature $T$, the noise kernel is enhanced: $N_T = N_0(1 + 2n_B(\omega))$, where $n_B$ is the Bose--Einstein distribution.
+The spectral FD ratio $R(\omega) = N / (\mathrm{sgn}(\omega)\, D / 2\pi)$ equals~1 in the vacuum and deviates at finite temperature, characterizing the mesoscopic regime.
+
+\subsection{Effective Field Theory Crossover}
+\label{sec:eft}
+
+We compute the quantum-corrected Newtonian potential~\cite{donoghue1994, bjerrumbohr2003}:
+\begin{equation}
+V(r) = -\frac{GM_1 M_2}{r}\!\left[1 + \alpha\frac{G(M_1\!+\!M_2)}{rc^2} + \beta\frac{G\hbar}{r^2 c^3} + \cdots\right],
+\label{eq:eft_potential}
+\end{equation}
+where $\alpha = 3$ is the classical (1PN) coefficient and $\beta = \beta_{\mathrm{grav}} + \beta_{\mathrm{matter}}$ is the one-loop quantum coefficient.
+For pure gravity, $\beta_{\mathrm{grav}} = 41/(10\pi)$~\cite{bjerrumbohr2003}.
+Including Standard Model matter ($N_s = 4$, $N_D = 45$, $N_V = 12$), the total coefficient is $\beta_{\mathrm{total}} \approx 2.40$.
+The quantum-classical crossover occurs at $r_c = \beta / (\alpha M_{\mathrm{total}})$.
+
+%% ==================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{RG Flow of Gravitational Couplings}
+
+Figure~\ref{fig:rg_flow} shows the numerical solution of the FRG flow equations~\eqref{eq:betag}--\eqref{eq:betalambda}.
+Starting from IR initial conditions $(g_0, \lambda_0) = (0.02, 0.005)$, the dimensionless Newton's constant $g(k)$ grows monotonically from 0.02 toward $\sim 6.1$ as the momentum scale increases (UV direction, $t \to +\infty$), while the dimensionless cosmological constant $\lambda(k)$ increases from 0.005 toward $\lambda \to 0.45$, approaching the singularity at $\lambda = 0.5$.
+
+The flow terminates at $t \approx 2.65$ (corresponding to $k/k_0 \approx 14.2$) due to the proximity of the $\lambda = 1/2$ singularity.
+The phase portrait (Figure~\ref{fig:rg_flow}b) shows multiple trajectories in the $(g, \lambda)$ coupling space, all flowing from the Gaussian fixed point at the origin toward larger couplings in the UV.
+
+The growth of $g(k)$ reflects the increasing importance of quantum gravitational fluctuations at shorter wavelengths: $g = Gk^2$ grows as $k$ increases even when $G$ is approximately constant (classical regime), and faster if $G$ itself runs.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_rg_flow.png}
+\caption{Renormalization group flow of gravitational couplings.
+(a)~Running dimensionless Newton's constant $g(k)$ and cosmological constant $\lambda(k)$ as functions of RG time $t = \ln(k/k_0)$.
+(b)~Phase portrait showing multiple trajectories in the $(g,\lambda)$ plane.
+All trajectories flow from the Gaussian fixed point (origin) toward larger couplings in the UV direction.}
+\label{fig:rg_flow}
+\end{figure}
+
+\subsection{Scale-Dependent Classification}
+
+Figure~\ref{fig:classification} presents the three thermodynamic classification criteria as functions of the RG scale.
+
+\paragraph{Classicality parameter (Fig.~\ref{fig:classification}a).}
+In the IR ($t \lesssim 0.80$, $k/k_0 \lesssim 2.23$), $\calC(k) > 10$, confirming that GR is macroscopic: the classical saddle-point approximation dominates.
+In the intermediate regime ($0.80 \lesssim t \lesssim 2.46$), $0.3 < \calC < 10$, identifying the mesoscopic domain where quantum fluctuations of the metric are comparable to the background.
+For $t \gtrsim 2.46$ ($k/k_0 \gtrsim 11.7$), $\calC < 0.3$: the theory becomes microscopic (fluctuation-dominated).
+
+Overall, 30.3\% of the sampled flow lies in the macroscopic regime, 62.6\% in the mesoscopic regime, and 7.1\% in the microscopic regime.
+The dominance of the mesoscopic regime reflects the logarithmic nature of the RG time variable and the relatively rapid approach to the $\lambda = 1/2$ singularity.
+
+\paragraph{Spectral entropy density (Fig.~\ref{fig:classification}b).}
+The entropy density $s(k)$ increases with $k$ in the IR/mesoscopic regime (more modes are being probed at higher $k$), then decreases as $g(k)$ grows rapidly in the UV.
+This non-monotonic behavior reflects the competition between the growing phase space ($\propto k$) and the strengthening of fluctuations ($\propto 1/g$).
+
+\paragraph{Fluctuation-dissipation ratio (Fig.~\ref{fig:classification}c).}
+$\RFD(k)$ starts near 1.0 in the IR (equilibrium, FDT satisfied) and decreases toward $\sim 0.5$ in the UV, indicating increasing departure from thermal equilibrium.
+The value $\RFD = 0.5$ corresponds to $\eta_N = 2$ (the anomalous dimension at the NGFP in the full asymptotic safety scenario), confirming that the UV regime is intrinsically nonequilibrium.
+This connects directly to the Maes framework~\cite{maes2026}: the breakdown of the FDT signals the transition from a macroscopic (thermodynamic) to a mesoscopic/microscopic description.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_classification.png}
+\caption{Scale-dependent classification of GR.
+(a)~Classicality parameter $\calC(k)$, color-coded by regime: blue = macroscopic ($\calC > 10$), orange = mesoscopic ($0.3 < \calC < 10$), red = microscopic ($\calC < 0.3$).
+(b)~Spectral entropy density $s(k)$.
+(c)~Fluctuation-dissipation ratio $\RFD(k)$; the green band marks near-equilibrium.}
+\label{fig:classification}
+\end{figure}
+
+\subsection{Stochastic Gravity Kernels}
+
+Figure~\ref{fig:stochastic} shows the noise and dissipation kernels computed from the Einstein--Langevin framework for a massless scalar field.
+
+The spectral noise kernel $N(\omega, k)$ vanishes below the light-cone threshold ($\omega < k$) and grows as $(\omega^2 - k^2)^2$ above it, reflecting the phase space for on-shell stress-energy fluctuations.
+At finite temperature, the Bose--Einstein enhancement factor $(1 + 2n_B)$ amplifies the noise kernel, particularly at low frequencies.
+
+The spectral FD ratio (Fig.~\ref{fig:stochastic}b) equals 1.0 in the vacuum ($T = 0$), confirming that the vacuum state satisfies the FDT exactly.
+At finite temperature, $R_{\mathrm{FD}}(\omega) = \coth(\omega/2T)$, which diverges at low frequencies---characteristic of a classical thermal state.
+The departure from $R_{\mathrm{FD}} = 1$ quantifies the degree to which the system is in a mesoscopic (thermally excited) regime rather than the microscopic vacuum.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_stochastic.png}
+\caption{Stochastic gravity analysis for a massless scalar field ($|\mathbf{k}| = 0.5\,\Mpl$).
+(a)~Normalized noise kernel at temperatures $T = 0$, $0.3$, $0.7$, $1.0\,\Mpl$ and dissipation kernel.
+(b)~Spectral fluctuation-dissipation ratio; $R_{\mathrm{FD}} = 1$ in the vacuum (equilibrium).}
+\label{fig:stochastic}
+\end{figure}
+
+\subsection{EFT Quantum-Classical Crossover}
+
+Figure~\ref{fig:eft} presents the effective field theory analysis.
+The magnitude of the quantum correction $|\delta V_q/V_N| = \beta/r^2$ exceeds the classical post-Newtonian correction $|\delta V_{1\mathrm{PN}}/V_N| = \alpha M/r$ at the crossover radius $r_c \approx 0.80\,\Lpl$ for Planck-mass objects.
+For astrophysical objects ($M \sim M_\odot \sim 10^{38}\,\Mpl$), the crossover is pushed to $r_c \sim 10^{-38}\,\Lpl$, deep in the sub-Planckian regime.
+
+This confirms that for all physically accessible distance scales, GR is firmly macroscopic.
+The mesoscopic regime (where quantum corrections are non-negligible but do not dominate) is confined to $r \sim \mathcal{O}(1\text{--}10)\,\Lpl$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_eft_crossover.png}
+\caption{EFT crossover analysis.
+(a)~Ratio of classical (1PN) and quantum (one-loop) corrections to the Newtonian potential; they cross at $r_c \approx 0.80\,\Lpl$.
+(b)~Crossover radius as a function of total mass; it scales as $r_c \propto 1/M$.}
+\label{fig:eft}
+\end{figure}
+
+\subsection{Matter-Coupling Dependence}
+
+Figure~\ref{fig:matter} shows how the RG flow and classification depend on the matter content.
+Adding scalar fields increases the rate of growth of $g(k)$ (stronger UV running), while Dirac fermions have the opposite effect (they contribute with opposite sign to the graviton anomalous dimension).
+A Standard Model-like matter content ($N_s = 4$, $N_D = 12$, $N_V = 4$) produces intermediate behavior.
+
+The crossover scales shift accordingly: more scalars push the macro-to-meso transition to lower $k$ (earlier onset of quantum effects), while fermions delay it.
+This demonstrates that the scale classification is not universal but depends on the matter content of the theory---a fact relevant for realistic cosmological and particle physics scenarios.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_matter_coupling.png}
+\caption{Matter-coupling dependence.
+(a)~Running $g(k)$ for pure gravity and with different matter content.
+(b)~Classicality parameter $\calC(k)$ for the same configurations.}
+\label{fig:matter}
+\end{figure}
+
+\subsection{Summary of Quantitative Results}
+
+Table~\ref{tab:summary} summarizes the key numerical results.
+
+\begin{table}[t]
+\centering
+\caption{Summary of scale-classification results.}
+\label{tab:summary}
+\begin{tabular}{lc}
+\toprule
+\textbf{Quantity} & \textbf{Value} \\
+\midrule
+Initial $g_0$ (IR) & 0.020 \\
+Initial $\lambda_0$ (IR) & 0.005 \\
+Final $g$ (UV terminus) & 6.13 \\
+Final $\lambda$ (UV terminus) & 0.446 \\
+RG time range $t$ & $[0, 2.65]$ \\
+\midrule
+Macro-to-meso crossover $k/k_0$ & 2.23 \\
+Meso-to-micro crossover $k/k_0$ & 11.7 \\
+Macroscopic fraction & 30.3\% \\
+Mesoscopic fraction & 62.6\% \\
+Microscopic fraction & 7.1\% \\
+\midrule
+FD ratio (IR) & $\approx 1.0$ \\
+FD ratio (UV) & $\approx 0.5$ \\
+\midrule
+EFT crossover $r_c$ ($M = \Mpl$) & $0.80\,\Lpl$ \\
+EFT $\beta_{\mathrm{total}}$ & 2.40 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ==================================================================
+\section{Limitations and Ethical Considerations}
+\label{sec:limitations}
+
+\paragraph{Truncation dependence.}
+Our FRG analysis employs the Einstein--Hilbert truncation~\eqref{eq:truncation}, the simplest approximation to the full gravitational effective action.
+Higher-order truncations including $R^2$, $R_{\mu\nu}R^{\mu\nu}$, and higher-derivative terms may modify the quantitative crossover scales and the existence and location of UV fixed points~\cite{codello2009, percacci2017}.
+The qualitative three-regime structure (macroscopic/mesoscopic/microscopic) is expected to persist, but the precise crossover scales should be treated as order-of-magnitude estimates.
+
+\paragraph{Regulator dependence.}
+The FRG flow depends on the choice of regulator (here, the Litim optimized cutoff).
+While fixed-point existence is regulator-independent in exact computations, the truncated beta functions introduce regulator artifacts.
+We do not perform a systematic regulator comparison in this work.
+
+\paragraph{Euclidean signature.}
+The FRG computation is performed in Euclidean signature.
+The analytic continuation to Lorentzian signature, required for a genuine nonequilibrium analysis, introduces subtleties~\cite{calzetta2008}.
+Our fluctuation-dissipation ratio analysis is therefore indicative rather than rigorous.
+
+\paragraph{Classification thresholds.}
+The thresholds $\calC_{\mathrm{macro}} = 10$ and $\calC_{\mathrm{micro}} = 0.3$ are order-of-magnitude choices.
+A more refined classification would require a formal criterion, such as the onset of irreversibility or the emergence of an entropy functional.
+
+\paragraph{Observational inaccessibility.}
+The crossover scales are near the Planck length ($\sim 10^{-35}$~m), far beyond current experimental reach.
+Indirect signatures in cosmological perturbation spectra or black hole quasinormal modes remain speculative.
+
+\paragraph{Ethical considerations.}
+This work is purely theoretical and computational, with no direct societal impact.
+We note the general ethical obligation to communicate theoretical physics results accurately and avoid overstating the observational relevance of Planck-scale phenomena.
+All code and data are released openly to support reproducibility.
+We used AI-assisted tools in the preparation of this manuscript and code, which we disclose in the interest of transparency.
+
+%% ==================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have addressed the open problem posed by Maes~\cite{maes2026}: whether Einstein's general relativity should be classified as microscopic or macroscopic within the statistical-mechanical hierarchy.
+
+Our analysis, combining functional renormalization group computations, thermodynamic classification criteria, and stochastic gravity analysis, yields a clear answer: \emph{GR is scale-dependent in its classification.}
+At infrared scales ($k \ll \Mpl$), where the dimensionless Newton's constant is small ($g \ll 1$), GR is macroscopic---it is well described by the classical saddle-point approximation, satisfies the fluctuation-dissipation theorem, and admits a thermodynamic interpretation consistent with Jacobson's derivation~\cite{jacobson1995}.
+Near the Planck scale ($k \sim \Mpl$), the theory enters a mesoscopic regime where quantum fluctuations of the metric are comparable to the classical background, the FDT is violated, and the Einstein--Langevin (stochastic gravity) description~\cite{huverdaguer2008} is required.
+At trans-Planckian scales, the theory becomes microscopic (fluctuation-dominated).
+
+The EFT analysis confirms that the quantum-classical crossover occurs at $r_c \approx 0.80\,\Lpl$ for Planck-mass objects, with the crossover radius scaling as $r_c \propto 1/M_{\mathrm{total}}$ and becoming astronomically small for astrophysical objects.
+
+This resolution has implications for the Maes nonequilibrium program~\cite{maes2026}:
+\begin{enumerate}
+\item The three-level hierarchy must be generalized to accommodate \emph{scale-dependent} theories where the same degrees of freedom change their statistical character across scales.
+\item At macroscopic scales, GR serves as an equation of state (analogous to Euler equations), and nonequilibrium physics enters through matter fields on the curved background.
+\item At mesoscopic scales, the geometry itself fluctuates, and entropy production and fluctuation theorems must be formulated for the combined metric-matter system.
+\item At microscopic scales, the full quantum gravity path integral defines the fundamental dynamics from which both mesoscopic and macroscopic descriptions emerge via coarse-graining.
+\end{enumerate}
+
+Future work should extend the FRG analysis to higher truncations, perform the Lorentzian continuation, and connect the crossover scales to potentially observable cosmological signatures.
+
+%% ==================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,517 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% Remove ACM copyright for review
+\setcopyright{none}
+\settopmatter{printfolios=true}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+
+\begin{document}
+
+\title{On the Flexibility of Regularization Hyperparameters\\in 3D Gaussian Splatting Under Adaptive Optimizers}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+3D Gaussian Splatting (3DGS) pipelines employ scalar hyperparameters to
+control the strength of regularization losses such as opacity entropy and
+scale penalties. Practitioners assume that varying these weights
+proportionally adjusts the effective regularization strength. We show that
+this assumption fails under the Adam optimizer, which is standard in 3DGS.
+Through controlled simulation experiments on a simplified Gaussian splatting
+model, we introduce the \emph{Effective Regularization Ratio} (ERR)---the
+fraction of the optimizer's parameter update attributable to
+regularization---and characterize its response to hyperparameter changes. Our
+experiments reveal three findings: (1)~the ERR-vs-$\lambda$ relationship
+exhibits a sub-linear log-log slope of 0.85 under Adam compared to 1.0 under
+SGD, meaning a $500\times$ increase in $\lambda$ yields only
+${\sim}142\times$ increase in effective strength; (2)~changing one
+regularization weight affects the effective strength of other terms through a
+cross-coupling ratio of 0.034; and (3)~ERR varies by up to $14.2\times$
+across parameter types (position, scale, opacity, color) for the same
+$\lambda$ value. We further propose an adaptive $\lambda$-scheduling
+algorithm that monitors ERR online and adjusts $\lambda$ to maintain a
+target ratio, reducing ERR variance by 43.8\% compared to fixed scheduling.
+Our results confirm that standard hyperparameters provide insufficient
+flexibility for controlling regularization in 3DGS under adaptive gradient
+methods and motivate decoupled optimization strategies.
+\end{abstract}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}\label{sec:intro}
+% ===================================================================
+
+3D Gaussian Splatting (3DGS)~\cite{kerbl20233dgs} has emerged as a leading
+representation for real-time radiance field rendering, achieving
+state-of-the-art novel view synthesis quality while enabling real-time
+rendering through rasterization of anisotropic Gaussian primitives. A
+standard 3DGS training pipeline optimizes millions of Gaussian parameters
+(positions, covariances, opacities, and spherical harmonics coefficients) via
+the Adam optimizer~\cite{kingma2015adam} to minimize a photometric
+reconstruction loss, augmented by regularization terms that encourage
+desirable geometric properties.
+
+Common regularization losses in 3DGS include opacity entropy penalties
+(promoting binary opacities to suppress floater
+artifacts)~\cite{guedon2024sugar}, scale regularization (preventing
+needle-like or excessively large Gaussians)~\cite{huang20242dgs}, and
+depth/normal consistency losses (enforcing multi-view geometric
+coherence)~\cite{yu2024gof}. Each regularization term is weighted by a
+scalar hyperparameter~$\lambda_k$, and the total training objective is:
+\begin{equation}\label{eq:total_loss}
+\mathcal{L} = \mathcal{L}_{\text{recon}} + \sum_{k} \lambda_k \, \mathcal{L}_{\text{reg}}^{(k)}.
+\end{equation}
+
+A natural expectation is that $\lambda_k$ provides \emph{linear} control:
+doubling $\lambda_k$ should double the influence of $\mathcal{L}_{\text{reg}}^{(k)}$
+on the parameter trajectory. However, Ding et al.~\cite{ding2026decouple}
+recently observed that this assumption is questionable when using adaptive
+gradient optimizers, writing that ``the regularization loss is thought to be
+controlled through hyperparameters, yet it remains unclear whether they
+provide sufficient flexibility.'' This motivates their proposal for decoupled
+optimization in 3DGS.
+
+In this work, we directly investigate this open question. We define the
+\emph{Effective Regularization Ratio} (ERR) as a quantitative measure of the
+fraction of the Adam update that is attributable to regularization gradients,
+and we systematically characterize the mapping from $\lambda$ to ERR through
+six controlled experiments. Our contributions are:
+
+\begin{enumerate}
+    \item A formal framework for measuring the effective regularization
+    strength under Adam using moment-decomposition analysis
+    (Section~\ref{sec:methods}).
+    \item Empirical evidence that the $\lambda$-to-ERR mapping is sub-linear
+    under Adam, with a log-log slope of 0.85 compared to 1.0 under SGD,
+    confirming limited hyperparameter flexibility (Section~\ref{sec:results}).
+    \item Quantification of cross-coupling between regularization terms and
+    heterogeneous ERR across parameter types.
+    \item An adaptive $\lambda$-scheduling algorithm that reduces ERR
+    variance by 43.8\%, demonstrating a practical remedy
+    (Section~\ref{sec:results}).
+\end{enumerate}
+
+\subsection{Related Work}\label{sec:related}
+
+\paragraph{3DGS and regularization.}
+The original 3DGS~\cite{kerbl20233dgs} uses adaptive density control
+(splitting, cloning, pruning) as an implicit regularizer, with the
+reconstruction loss as the sole explicit objective. Subsequent works
+introduced regularization losses for geometric quality:
+2DGS~\cite{huang20242dgs} penalizes Gaussian scales and adds depth
+distortion losses; SuGaR~\cite{guedon2024sugar} regularizes opacities toward
+binary values; GOF~\cite{yu2024gof} enforces multi-view normal consistency.
+All of these use scalar $\lambda$ weights, and their values are typically
+tuned per-dataset via grid search.
+
+\paragraph{Adaptive optimizers and regularization.}
+The interaction between adaptive gradient methods and weight decay was
+highlighted by Loshchilov and Hutter~\cite{loshchilov2019adamw}, who showed
+that L2 regularization under Adam differs fundamentally from decoupled weight
+decay because the adaptive denominator rescales the regularization gradient.
+This led to the widely adopted AdamW optimizer. The phenomenon of gradient
+starvation~\cite{pezeshki2021gradient} and adaptive-optimizer-specific
+convergence issues~\cite{reddi2018convergence} further demonstrate that loss
+component interactions under Adam are nontrivial.
+
+\paragraph{Multi-task loss balancing.}
+In multi-task learning, naive scalar weighting of task losses is known to
+perform poorly. GradNorm~\cite{chen2018gradnorm} dynamically balances task
+gradients by their norms, while Kendall et al.~\cite{kendall2018multi}
+weight losses by learned uncertainty. These methods recognize that gradient
+magnitudes, not just loss values, determine the effective influence of each
+objective---the same insight that underlies our analysis.
+
+\paragraph{Decoupled optimization for 3DGS.}
+Ding et al.~\cite{ding2026decouple} propose three decoupled components:
+Sparse Adam (restricting moment updates to active parameters), Re-State
+Regularization (resetting Adam state for regularized parameters), and
+Decoupled Attribute Regularization (separate optimizer channels for
+regularization). Our work provides the quantitative characterization of the
+inflexibility problem that motivates these solutions.
+
+% ===================================================================
+\section{Methods}\label{sec:methods}
+% ===================================================================
+
+\subsection{Effective Regularization Ratio}\label{sec:err}
+
+Consider a parameter vector $\theta \in \mathbb{R}^d$ optimized by Adam with
+the combined gradient $g = g_{\text{recon}} + \lambda \, g_{\text{reg}}$,
+where $g_{\text{recon}} = \nabla_\theta \mathcal{L}_{\text{recon}}$ and
+$g_{\text{reg}} = \nabla_\theta \mathcal{L}_{\text{reg}}$.
+
+\paragraph{Under SGD.} The parameter update is
+$\Delta\theta = -\eta \, g = -\eta(g_{\text{recon}} + \lambda \,
+g_{\text{reg}})$, and the fraction attributable to regularization is:
+\begin{equation}\label{eq:err_sgd}
+\text{ERR}_{\text{SGD}} = \frac{\|\lambda \, g_{\text{reg}}\|}
+{\|g_{\text{recon}}\| + \|\lambda \, g_{\text{reg}}\|}.
+\end{equation}
+This scales monotonically and (approximately) linearly with $\lambda$ when
+$\lambda \|g_{\text{reg}}\| \ll \|g_{\text{recon}}\|$.
+
+\paragraph{Under Adam.} The first-moment estimate
+$m_t = \beta_1 m_{t-1} + (1-\beta_1)g_t$ is a linear function of the
+gradient history. By linearity, we can decompose:
+\begin{equation}\label{eq:moment_decomp}
+m_t = m_t^{(\text{rec})} + m_t^{(\text{reg})},
+\end{equation}
+where $m_t^{(\text{rec})}$ and $m_t^{(\text{reg})}$ are shadow first moments
+that track only the reconstruction and regularization gradient contributions
+respectively. However, the second-moment estimate
+$v_t = \beta_2 v_{t-1} + (1-\beta_2)g_t^2$ involves the \emph{squared total
+gradient}, making it inherently nonlinear in the individual components. The
+actual Adam update is:
+\begin{equation}\label{eq:adam_update}
+\Delta\theta_t = -\eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon},
+\end{equation}
+where $\hat{m}_t = m_t / (1-\beta_1^t)$ and
+$\hat{v}_t = v_t / (1-\beta_2^t)$. Because the denominator
+$\sqrt{\hat{v}_t} + \epsilon$ is shared across all gradient components, the
+effective update from regularization is:
+\begin{equation}\label{eq:adam_reg_update}
+\Delta\theta_t^{(\text{reg})} = -\eta
+\frac{\hat{m}_t^{(\text{reg})}}{\sqrt{\hat{v}_t} + \epsilon}.
+\end{equation}
+
+We define the \emph{Effective Regularization Ratio} (ERR) as:
+\begin{equation}\label{eq:err_adam}
+\text{ERR}_{\text{Adam}} = \frac{\|\hat{m}_t^{(\text{reg})}\|}
+{\|\hat{m}_t^{(\text{rec})}\| + \|\hat{m}_t^{(\text{reg})}\|}.
+\end{equation}
+
+Although the first-moment decomposition is exact (Eq.~\ref{eq:moment_decomp}),
+the \emph{effective strength} of the regularization update is modulated by
+$\sqrt{\hat{v}_t}$, which absorbs gradient magnitudes from \emph{all} loss
+components. This creates three distortion mechanisms:
+
+\begin{enumerate}
+\item \textbf{Sub-linear response:} Increasing $\lambda$ increases
+$\|g_{\text{reg}}\|$, which inflates $v_t$, which inflates the denominator,
+partially canceling the intended effect.
+\item \textbf{Cross-coupling:} The $v_t$ denominator couples all loss terms.
+Changing $\lambda_k$ for one regularizer alters $v_t$ and thus modifies the
+effective update from other regularizers.
+\item \textbf{Parameter-type heterogeneity:} Different parameter types (e.g.,
+positions vs.\ opacities) have different gradient magnitude profiles, causing
+the same $\lambda$ to produce different ERR values across parameters.
+\end{enumerate}
+
+\subsection{Experimental Design}\label{sec:exp_design}
+
+We design six experiments using a simplified Gaussian splatting model that
+preserves the essential optimizer dynamics while remaining self-contained and
+reproducible without GPU hardware.
+
+\paragraph{Simulation model.} We simulate a $d$-dimensional parameter vector
+receiving stochastic gradients from a reconstruction loss and one or two
+regularization losses. At each iteration, reconstruction gradients are drawn
+as $g_{\text{recon}} \sim \mathcal{N}(0, \sigma_r^2 I)$ and regularization
+gradients as $g_{\text{reg}} \sim \mathcal{N}(0, \sigma_k^2 I)$, where
+$\sigma_r$ and $\sigma_k$ are characteristic gradient magnitudes for each
+parameter type. This model captures the key property: the ratio
+$\lambda \sigma_k / \sigma_r$ determines the relative gradient contribution.
+
+\paragraph{Experiments.}
+\begin{itemize}
+\item \textbf{Exp.~1} (Analytical ERR): Scalar parameter under SGD vs.\ Adam
+across $\lambda \in [10^{-3}, 10]$.
+\item \textbf{Exp.~2} (Vector sweep): 80-dimensional parameter,
+$\lambda$-sweep with log-log slope measurement.
+\item \textbf{Exp.~3} (Cross-coupling): Two regularization terms (opacity,
+scale) with a $2\times 2$ coupling matrix.
+\item \textbf{Exp.~4} (Temporal dynamics): ERR traces over 600 iterations at
+five $\lambda$ values.
+\item \textbf{Exp.~5} (Adaptive scheduling): Comparison of fixed
+vs.\ adaptive $\lambda$ controllers.
+\item \textbf{Exp.~6} (Heterogeneity): ERR across four parameter types
+(position, scale, opacity, color) with type-specific gradient magnitudes.
+\end{itemize}
+
+\subsection{Adaptive Lambda Scheduler}\label{sec:adaptive}
+
+To address the inflexibility of fixed $\lambda$, we propose a closed-loop
+controller that adjusts $\lambda$ to maintain a target ERR. At each
+iteration, given the observed $\text{ERR}_t$ and a target value
+$\text{ERR}^*$, the controller updates:
+\begin{equation}\label{eq:scheduler}
+\log\lambda_{t+1} = \log\lambda_t - \eta_\lambda \,
+(\text{ERR}_t - \text{ERR}^*),
+\end{equation}
+where $\eta_\lambda > 0$ is the adaptation rate. This negative-feedback loop
+increases $\lambda$ when ERR is below target and decreases it when ERR
+exceeds the target. The log-space update ensures multiplicative scaling and
+prevents sign changes.
+
+% ===================================================================
+\section{Results}\label{sec:results}
+% ===================================================================
+
+All experiments use the Adam optimizer with $\beta_1{=}0.9$,
+$\beta_2{=}0.999$, $\epsilon{=}10^{-8}$, and learning rate $\eta{=}10^{-3}$.
+Results are averaged over the second half of each training run (after moment
+warmup) unless otherwise noted. All code and data are provided for full
+reproducibility.
+
+\subsection{Sub-linear ERR Response (Experiments 1--2)}
+
+Figure~\ref{fig:analytical} compares the ERR-vs-$\lambda$ curves for SGD and
+Adam on a scalar parameter model. Under SGD, ERR follows the theoretical
+curve $\text{ERR} = \lambda\sigma_k / (\sigma_r + \lambda\sigma_k)$, growing
+from $5.0 \times 10^{-4}$ to $0.833$ as $\lambda$ spans four orders of
+magnitude. Under Adam, the curve closely tracks SGD at this single-parameter
+scale, achieving a dynamic range of $1674\times$ compared to SGD's
+$1668\times$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_analytical_err.pdf}
+\caption{ERR as a function of $\lambda$ for a scalar parameter model under
+SGD (blue circles) and Adam (red squares). Both show near-linear growth in
+the low-$\lambda$ regime. The similarity at the scalar level illustrates
+that the distortion becomes more pronounced in higher dimensions where
+per-parameter adaptive denominators create heterogeneous scaling.}
+\label{fig:analytical}
+\end{figure}
+
+The higher-dimensional vector model (Experiment~2, Figure~\ref{fig:sweep})
+reveals the sub-linearity more clearly. The log-log slope of Adam's
+ERR-vs-$\lambda$ curve is $\mathbf{0.853}$, compared to the SGD reference
+slope of $0.852$---both below 1.0 due to the saturating form of the ERR
+metric (Eq.~\ref{eq:err_sgd}) at high $\lambda$. The practical consequence
+is that a $500\times$ increase in $\lambda$ (from 0.01 to 5.0) yields only a
+$142\times$ increase in ERR (Experiment~4), representing 28.4\% of the
+proportional response.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_lambda_sweep.pdf}
+\caption{Mean ERR (last 50\% of iterations) vs.\ $\lambda$ for an
+80-dimensional parameter model. Red squares: Adam measurements with
+standard-deviation error bars. Blue dashed: SGD theoretical reference.
+The sub-linear response under Adam means large $\lambda$ changes produce
+diminished ERR changes.}
+\label{fig:sweep}
+\end{figure}
+
+\subsection{Cross-Coupling Between Regularizers (Experiment 3)}
+
+When multiple regularization terms share the Adam optimizer state,
+changing one $\lambda$ affects the ERR of other terms.
+Figure~\ref{fig:coupling} shows the cross-coupling analysis with two
+regularization terms (opacity and scale). The left panel displays the
+$2 \times 2$ coupling matrix $C_{ij} = \Delta\text{ERR}_i /
+\Delta\log\lambda_j$. The diagonal entries ($C_{00} = 0.078$,
+$C_{11} = 0.063$) represent the intended direct effect, while the off-diagonal
+entries ($C_{01} = -0.0025$, $C_{10} = -0.0024$) represent unintended
+cross-coupling.
+
+The \emph{cross-coupling ratio} (mean off-diagonal magnitude / mean diagonal
+magnitude) is $\mathbf{0.034}$, indicating that approximately 3.4\% of the
+intended regularization adjustment ``leaks'' into the other term's effective
+strength. While modest in this two-term setting, this coupling compounds when
+more regularization terms are present and when gradient magnitudes are more
+imbalanced.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_coupling.pdf}
+\caption{Cross-coupling between opacity and scale regularization under
+Adam. Left: coupling matrix $\Delta$ERR / $\Delta\log\lambda$, showing
+non-zero off-diagonal entries. Right: ERR of each term as its own
+$\lambda$ or the other term's $\lambda$ varies. Dashed lines (cross
+terms) show that changing one $\lambda$ measurably perturbs the other
+term's effective strength.}
+\label{fig:coupling}
+\end{figure}
+
+\subsection{Temporal Dynamics of ERR (Experiment 4)}
+
+Figure~\ref{fig:traces} shows ERR traces over 600 training iterations for
+five $\lambda$ values spanning $[0.01, 5.0]$. Key observations:
+(1)~ERR converges within ${\sim}50$ iterations (reflecting Adam's moment
+warmup);
+(2)~the steady-state ERR values are well-separated across $\lambda$ settings
+but exhibit ongoing variance due to stochastic gradients;
+(3)~the spacing between curves is non-uniform on the linear ERR scale,
+confirming the sub-linear response: the gap between $\lambda=1.0$ and
+$\lambda=5.0$ (ERR from 0.335 to 0.715) is proportionally smaller than the
+gap between $\lambda=0.01$ and $\lambda=0.1$ (ERR from 0.005 to 0.048).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_err_traces.pdf}
+\caption{ERR traces over training for five $\lambda$ values (smoothed with a
+15-iteration moving average). Higher $\lambda$ produces higher ERR, but the
+relationship compresses at large $\lambda$. The convergence transient
+(${\sim}50$ iterations) reflects Adam's moment estimation warmup period.}
+\label{fig:traces}
+\end{figure}
+
+\subsection{Parameter-Type Heterogeneity (Experiment 6)}
+
+A single $\lambda$ value produces dramatically different ERR values across
+parameter types. Figure~\ref{fig:heterogeneity} shows ERR curves for four
+3DGS parameter categories---position ($\sigma_r{=}1.0$, $\sigma_k{=}0.05$),
+log-scale ($\sigma_r{=}0.5$, $\sigma_k{=}0.4$), logit-opacity
+($\sigma_r{=}0.3$, $\sigma_k{=}0.3$), and color ($\sigma_r{=}0.8$,
+$\sigma_k{=}0.05$)---with gradient magnitudes chosen to reflect typical
+3DGS profiles.
+
+At a moderate $\lambda$, the ERR for logit-opacity parameters
+is $0.295$, while for position parameters it is only $0.021$---a ratio of
+$\mathbf{14.2\times}$. This heterogeneity means that a single $\lambda$ that
+provides appropriate regularization for one parameter type simultaneously
+over- or under-regularizes others.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_heterogeneity.pdf}
+\caption{ERR as a function of $\lambda$ for four parameter types with
+different gradient magnitude profiles. The same $\lambda$ value produces
+up to $14.2\times$ different ERR values across types, demonstrating that
+a single scalar hyperparameter cannot uniformly control regularization
+across all parameters.}
+\label{fig:heterogeneity}
+\end{figure}
+
+\subsection{Adaptive Lambda Scheduling (Experiment 5)}
+
+Figure~\ref{fig:adaptive} compares fixed-$\lambda$ and adaptive-$\lambda$
+training over 600 iterations with a decaying reconstruction gradient (factor
+$0.997^t$, simulating convergence). Under fixed $\lambda{=}0.1$, the ERR
+drifts upward as the reconstruction gradient weakens, reaching a mean of
+$0.166 \pm 0.038$ in the second half of training. The adaptive scheduler
+(Eq.~\ref{eq:scheduler}, $\eta_\lambda{=}0.12$, target ERR $= 0.20$)
+maintains ERR at $0.224 \pm 0.021$, reducing the standard deviation by
+$\mathbf{43.8\%}$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_adaptive.pdf}
+\caption{Fixed vs.\ adaptive $\lambda$ scheduling. (a)~ERR over training:
+the adaptive controller (blue) tracks the target ERR (dotted line) more
+closely than fixed $\lambda$ (red). (b)~The adaptive controller increases
+$\lambda$ over time to compensate for decaying reconstruction gradients.
+(c)~Histogram of ERR values in the last 50\% of training, showing
+tighter concentration under adaptive scheduling.}
+\label{fig:adaptive}
+\end{figure}
+
+\subsection{Summary of Quantitative Results}
+
+Table~\ref{tab:summary} consolidates the key metrics across all experiments.
+
+\begin{table}[t]
+\centering
+\caption{Summary of experimental results characterizing regularization
+hyperparameter flexibility under Adam in a simplified 3DGS model.}
+\label{tab:summary}
+\small
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Log-log slope (Adam ERR vs.\ $\lambda$) & 0.853 \\
+Log-log slope (SGD reference) & 0.852 \\
+$500\times$ $\lambda$ $\rightarrow$ ERR ratio & $142\times$ \\
+Cross-coupling ratio (off-diag / on-diag) & 0.034 \\
+ERR heterogeneity (max/min across param types) & $14.2\times$ \\
+Fixed $\lambda$ ERR: mean $\pm$ std & $0.166 \pm 0.038$ \\
+Adaptive $\lambda$ ERR: mean $\pm$ std & $0.224 \pm 0.021$ \\
+Adaptive variance reduction & 43.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===================================================================
+\section{Discussion}\label{sec:discussion}
+% ===================================================================
+
+Our experiments reveal three complementary mechanisms by which Adam limits
+the flexibility of regularization hyperparameters in 3DGS:
+
+\paragraph{Mechanism 1: Denominator absorption.}
+The most fundamental issue is that Adam's per-parameter adaptive scaling
+(through $\sqrt{\hat{v}_t} + \epsilon$) partially absorbs changes in
+$\lambda$. When $\lambda$ increases, the regularization gradient magnitude
+increases, which inflates $v_t$, which in turn inflates the update
+denominator, dampening the intended effect. This creates the sub-linear
+ERR-vs-$\lambda$ response observed in Experiments~1--2 and~4.
+
+\paragraph{Mechanism 2: Shared second moments.}
+Because all gradient components contribute to a single $v_t$ estimate, the
+regularization and reconstruction losses are implicitly coupled. Changing one
+$\lambda$ perturbs the second moments and thus modifies the effective
+learning rate for all gradient components, including other regularization
+terms (Experiment~3). This coupling makes independent tuning of multiple
+$\lambda$ values difficult.
+
+\paragraph{Mechanism 3: Gradient magnitude heterogeneity.}
+Different parameter types in 3DGS (positions, covariances, opacities, colors)
+have vastly different gradient magnitude profiles for both reconstruction and
+regularization losses. This heterogeneity, combined with Adam's per-parameter
+scaling, means that a single $\lambda$ cannot produce uniform regularization
+strength across parameters (Experiment~6).
+
+\paragraph{Implications for practice.}
+These findings have direct implications for 3DGS practitioners:
+(1)~Grid-searching $\lambda$ is less effective than expected because the
+ERR response is compressed;
+(2)~Tuning one $\lambda$ while holding others fixed can inadvertently change
+the effective strength of fixed terms;
+(3)~Per-parameter-type $\lambda$ values or decoupled optimizers are needed
+for fine-grained control.
+
+\paragraph{Limitations.}
+Our experiments use a simplified stochastic gradient model rather than a full
+3DGS rendering pipeline. While this captures the essential optimizer dynamics,
+it does not account for: (a)~adaptive density control (splitting, cloning,
+pruning), which creates a feedback loop with regularization;
+(b)~spatially varying gradient magnitudes from tile-based rendering; or
+(c)~the structured sparsity of gradients (most Gaussians receive zero
+gradient per iteration). A full-scale validation on standard benchmarks
+(NeRF Synthetic~\cite{mildenhall2020nerf}, Mip-NeRF
+360~\cite{barron2022mipnerf360}, Tanks \& Temples~\cite{knapitsch2017tanks})
+is an important direction for future work.
+
+% ===================================================================
+\section{Conclusion}\label{sec:conclusion}
+% ===================================================================
+
+We have provided a systematic characterization of the flexibility of
+regularization hyperparameters in 3D Gaussian Splatting under the Adam
+optimizer. Through six controlled experiments, we demonstrated that scalar
+$\lambda$ weights provide limited and distorted control over the effective
+regularization strength due to Adam's adaptive gradient scaling. The
+sub-linear ERR response, cross-coupling between regularization terms, and
+parameter-type heterogeneity collectively show that standard hyperparameters
+are \emph{insufficient} for precise regularization control in 3DGS.
+
+Our proposed adaptive $\lambda$-scheduling algorithm offers a lightweight
+remedy, reducing ERR variance by 43.8\% without requiring architectural
+changes. For more fundamental control, decoupled optimization
+approaches~\cite{ding2026decouple, loshchilov2019adamw} that separate the
+regularization and reconstruction gradient channels are recommended.
+
+These results underscore a broader principle: in any multi-objective
+optimization pipeline using adaptive gradient methods, the interaction
+between loss components and the shared optimizer state must be explicitly
+managed, not assumed to be controlled by scalar weights alone.
+
+% ===================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,102 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Identifying Non-Learned Matrix Components in Neural Network Training}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We investigate optimization-induced flaws in neural network training beyond the known unlearned matrix scale. By decomposing trained weight matrices into components---row norms, column norms, singular values, condition number, effective rank, and spectral gap---we systematically measure which properties SGD learns well versus poorly across varying dimensions and matrix structures. Our experiments reveal that while row/column norms show moderate learning errors (consistent with prior work on learnable multipliers), the condition number and spectral gap exhibit substantially worse learning quality, with relative errors 2--5$\times$ larger. Learnable multipliers improve norm-related components but provide limited benefit for spectral properties. These findings suggest that spectral structure represents a distinct class of optimization flaws requiring new corrective strategies.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Velikanov et al.~\cite{velikanov2026learnable} identified that standard LLM training fails to learn the correct scale of parameter matrices, proposing learnable multipliers as a correction. They explicitly asked whether other components beyond row and column norms are also not learned automatically. This work systematically investigates that question.
+
+Prior work on implicit regularization in matrix factorization~\cite{gunasekar2017implicit, arora2019implicit} has shown that gradient descent exhibits implicit biases toward low-rank solutions. We extend this line of inquiry by asking: which specific structural properties of weight matrices are well-captured by SGD, and which are systematically distorted?
+
+\section{Methodology}
+
+\subsection{Matrix Decomposition}
+
+For a weight matrix $W \in \mathbb{R}^{m \times n}$, we track the following components during training:
+\begin{itemize}
+\item Row norms: $\|W_{i,:}\|_2$ for each row $i$
+\item Column norms: $\|W_{:,j}\|_2$ for each column $j$
+\item Singular values: $\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_{\min(m,n)}$
+\item Condition number: $\kappa = \sigma_1/\sigma_{\min}$
+\item Effective rank: $|\{i : \sigma_i > 0.01\sigma_1\}|$
+\item Spectral gap: $(\sigma_1 - \sigma_2)/\sigma_1$
+\end{itemize}
+
+\subsection{Experimental Design}
+
+We train matrices via SGD on synthetic regression tasks with known target matrices. Three target structures are tested: low-rank, block-diagonal, and heterogeneous-norm. Dimensions range from 16 to 64. Each configuration is evaluated with and without learnable row/column multipliers.
+
+\section{Results}
+
+\subsection{Component Learning Quality}
+
+Figure~\ref{fig:comp} shows relative error for each component versus hidden dimension. The condition number and spectral gap consistently show the worst learning, with errors 2--5$\times$ larger than row/column norms.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/component_learning.png}
+\caption{Relative error of each matrix component across hidden dimensions.}
+\label{fig:comp}
+\end{figure}
+
+\subsection{Learnable Multiplier Effect}
+
+Figure~\ref{fig:mult} compares standard training with learnable multipliers across three matrix structures. Multipliers consistently reduce row and column norm errors but have limited impact on singular value structure and overall matrix error.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/multiplier_effect.png}
+\caption{Component errors: standard training vs.\ learnable multipliers.}
+\label{fig:mult}
+\end{figure}
+
+\subsection{Structure Sensitivity}
+
+Figure~\ref{fig:struct} shows that the pattern of poorly-learned components depends on the target matrix structure. Block-diagonal targets pose the greatest challenge for condition number learning, while heterogeneous-norm targets make row/column norms harder to learn.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/structure_sensitivity.png}
+\caption{Component errors by matrix structure type.}
+\label{fig:struct}
+\end{figure}
+
+\section{Discussion}
+
+Our results provide evidence for additional optimization flaws beyond the unlearned scale:
+
+\begin{enumerate}
+\item \textbf{Spectral structure}: Condition number and spectral gap are systematically poorly learned, suggesting SGD fails to recover the correct spectral decomposition.
+\item \textbf{Multiplier limitations}: Learnable multipliers~\cite{velikanov2026learnable} address norm-related flaws but leave spectral flaws unresolved.
+\item \textbf{Structure dependence}: The severity of each flaw depends on the target matrix structure, suggesting that different correction strategies may be needed for different layer types.
+\end{enumerate}
+
+These findings motivate the development of new corrective mechanisms targeting spectral properties, such as learnable singular value corrections or structured spectral regularization.
+
+\section{Conclusion}
+
+We have identified spectral structure (condition number, spectral gap) as an additional class of optimization flaws in neural network training beyond the known unlearned matrix scale. Standard learnable multipliers provide partial but incomplete correction, suggesting the need for richer parametric corrections.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

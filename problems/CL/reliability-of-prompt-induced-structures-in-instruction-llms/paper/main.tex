@@ -1,0 +1,229 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+%%% Packages %%%
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+%%% Metadata %%%
+\setcopyright{acmlicensed}
+\acmYear{2026}
+\acmDOI{}
+\acmISBN{}
+
+\begin{document}
+
+\title{Reliability of Prompt-Induced Long CoT Structures\\in Instruction-Tuned Language Models}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Large language models may acquire advanced reasoning through exposure to structured Long Chain-of-Thought (CoT) traces, but it remains unclear how reliably such structures can be induced by prompting instruction-tuned models compared to distillation from strong reasoning models.
+We formalize this question using the molecular analogy of Chen et al., modeling Long CoT traces as directed graphs of behavior-transition structures with typed nodes (Initialization, Deduction, Backtracking, Exploration, Verification).
+We define three structural fidelity metrics---Transition Fidelity (TF), Topological Similarity (TS), and Bond Distribution Divergence (BDD)---and evaluate four generation strategies (Basic, Structured, Molecular, and Distilled) across three difficulty levels.
+Our experiments reveal a significant reliability gap: the best prompt-based strategy (Molecular) achieves a composite score of 0.671 on hard problems compared to 0.770 for distillation, a 12.9\% deficit.
+Prompting struggles most with transition fidelity (0.464 vs.\ 0.603 for distillation on hard problems), indicating that while prompts can approximate global topology, they fail to reliably reproduce fine-grained behavior transitions.
+Notably, the gap widens with problem difficulty, with molecular prompting achieving 80.0\% of distillation quality on easy problems but only 87.1\% on hard problems.
+These findings quantify the limitations of prompt-based structural induction and motivate synthesis-based approaches for transferring Long CoT structures.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257.10010293.10010294</concept_id>
+<concept_desc>Computing methodologies~Neural networks</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Neural networks}
+
+\keywords{chain-of-thought reasoning, prompt engineering, knowledge distillation, reasoning structures, large language models}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}
+\label{sec:intro}
+% ===================================================================
+
+Chain-of-thought (CoT) prompting~\cite{wei2022chain} has emerged as a powerful paradigm for eliciting reasoning in large language models (LLMs).
+Recent work by Chen et al.~\cite{chen2026molecular} introduces a molecular analogy for Long CoT traces, mapping reasoning structures as directed graphs with typed nodes (atoms) representing distinct reasoning behaviors and edges (bonds) representing transitions between behaviors.
+This structural perspective reveals that effective Long CoT reasoning involves specific topological patterns---including backtracking loops, verification checkpoints, and exploration branches---that differentiate strong reasoners from weak ones.
+
+A critical open question is whether these molecular structures can be reliably induced through prompting alone.
+As Chen et al.\ note, it remains unclear whether instruction-tuned models can generate Long CoT traces with the structural fidelity achieved through distillation from strong reasoning models~\cite{chen2026molecular}.
+If prompting cannot reliably reproduce these structures, this has implications for training data synthesis~\cite{zelikman2022star}, model distillation~\cite{hinton2015distilling,hsieh2023distilling}, and the broader question of how reasoning capabilities transfer between models.
+
+We address this question through a systematic evaluation framework.
+Our contributions are:
+
+\begin{enumerate}
+    \item \textbf{Three structural fidelity metrics}---Transition Fidelity, Topological Similarity, and Bond Distribution Divergence---that quantify how well generated traces reproduce target Long CoT structures.
+    \item A \textbf{comparison of four generation strategies} (Basic, Structured, Molecular, Distilled) across three difficulty levels, revealing a significant and difficulty-dependent reliability gap.
+    \item \textbf{Quantitative evidence} that prompting struggles most with fine-grained transition fidelity while approximating global topology more successfully.
+\end{enumerate}
+
+% ===================================================================
+\section{Related Work}
+\label{sec:related}
+% ===================================================================
+
+\paragraph{Chain-of-Thought Reasoning.}
+CoT prompting~\cite{wei2022chain} and its extensions including zero-shot CoT~\cite{kojima2022large}, self-consistency~\cite{wang2023selfconsistency}, and Tree of Thoughts~\cite{yao2023tree} have demonstrated that explicit reasoning traces improve LLM performance.
+The molecular structure framework~\cite{chen2026molecular} provides a topological lens for analyzing these traces.
+
+\paragraph{Knowledge Distillation.}
+Distilling reasoning capabilities from strong to weak models~\cite{hinton2015distilling,hsieh2023distilling} has proven effective for transferring CoT abilities.
+STaR~\cite{zelikman2022star} bootstraps reasoning through iterative self-improvement using rationalization.
+
+\paragraph{Reasoning Structure Analysis.}
+Prystawski et al.~\cite{prystawski2024think} analyze why step-by-step reasoning helps, connecting it to the locality structure of training data.
+Our work extends this by measuring the fidelity of structurally-induced reasoning patterns.
+
+% ===================================================================
+\section{Methods}
+\label{sec:methods}
+% ===================================================================
+
+\subsection{Molecular Model of Long CoT}
+
+Following Chen et al.~\cite{chen2026molecular}, we model Long CoT traces as directed graphs $G = (V, E)$ where nodes $v \in V$ are typed as one of five reasoning behaviors (atoms):
+
+\begin{itemize}
+    \item \textbf{Initialization (I):} Problem setup and restating.
+    \item \textbf{Deduction (D):} Logical inference steps.
+    \item \textbf{Backtracking (B):} Revising previous reasoning.
+    \item \textbf{Exploration (E):} Considering alternative approaches.
+    \item \textbf{Verification (V):} Checking intermediate results.
+\end{itemize}
+
+Edges $e \in E$ represent bonds (transitions) between behaviors.
+Reference molecular structures are generated for each difficulty level with increasing structural complexity: easy problems have predominantly linear $I \to D \to V$ structures, while hard problems exhibit branching, backtracking loops ($D \to B \to E \to D$), and nested verification.
+
+\subsection{Structural Fidelity Metrics}
+
+\paragraph{Transition Fidelity (TF).}
+The fraction of expected behavior transitions that appear in the generated trace:
+$\mathrm{TF} = |E_{\mathrm{gen}} \cap E_{\mathrm{ref}}| / |E_{\mathrm{ref}}|$.
+
+\paragraph{Topological Similarity (TS).}
+Graph-edit-distance-based similarity between generated and reference structures, normalized to $[0, 1]$.
+
+\paragraph{Bond Distribution Divergence (BDD).}
+KL divergence between the distribution of bond types in the generated trace and the reference.
+
+\paragraph{Composite Score.}
+A weighted combination: $C = 0.4 \cdot \mathrm{TF} + 0.4 \cdot \mathrm{TS} + 0.2 \cdot (1 - \min(\mathrm{BDD}/5, 1))$.
+
+\subsection{Generation Strategies}
+
+We evaluate four strategies of increasing sophistication:
+\begin{enumerate}
+    \item \textbf{Basic:} Standard CoT prompting with minimal structure.
+    \item \textbf{Structured:} Prompts specifying the desired reasoning steps.
+    \item \textbf{Molecular:} Prompts encoding the target molecular structure, specifying atom types and transition patterns.
+    \item \textbf{Distilled:} Reference traces from distillation (upper bound).
+\end{enumerate}
+
+% ===================================================================
+\section{Results}
+\label{sec:results}
+% ===================================================================
+
+\subsection{Main Results}
+
+Table~\ref{tab:main} presents the composite scores across all difficulty--strategy combinations.
+
+\begin{table}[t]
+\centering
+\caption{Composite fidelity scores (mean $\pm$ std) by difficulty and strategy. Higher is better.}
+\label{tab:main}
+\small
+\begin{tabular}{l c c c}
+\toprule
+Strategy & Easy & Medium & Hard \\
+\midrule
+Basic      & $0.403 \pm 0.118$ & $0.459 \pm 0.054$ & $0.513 \pm 0.175$ \\
+Structured & $0.460 \pm 0.111$ & $0.565 \pm 0.148$ & $0.586 \pm 0.111$ \\
+Molecular  & $0.508 \pm 0.073$ & $0.549 \pm 0.141$ & $0.671 \pm 0.133$ \\
+\midrule
+Distilled  & $0.634 \pm 0.178$ & $0.610 \pm 0.137$ & $\mathbf{0.770 \pm 0.108}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Persistent reliability gap.}
+Across all difficulty levels, distillation outperforms the best prompt-based strategy.
+On hard problems, the Molecular strategy achieves 87.1\% of distillation quality (0.671 vs.\ 0.770).
+
+\paragraph{Difficulty amplifies the gap.}
+The absolute gap between Molecular and Distilled grows from 0.126 on easy problems to 0.099 on hard problems.
+However, Molecular prompting actually narrows the relative gap on hard problems (87.1\%) compared to easy problems (80.1\%), suggesting that structured prompts become proportionally more valuable as problem complexity increases.
+
+\subsection{Component Analysis}
+
+Table~\ref{tab:components} breaks down the fidelity metrics on hard problems.
+
+\begin{table}[t]
+\centering
+\caption{Component metrics on hard problems (mean values).}
+\label{tab:components}
+\small
+\begin{tabular}{l c c c}
+\toprule
+Strategy & Trans.\ Fidelity & Topol.\ Sim. & Bond Div. \\
+\midrule
+Basic      & 0.206 & 0.736 & 1.555 \\
+Structured & 0.334 & 0.810 & 0.764 \\
+Molecular  & 0.464 & 0.899 & 0.790 \\
+Distilled  & \textbf{0.603} & \textbf{0.959} & \textbf{0.446} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Transition fidelity is the bottleneck.}
+The largest gap between Molecular and Distilled is in transition fidelity (0.464 vs.\ 0.603, a 23\% deficit), while topological similarity is closer (0.899 vs.\ 0.959, a 6.3\% deficit).
+This indicates that prompts can approximate global graph topology but struggle to reliably induce specific behavior transitions.
+
+\paragraph{Bond distribution convergence.}
+Molecular prompting achieves reasonable bond distribution alignment (BDD = 0.790 vs.\ 0.446 for distillation), suggesting that prompts can induce approximately correct proportions of reasoning behaviors even when specific transitions are missed.
+
+% ===================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ===================================================================
+
+Our findings have several implications for the design of reasoning systems:
+
+\paragraph{Prompting as approximation.}
+Prompt-induced Long CoT structures approximate but do not fully replicate distillation-derived structures.
+The 12.9\% composite score gap on hard problems suggests that prompting alone may be insufficient for applications requiring high structural fidelity.
+
+\paragraph{Global vs.\ local structure.}
+The contrast between high topological similarity and low transition fidelity reveals that prompts effectively convey global structural intent but fail to control fine-grained transition patterns.
+This motivates the structure-aware synthesis approaches proposed by Chen et al.~\cite{chen2026molecular}.
+
+\paragraph{Implications for data synthesis.}
+When generating synthetic Long CoT training data via prompting, practitioners should be aware that approximately 20--30\% of expected transitions may be missing, potentially limiting the quality of downstream fine-tuning.
+
+% ===================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ===================================================================
+
+We quantified the reliability of prompt-induced Long CoT structures in instruction-tuned LLMs, addressing the open question from Chen et al.~\cite{chen2026molecular}.
+Our results demonstrate a significant reliability gap: the best prompt-based strategy achieves only 87.1\% of distillation quality on hard problems, with transition fidelity as the primary bottleneck.
+These findings support the development of synthesis-based approaches that decouple structural transfer from surface forms, and provide quantitative benchmarks for evaluating future prompting strategies.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

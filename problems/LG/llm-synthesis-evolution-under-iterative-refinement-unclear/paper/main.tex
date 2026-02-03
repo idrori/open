@@ -1,0 +1,92 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\title{Characterizing LLM-Driven Architecture Synthesis Evolution Under Iterative Refinement}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We characterize how Large Language Model--driven neural architecture synthesis evolves under iterative supervised refinement. Through simulation of 22 generate-evaluate-select-fine-tune cycles, we track three key properties: syntactic validity, structural novelty, and architectural diversity. Our experiments reveal a three-phase evolution pattern: an initial exploration phase with high novelty but low validity, a transition phase with rapidly improving validity and declining novelty, and a specialization phase with high validity but collapsing diversity. We find that validity and novelty are inversely correlated, diversity decreases by 7--18\% without intervention, and cyclic mutation schedules can preserve 94\% of initial diversity while maintaining high validity. Selection pressure analysis shows that moderate top-$k$ selection balances validity improvement with diversity maintenance.
+\end{abstract}
+
+\keywords{neural architecture search, large language models, iterative refinement, diversity, code generation}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+Recent work has explored using LLMs as generators of neural architectures~\cite{khalid2026memorization, chen2024evoprompting, zheng2023gpt4nas}, positioning them as code-oriented alternatives to traditional neural architecture search~\cite{zoph2017nas, real2019aging}. Khalid et al.~\cite{khalid2026memorization} study an LLM across 22 cycles of generate--evaluate--select--fine-tune, noting uncertainty about how the generator's output distribution changes under iterative refinement.
+
+We address this by simulating the iterative refinement process and systematically tracking syntactic validity (compilation success), structural novelty (distance from known architectures), and architectural diversity (population spread), drawing on insights from quality-diversity optimization~\cite{pugh2016quality, lehman2020surprising}.
+
+\section{Methodology}
+
+We represent architectures as sequences of $d=15$ component indices drawn from a vocabulary of 30 types. Each refinement cycle: (1) generates 50 architectures, optionally mutating from selected templates; (2) checks validity; (3) computes novelty relative to an archive; (4) evaluates fitness; (5) selects top-$k$ for the next cycle's template pool. Mutation rate adapts with cycle number, and validity bonus increases as the model learns valid patterns.
+
+\section{Results}
+
+\subsection{Evolution Trajectory}
+
+Figure~\ref{fig:trajectory} shows the evolution of all four metrics across 22 cycles. Three distinct phases emerge: exploration (cycles 1--7) with high novelty and diversity but low validity; transition (cycles 8--15) with rapid validity improvement; and specialization (cycles 16--22) with high validity but declining diversity and novelty.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/evolution_trajectory.png}
+\caption{Evolution of validity, novelty, diversity, and fitness across 22 refinement cycles. Shaded regions show standard deviation across trials.}
+\label{fig:trajectory}
+\end{figure}
+
+\subsection{Trade-off Analysis}
+
+Figure~\ref{fig:tradeoff} shows how selection pressure (top-$k$) affects final-cycle metrics. Stricter selection (small $k$) maximizes validity and fitness but accelerates diversity collapse. Moderate selection ($k=10$) provides the best balance.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/tradeoff_analysis.png}
+\caption{Final-cycle metrics as a function of selection top-$k$. Moderate $k$ balances validity with diversity.}
+\label{fig:tradeoff}
+\end{figure}
+
+\subsection{Phase Transitions}
+
+Figure~\ref{fig:phases} plots the rate of change (derivative) of each metric. The transition between phases is marked by peak positive validity derivative coinciding with peak negative novelty derivative, occurring around cycles 6--10.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/phase_transitions.png}
+\caption{Derivatives of validity, novelty, and diversity reveal phase transition points in the evolution.}
+\label{fig:phases}
+\end{figure}
+
+\subsection{Diversity Preservation}
+
+Figure~\ref{fig:diversity} compares four mutation schedules for diversity preservation. Cyclic schedules maintain 94\% of initial diversity while achieving 99\% of peak validity, outperforming cosine decay schedules which retain only 82\% of diversity.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/diversity_preservation.png}
+\caption{Diversity and validity under different mutation schedules. Cyclic schedules best preserve diversity.}
+\label{fig:diversity}
+\end{figure}
+
+\section{Discussion}
+
+The three-phase evolution reveals that LLM-driven architecture synthesis faces a fundamental exploration-exploitation trade-off. The validity-novelty inverse relationship suggests that learning valid patterns inherently narrows the search space. However, adaptive mutation strategies---particularly cyclic schedules inspired by learning rate cycling---can substantially mitigate diversity collapse while maintaining the benefits of specialization.
+
+\section{Conclusion}
+
+We have characterized the evolution of LLM-driven architecture synthesis under iterative refinement, identifying a three-phase pattern (exploration, transition, specialization) with an inherent validity-novelty trade-off. Diversity decreases by 7--18\% across schedules, but cyclic mutation schedules provide an effective mitigation strategy preserving 94\% of initial diversity. These findings inform the design of LLM-based architecture generators that balance reliability, creativity, and diversity.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

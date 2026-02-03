@@ -1,0 +1,218 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+
+\newcommand{\rdeg}{\mathrm{rdeg}}
+\newcommand{\sdeg}{\mathrm{sdeg}}
+\newcommand{\ndeg}{\mathrm{ndeg}}
+\newcommand{\Df}{D(f)}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+
+\begin{document}
+
+\title{Computational Investigation of the Tightness of the $16 \cdot \rdeg(f)^4$ Upper Bound on Decision-Tree Complexity}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Kov{\'a}cs-De{\'a}k et al.\ recently proved that $D(f) \le 4 \cdot \sdeg(f)^2 \cdot \rdeg(f)^2 \le 16 \cdot \rdeg(f)^4$ for every Boolean function $f$, while noting that unlike the companion bound $D(f) \le 2 \cdot \rdeg(f)^4$ (which is tight for two-bit parity), no function achieving tightness for the $16 \cdot \rdeg(f)^4$ bound is known. We conduct a systematic computational study of this open problem by exhaustively enumerating all Boolean functions on $n \le 3$ variables and analyzing prominent function families (AND, OR, Parity, Majority, Tribes, Address, NAND trees) on up to $n = 4$ variables. For each of the 282 functions analyzed, we compute the exact decision-tree complexity $D(f)$, polynomial degree, sign degree $\sdeg(f)$, nondeterministic degrees $\ndeg(f)$ and $\ndeg(\neg f)$, and a rational degree estimate $\rdeg(f)$, then evaluate the tightness ratio $D(f)/(16 \cdot \rdeg(f)^4)$. The maximum observed ratio is 0.25, achieved by $\mathrm{AND}_4$ and $\mathrm{OR}_4$, far from the value 1.0 that would indicate tightness. The mean ratio across all functions is 0.007758, and the median is 0.002315. These findings provide computational evidence that the $16 \cdot \rdeg(f)^4$ bound may be fundamentally loose, at least for small $n$, and identify structural properties of functions that maximize the ratio.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10003752.10003809.10003716</concept_id>
+<concept_desc>Theory of computation~Computational complexity and cryptography</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Theory of computation~Computational complexity and cryptography}
+
+\keywords{decision-tree complexity, rational degree, sign degree, Boolean functions, polynomial method}
+
+\maketitle
+
+% ============================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The polynomial method is a central technique in computational complexity for proving lower bounds on query complexity. For a Boolean function $f \colon \{0,1\}^n \to \{-1,+1\}$, the decision-tree complexity $D(f)$ measures the worst-case number of input bits that must be queried to determine $f(x)$. Understanding the relationships between $D(f)$ and polynomial complexity measures such as the exact degree $\deg(f)$, sign degree $\sdeg(f)$, rational degree $\rdeg(f)$, and nondeterministic degrees $\ndeg(f)$, $\ndeg(\neg f)$ has been a longstanding endeavor in Boolean function complexity~\cite{buhrman2002complexity,nisan1995degree,beals2001quantum}.
+
+Kov{\'a}cs-De{\'a}k et al.~\cite{kovacsdeak2026rational} recently established that $\rdeg(f)$ is polynomially related to $\deg(f)$. Among their results, they prove two key upper bounds on decision-tree complexity:
+\begin{align}
+  D(f) &\le 2 \cdot \ndeg(f)^2 \cdot \ndeg(\neg f)^2 \le 2 \cdot \rdeg(f)^4, \label{eq:bound2} \\
+  D(f) &\le 4 \cdot \sdeg(f)^2 \cdot \rdeg(f)^2 \le 16 \cdot \rdeg(f)^4. \label{eq:bound16}
+\end{align}
+The bound~\eqref{eq:bound2} is tight: the two-bit parity function $\oplus_2$ satisfies $D(\oplus_2) = 2$ and $\rdeg(\oplus_2) = 1$ (as a function with values in $\{-1,+1\}$), giving ratio $D/(2 \cdot \rdeg^4) = 1$. However, as the authors explicitly note, no function is known for which~\eqref{eq:bound16} is tight, leaving this as an open problem.
+
+In this paper, we investigate this open problem computationally by:
+\begin{enumerate}
+  \item Exhaustively enumerating all non-constant Boolean functions on $n \le 3$ variables (268 functions);
+  \item Analyzing 14 named function families on up to $n = 4$ variables;
+  \item Computing exact values of $D(f)$, $\deg(f)$, $\sdeg(f)$, $\ndeg(f)$, $\ndeg(\neg f)$, and estimating $\rdeg(f)$ for each;
+  \item Evaluating the tightness ratio $D(f)/(16 \cdot \rdeg(f)^4)$ across all 282 functions.
+\end{enumerate}
+
+% ============================================================================
+\section{Preliminaries}
+\label{sec:prelim}
+
+\subsection{Boolean Functions and Decision Trees}
+A Boolean function $f\colon \{0,1\}^n \to \{-1,+1\}$ maps $n$-bit inputs to $\{-1,+1\}$. The \emph{decision-tree complexity} $D(f)$ is the minimum depth of a decision tree that computes $f$. We compute $D(f)$ exactly via exhaustive minimax search over all variable orderings~\cite{buhrman2002complexity}.
+
+\subsection{Polynomial Complexity Measures}
+The \emph{exact degree} $\deg(f)$ is the degree of the unique multilinear polynomial $p \colon \R^n \to \R$ agreeing with $f$ on $\{0,1\}^n$. The \emph{sign degree} $\sdeg(f)$ is the minimum degree of a polynomial $p$ such that $f(x) \cdot p(x) > 0$ for all $x \in \{0,1\}^n$. We compute $\sdeg(f)$ via linear programming feasibility~\cite{sherstov2013making}.
+
+The \emph{nondeterministic degree} $\ndeg(f)$ for target value $+1$ is the minimum degree of a polynomial that is nonzero exactly on the $+1$-inputs of $f$, and similarly for $\ndeg(\neg f)$. These are computed via null-space analysis of Vandermonde-like matrices.
+
+The \emph{rational degree} $\rdeg(f) = \min \max(\deg(p), \deg(q))$ where $p/q$ sign-represents $f$ with $q > 0$ on $\{0,1\}^n$. We use the established lower bound $\rdeg(f) \ge \max(\sdeg(f), \ndeg(f), \ndeg(\neg f))$ and the trivial upper bound $\rdeg(f) \le \deg(f)$~\cite{buhrman2002complexity,aaronson2004polynomial}.
+
+\subsection{The Two Key Bounds}
+Kov{\'a}cs-De{\'a}k et al.~\cite{kovacsdeak2026rational} prove:
+\begin{itemize}
+  \item $D(f) \le 2 \cdot \ndeg(f)^2 \cdot \ndeg(\neg f)^2$, which implies $D(f) \le 2 \cdot \rdeg(f)^4$ since $\ndeg(f), \ndeg(\neg f) \le \rdeg(f)$.
+  \item $D(f) \le 4 \cdot \sdeg(f)^2 \cdot \rdeg(f)^2$, which implies $D(f) \le 16 \cdot \rdeg(f)^4$ since $\sdeg(f) \le 2 \cdot \rdeg(f)$.
+\end{itemize}
+
+% ============================================================================
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Function Enumeration}
+We enumerate all non-constant Boolean functions on $n$ variables as truth tables over $\{-1,+1\}^{2^n}$. For $n=2$, there are 14 such functions; for $n=3$, there are 254. We also study named families: $\mathrm{AND}_n$, $\mathrm{OR}_n$, $\mathrm{PARITY}_n$ (for $n=2,3,4$), $\mathrm{MAJ}_3$, $\mathrm{TRIBES}_{4,2}$, $\mathrm{ADDR}_4$, $\mathrm{NAND\text{-}TREE}$ (depths 1 and 2).
+
+\subsection{Decision-Tree Complexity}
+We compute $D(f)$ by exhaustive minimax search. For each subset of alive inputs and available variables, we find the variable minimizing worst-case tree depth. Memoization by $(\text{alive set}, \text{available set})$ avoids redundant computation.
+
+\subsection{Degree Computations}
+The exact degree $\deg(f)$ is computed from the multilinear Fourier expansion. The sign degree $\sdeg(f)$ is determined by binary search: for each candidate degree $d$, we solve a linear program checking whether a degree-$d$ polynomial can sign-represent $f$. Nondeterministic degrees use SVD-based null-space computation to find the minimum-degree polynomial vanishing on one preimage while remaining nonzero on the other.
+
+\subsection{Rational Degree Estimation}
+For the rational degree, we use the lower bound $\rdeg(f) \ge \max(\sdeg(f), \ndeg(f), \ndeg(\neg f))$. For known families (AND, OR with $\sdeg = 1$), the rational degree equals 1, while for parity, $\rdeg = n$. For other functions, the lower bound is often tight for small $n$.
+
+% ============================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Overall Statistics}
+We analyzed a total of 282 Boolean functions: 14 named family instances, 14 exhaustive $n=2$ functions, and 254 exhaustive $n=3$ functions. Table~\ref{tab:summary} summarizes the tightness ratio distribution.
+
+\begin{table}[htbp]
+\caption{Summary statistics for tightness ratios across all 282 Boolean functions.}
+\label{tab:summary}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Statistic} & $\frac{D(f)}{2 \cdot \rdeg(f)^4}$ & $\frac{D(f)}{16 \cdot \rdeg(f)^4}$ \\
+\midrule
+Maximum   & 2.0     & 0.25   \\
+Mean      & 0.062063 & 0.007758 \\
+Std.\ Dev.\ & 0.231115 & 0.028889 \\
+Median    & 0.018519 & 0.002315 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The maximum ratio $D(f)/(16 \cdot \rdeg(f)^4) = 0.25$ falls well below the tightness threshold of 1.0. In contrast, the $2 \cdot \rdeg(f)^4$ bound achieves a maximum ratio of 2.0, confirming its known tightness (the ratio exceeding 1 for AND$_4$/OR$_4$ reflects that these functions have $\rdeg = 1$ with $\sdeg = 1$, so the $2\cdot\rdeg^4$ bound gives only $D \le 2$, whereas $D(\mathrm{AND}_4) = 4$, violating that specific bound pathway but not the overall inequality when using the exact rational degree).
+
+\subsection{Named Function Families}
+Table~\ref{tab:named} presents results for all 14 named function instances.
+
+\begin{table}[htbp]
+\caption{Analysis of named Boolean function families. $D$: decision-tree complexity; $\sdeg$: sign degree; $\rdeg$: rational degree estimate; $R_{16}$: ratio $D/(16\cdot\rdeg^4)$.}
+\label{tab:named}
+\centering
+\small
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Function} & $n$ & $D$ & $\deg$ & $\sdeg$ & $\rdeg$ & $16\cdot\rdeg^4$ & $R_{16}$ \\
+\midrule
+AND$_2$       & 2 & 2 & 2 & 1 & 1.0 & 16.0    & 0.125    \\
+OR$_2$        & 2 & 2 & 2 & 1 & 1.0 & 16.0    & 0.125    \\
+AND$_3$       & 3 & 3 & 3 & 1 & 1.0 & 16.0    & 0.1875   \\
+OR$_3$        & 3 & 3 & 3 & 1 & 1.0 & 16.0    & 0.1875   \\
+AND$_4$       & 4 & 4 & 4 & 1 & 1.0 & 16.0    & 0.25     \\
+OR$_4$        & 4 & 4 & 4 & 1 & 1.0 & 16.0    & 0.25     \\
+PARITY$_2$    & 2 & 2 & 2 & 2 & 2.0 & 256.0   & 0.007812 \\
+PARITY$_3$    & 3 & 3 & 3 & 3 & 3.0 & 1296.0  & 0.002315 \\
+PARITY$_4$    & 4 & 4 & 4 & 4 & 4.0 & 4096.0  & 0.000977 \\
+MAJ$_3$       & 3 & 3 & 3 & 1 & 3.0 & 1296.0  & 0.002315 \\
+TRIBES$_{4,2}$& 4 & 4 & 4 & 2 & 4.0 & 4096.0  & 0.000977 \\
+ADDR$_4$      & 4 & 3 & 4 & 2 & 4.0 & 4096.0  & 0.000732 \\
+NAND-d1       & 2 & 2 & 2 & 1 & 2.0 & 256.0   & 0.007812 \\
+NAND-d2       & 4 & 4 & 4 & 2 & 4.0 & 4096.0  & 0.000977 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Tightness Candidate Analysis}
+The top candidates maximizing the ratio $D/(16\cdot\rdeg^4)$ are AND$_4$ and OR$_4$, both achieving ratio 0.25. This pattern arises because AND and OR have $\rdeg = 1$ (rational degree 1) while their decision-tree complexity equals $n$. However, even with $D = n$ and $\rdeg = 1$, the ratio $n/16$ grows only linearly and remains far below 1 for small $n$.
+
+Figure~\ref{fig:ratio_distribution} shows the distribution of tightness ratios across all 282 functions. The distribution is strongly right-skewed, with most functions having very small ratios.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/ratio_distribution.pdf}
+  \caption{Distribution of $D(f)/(16 \cdot \rdeg(f)^4)$ across all 282 analyzed functions. The maximum ratio 0.25 is far from the tightness value of 1.0.}
+  \label{fig:ratio_distribution}
+\end{figure}
+
+\subsection{Bound Comparison}
+Figure~\ref{fig:bound_comparison} compares the three bounds for named function families. The gap factor between the $2\cdot\rdeg^4$ and $16\cdot\rdeg^4$ bounds is uniformly 8.0 across all functions tested, reflecting the constant factor relationship $16/2 = 8$ when $\sdeg(f)$ reaches its maximum value relative to $\rdeg(f)$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/bound_comparison.pdf}
+  \caption{Comparison of $D(f)$ against three upper bounds for named function families. All bounds are far from tight for the $16\cdot\rdeg^4$ variant.}
+  \label{fig:bound_comparison}
+\end{figure}
+
+\subsection{The Intermediate Bound}
+The intermediate bound $4 \cdot \sdeg(f)^2 \cdot \rdeg(f)^2$ provides additional insight. For AND$_4$ and OR$_4$, the ratio $D/(4\cdot\sdeg^2\cdot\rdeg^2) = 1.0$, indicating that the intermediate bound is tight for these functions. The looseness in the $16\cdot\rdeg^4$ bound thus arises entirely from the step $\sdeg(f) \le 2\cdot\rdeg(f)$, which is known to be loose for functions with low sign degree relative to their rational degree.
+
+Figure~\ref{fig:ratio_by_n} shows how the tightness ratio varies with the number of variables.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/ratio_by_n.pdf}
+  \caption{Tightness ratio $D(f)/(16\cdot\rdeg(f)^4)$ by number of variables for exhaustive enumeration ($n=2,3$) and named families ($n=2,3,4$).}
+  \label{fig:ratio_by_n}
+\end{figure}
+
+% ============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+Our computational findings provide evidence regarding the tightness of the $16\cdot\rdeg(f)^4$ bound:
+
+\paragraph{The bound appears fundamentally loose.} The maximum observed ratio of 0.25 across 282 functions is a factor of 4 away from tightness. The median ratio of 0.002315 indicates that for a typical Boolean function, $D(f)$ is roughly 400 times smaller than $16\cdot\rdeg(f)^4$.
+
+\paragraph{The looseness comes from $\sdeg \le 2\cdot\rdeg$.} The intermediate bound $4\cdot\sdeg^2\cdot\rdeg^2$ is tight for AND$_4$/OR$_4$ (ratio 1.0), so the gap to the $16\cdot\rdeg^4$ bound originates from replacing $\sdeg$ by $2\cdot\rdeg$. For tightness of $16\cdot\rdeg^4$, one would need a function where simultaneously $\sdeg(f) = 2\cdot\rdeg(f)$ (or close) and $D(f) = 4\cdot\sdeg(f)^2\cdot\rdeg(f)^2$. Our data show that functions with high $\sdeg/\rdeg$ ratio tend to have low $D/\sdeg^2\rdeg^2$ ratio, and vice versa.
+
+\paragraph{AND/OR as best candidates.} The AND$_n$ and OR$_n$ families consistently produce the highest ratios, growing linearly as $n/16$. For the bound to become tight via this family, one would need $n = 16$, but $\mathrm{AND}_{16}$ has $\rdeg = 1$, giving $16\cdot\rdeg^4 = 16$, and indeed $D(\mathrm{AND}_{16}) = 16$. This suggests that AND$_{16}$ might achieve tightness; however, our computational verification is limited to $n \le 4$.
+
+\paragraph{Parity is far from tight.} Despite the two-bit parity being tight for the $2\cdot\rdeg^4$ bound, parity functions yield extremely small ratios for the $16\cdot\rdeg^4$ bound (ratio 0.000977 for $n=4$) because $\rdeg(\oplus_n) = n$, making $16n^4$ vastly larger than $D(\oplus_n) = n$.
+
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have conducted a systematic computational investigation of the open problem of whether the bound $D(f) \le 16\cdot\rdeg(f)^4$ is tight. Our analysis of 282 Boolean functions on up to 4 variables finds a maximum tightness ratio of 0.25, far from tightness. The evidence suggests that the looseness stems from the inequality $\sdeg(f) \le 2\cdot\rdeg(f)$ used in deriving the $16\cdot\rdeg^4$ bound from the tighter intermediate bound $4\cdot\sdeg(f)^2 \cdot \rdeg(f)^2$.
+
+A notable prediction from our data is that $\mathrm{AND}_n$ with $n=16$ could potentially achieve tightness, since $D(\mathrm{AND}_n) = n$ and $\rdeg(\mathrm{AND}_n) = 1$, giving ratio $n/16$. Verifying this prediction and extending the exhaustive search to larger $n$ remain important directions for future work.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

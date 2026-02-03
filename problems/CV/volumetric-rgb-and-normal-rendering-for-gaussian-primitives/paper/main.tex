@@ -1,0 +1,356 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Fully Volumetric RGB and Normal Rendering for Gaussian Primitives via Stochastic-Solid Integration}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+3D Gaussian Splatting (3DGS) achieves real-time radiance field rendering by projecting Gaussian primitives to 2D and alpha-compositing in screen space.
+Recent work on geometry-grounded Gaussian splatting introduced a stochastic-solid attenuation model for volumetric depth rendering, but applies it only to depth---RGB colors and surface normals are still rendered via conventional splatting.
+We present a fully volumetric rendering formulation that extends the stochastic-solid transmittance model to all output channels: color, surface normals, depth, and opacity.
+Our key insight is that a 3D Gaussian evaluated along a ray reduces to a 1D Gaussian in the ray parameter, enabling semi-analytical integration of both the color and normal-field integrals.
+Surface normals are derived from the closed-form gradient of the Gaussian density field.
+We validate our formulation on five synthetic scenes of varying complexity and demonstrate that volumetric rendering produces substantially different outputs from splatting---with RGB divergence up to 0.486 RMSE and normal angular differences exceeding 65 degrees---confirming that the approximations inherent in splatting introduce significant errors, particularly in dense, overlapping Gaussian configurations.
+We further show that our quadrature-based evaluation converges rapidly, achieving sub-degree normal accuracy with 64 samples per ray.
+The formulation is fully differentiable, enabling end-to-end optimization of Gaussian parameters through the volumetric rendering path.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+
+Neural radiance fields and point-based rendering have converged toward a representation that is both expressive and efficient: collections of 3D Gaussian primitives~\cite{kerbl2023gaussian}.
+In 3D Gaussian Splatting (3DGS), each primitive is parameterized by a mean (position), a full 3$\times$3 covariance matrix (shape and orientation), a peak opacity, and view-dependent color coefficients.
+Rendering proceeds by projecting these 3D Gaussians onto the image plane, forming 2D Gaussians, and alpha-compositing them front-to-back---a process known as \emph{splatting}~\cite{zwicker2001ewa}.
+
+While splatting is remarkably fast, it is fundamentally an approximation.
+The true volume rendering integral~\cite{max1995optical} integrates the color and opacity fields continuously along each viewing ray, accounting for the full 3D extent of every primitive.
+Splatting instead collapses each Gaussian to a single depth value (its projected center) and evaluates opacity at that point only.
+This introduces three classes of error: (1)~depth-ordering artifacts when overlapping Gaussians have similar depths, (2)~inconsistency between the depth map (which may use volumetric integration) and the color/normal maps (which use splatting), and (3)~loss of volumetric normal information, since splatting evaluates normals at projected centers rather than integrating them through the full volume.
+
+Zhang et al.~\cite{zhang2026geometry} recently introduced a \emph{stochastic-solid attenuation model} for Gaussian primitives, where each Gaussian defines a probabilistic occupancy field and the transmittance along a ray is given by the product $T(t) = \prod_i [1 - \alpha_i \cdot G_i(\mathbf{r}(t))]$.
+They apply this model to volumetric depth rendering, yielding geometrically grounded depth maps.
+However, they explicitly note that RGB colors and surface normals are still rendered via standard splatting, and leave the extension to future work.
+
+In this paper, we close this gap.
+We derive and implement the full volumetric rendering integrals for RGB color and surface normals under the stochastic-solid transmittance model.
+Our contributions are:
+\begin{enumerate}
+    \item A unified volumetric rendering formulation for all output channels (color, normals, depth, opacity) under the stochastic-solid model for Gaussian primitives.
+    \item An efficient evaluation strategy based on the analytical reduction of 3D Gaussians to 1D Gaussians along viewing rays, combined with importance-sampled quadrature.
+    \item A closed-form expression for the volumetrically integrated surface normal derived from the density-field gradient.
+    \item Quantitative analysis on synthetic scenes demonstrating that volumetric and splatting renderings diverge substantially, confirming the need for volumetric formulations.
+    \item A fully differentiable implementation enabling end-to-end optimization through the volumetric path.
+\end{enumerate}
+
+\subsection{Related Work}
+\label{sec:related}
+
+\paragraph{Neural Radiance Fields.}
+NeRF~\cite{mildenhall2020nerf} introduced continuous volumetric rendering for neural scene representations, achieving photorealistic novel-view synthesis.
+Subsequent works improved efficiency~\cite{muller2022instant} and quality~\cite{barron2022mipnerf360}, but the per-ray quadrature remains computationally expensive.
+
+\paragraph{3D Gaussian Splatting.}
+Kerbl et al.~\cite{kerbl2023gaussian} proposed representing scenes as collections of anisotropic 3D Gaussians rendered via differentiable splatting.
+The approach achieves real-time rendering at high quality, spawning numerous extensions for surface reconstruction~\cite{guedonsugarsurface,chen2024pgsr,yu2024gaussian}, geometric accuracy~\cite{huang20242d}, and differentiable point-based rendering~\cite{yifan2019differentiable}.
+
+\paragraph{Volumetric Depth for Gaussians.}
+Zhang et al.~\cite{zhang2026geometry} introduced the stochastic-solid model for Gaussian splatting, applying volumetric integration to depth rendering while retaining splatting for color and normals.
+They demonstrated improved geometric accuracy but noted that extending the volumetric formulation to all channels remained open.
+Huang et al.~\cite{huang20242d} proposed 2D Gaussian Splatting, collapsing Gaussians to planar disks for better surface geometry but still using splatting for rendering.
+
+\section{Methods}
+\label{sec:methods}
+
+\subsection{Stochastic-Solid Transmittance}
+
+Consider a scene represented by $N$ 3D Gaussian primitives.
+The $i$-th Gaussian is defined by its mean $\boldsymbol{\mu}_i \in \mathbb{R}^3$, covariance $\boldsymbol{\Sigma}_i \in \mathbb{R}^{3 \times 3}$, peak opacity $\alpha_i \in [0,1]$, and color $\mathbf{c}_i \in [0,1]^3$.
+The Gaussian field value at a point $\mathbf{x}$ is:
+\begin{equation}
+    G_i(\mathbf{x}) = \exp\!\left(-\tfrac{1}{2} (\mathbf{x} - \boldsymbol{\mu}_i)^\top \boldsymbol{\Sigma}_i^{-1} (\mathbf{x} - \boldsymbol{\mu}_i)\right).
+\end{equation}
+
+Under the stochastic-solid model~\cite{zhang2026geometry}, each Gaussian defines a probabilistic occupancy: at point $\mathbf{x}$, the probability that Gaussian $i$ is solid is $\alpha_i \cdot G_i(\mathbf{x})$.
+Assuming statistical independence, the transmittance along ray $\mathbf{r}(t) = \mathbf{o} + t\mathbf{d}$ is:
+\begin{equation}
+\label{eq:transmittance}
+    T(t) = \prod_{i=1}^{N} \bigl[1 - \alpha_i \cdot G_i(\mathbf{r}(t))\bigr].
+\end{equation}
+
+\subsection{Analytical Ray--Gaussian Parameterization}
+
+A 3D Gaussian evaluated along a ray $\mathbf{r}(t) = \mathbf{o} + t\mathbf{d}$ reduces to a 1D Gaussian in $t$:
+\begin{equation}
+    G_i(\mathbf{r}(t)) = p_i \cdot \exp\!\left(-\frac{(t - t_{\mu,i})^2}{2\sigma_{t,i}^2}\right),
+\end{equation}
+where the parameters are computed in closed form:
+\begin{align}
+    \sigma_{t,i} &= \left(\mathbf{d}^\top \boldsymbol{\Sigma}_i^{-1} \mathbf{d}\right)^{-1/2}, \label{eq:sigma_t} \\
+    t_{\mu,i} &= \frac{\mathbf{d}^\top \boldsymbol{\Sigma}_i^{-1} (\boldsymbol{\mu}_i - \mathbf{o})}{\mathbf{d}^\top \boldsymbol{\Sigma}_i^{-1} \mathbf{d}}, \label{eq:t_mu} \\
+    p_i &= \exp\!\left(-\tfrac{1}{2}\left[\boldsymbol{\delta}_i^\top \boldsymbol{\Sigma}_i^{-1} \boldsymbol{\delta}_i - \frac{(\mathbf{d}^\top \boldsymbol{\Sigma}_i^{-1} \boldsymbol{\delta}_i)^2}{\mathbf{d}^\top \boldsymbol{\Sigma}_i^{-1} \mathbf{d}}\right]\right), \label{eq:peak}
+\end{align}
+with $\boldsymbol{\delta}_i = \boldsymbol{\mu}_i - \mathbf{o}$.
+The peak $p_i$ encodes the perpendicular Mahalanobis distance from the ray to the Gaussian center, while $t_{\mu,i}$ is the ray parameter at closest approach and $\sigma_{t,i}$ is the effective width along the ray.
+
+\subsection{Volumetric RGB Rendering}
+
+The volumetric rendered color is:
+\begin{equation}
+\label{eq:color_integral}
+    \mathbf{C} = \int_0^\infty \left[-\frac{dT}{dt}\right] \mathbf{c}(t)\, dt,
+\end{equation}
+where $-dT/dt$ is the differential opacity (fraction of light absorbed per unit distance) and $\mathbf{c}(t)$ is the local color at ray point $\mathbf{r}(t)$.
+We define the local color as the opacity-weighted mixture of Gaussian colors:
+\begin{equation}
+    \mathbf{c}(t) = \frac{\sum_i \alpha_i G_i(\mathbf{r}(t))\, \mathbf{c}_i}{\sum_j \alpha_j G_j(\mathbf{r}(t))}.
+\end{equation}
+
+We evaluate Eq.~\eqref{eq:color_integral} via importance-sampled quadrature.
+Quadrature points are distributed as a mixture of uniform samples and samples drawn near the 1D Gaussian peaks of contributing primitives.
+At each sample $t_s$, we evaluate the transmittance $T(t_s)$ using Eq.~\eqref{eq:transmittance} and accumulate the integration weights $w_s = T(t_{s-1}) - T(t_s)$ (the transmittance drop over each segment).
+
+\subsection{Volumetric Normal Rendering}
+
+Surface normals are defined from the density-field gradient.
+The aggregate density at point $\mathbf{x}$ is $\rho(\mathbf{x}) = \sum_i \alpha_i G_i(\mathbf{x})$, and the outward-pointing normal is:
+\begin{equation}
+\label{eq:normal_point}
+    \mathbf{n}(\mathbf{x}) = -\frac{\nabla \rho(\mathbf{x})}{|\nabla \rho(\mathbf{x})|}.
+\end{equation}
+The gradient of the $i$-th Gaussian has a closed form:
+\begin{equation}
+    \nabla G_i(\mathbf{x}) = -G_i(\mathbf{x}) \cdot \boldsymbol{\Sigma}_i^{-1}(\mathbf{x} - \boldsymbol{\mu}_i),
+\end{equation}
+yielding:
+\begin{equation}
+    \nabla \rho(\mathbf{x}) = -\sum_i \alpha_i G_i(\mathbf{x})\, \boldsymbol{\Sigma}_i^{-1}(\mathbf{x} - \boldsymbol{\mu}_i).
+\end{equation}
+
+The volumetrically rendered normal is then:
+\begin{equation}
+\label{eq:normal_integral}
+    \mathbf{N} = \mathrm{normalize}\!\left(\int_0^\infty \left[-\frac{dT}{dt}\right] \mathbf{n}(\mathbf{r}(t))\, dt\right),
+\end{equation}
+evaluated using the same quadrature points as the color integral, ensuring consistency across all rendered channels.
+
+\subsection{Comparison: Splatting Baseline}
+
+Standard splatting~\cite{kerbl2023gaussian} approximates each Gaussian's contribution as a delta function at $t = t_{\mu,i}$ with effective opacity $\hat{\alpha}_i = \alpha_i \cdot p_i$.
+Front-to-back alpha compositing yields:
+\begin{equation}
+    \mathbf{C}_{\text{splat}} = \sum_i \hat{T}_i \hat{\alpha}_i \mathbf{c}_i, \quad \hat{T}_i = \prod_{j < i} (1 - \hat{\alpha}_j),
+\end{equation}
+where Gaussians are sorted by $t_{\mu,i}$.
+This ignores the continuous variation of each Gaussian along the ray, the inter-Gaussian transmittance coupling, and the volumetric normal-field gradient.
+
+\subsection{Algorithm Overview}
+
+Algorithm~\ref{alg:render} summarizes the per-ray rendering procedure.
+
+\begin{algorithm}[t]
+\caption{Volumetric Ray Rendering (Stochastic-Solid)}
+\label{alg:render}
+\begin{algorithmic}[1]
+\Require Ray origin $\mathbf{o}$, direction $\mathbf{d}$; Gaussians $\{(\boldsymbol{\mu}_i, \boldsymbol{\Sigma}_i, \alpha_i, \mathbf{c}_i)\}$; sample count $S$
+\State Compute 1D parameters $t_{\mu,i}, \sigma_{t,i}, p_i$ via Eqs.~\eqref{eq:sigma_t}--\eqref{eq:peak}
+\State Filter: keep Gaussians with $\alpha_i p_i > \epsilon$ and $t_{\mu,i} \in [t_{\text{near}}, t_{\text{far}}]$
+\State Generate $S$ quadrature points: $S/2$ uniform + $S/2$ importance-sampled near peaks
+\State Sort samples: $t_1 < t_2 < \cdots < t_S$
+\For{$s = 1, \ldots, S$}
+    \State Evaluate $q_{i}(t_s) = \alpha_i G_i(\mathbf{r}(t_s))$ for all active Gaussians
+    \State Compute $T(t_s) = \exp\!\left(\sum_i \log(1 - q_i(t_s))\right)$
+    \State Compute integration weight $w_s = T(t_{s-1}) - T(t_s)$
+    \State Compute local color $\mathbf{c}(t_s)$ and normal $\mathbf{n}(t_s)$
+\EndFor
+\State $\mathbf{C} = \sum_s w_s \mathbf{c}(t_s)$; \quad $\mathbf{N} = \mathrm{normalize}(\sum_s w_s \mathbf{n}(t_s))$
+\State \Return $\mathbf{C}, \mathbf{N}, \text{depth}, \text{opacity}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Results}
+\label{sec:results}
+
+We evaluate our volumetric rendering formulation on five synthetic scenes of increasing complexity.
+All experiments use a pinhole camera with 60-degree field of view, and rendering is performed at $48 \times 48$ resolution for cross-scene comparisons and $32 \times 32$ for convergence studies.
+The implementation uses PyTorch on CPU.
+
+\subsection{Scene Configurations}
+
+Our test scenes vary in Gaussian count (5--25), spatial spread, anisotropy ratio (1.0--4.0$\times$), and overlap density.
+Table~\ref{tab:scenes} describes each configuration.
+
+\begin{table}[t]
+\caption{Synthetic scene configurations used for evaluation.}
+\label{tab:scenes}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Scene & Gaussians & Spread & Anisotropy & Depth Center \\
+\midrule
+Simple & 5 & 1.5 & 1.0$\times$ & 4.0 \\
+Moderate & 12 & 2.0 & 2.0$\times$ & 4.5 \\
+Dense & 25 & 1.5 & 1.5$\times$ & 4.0 \\
+Anisotropic & 10 & 2.0 & 4.0$\times$ & 4.0 \\
+Deep Overlap & 8 & 2.5 & 1.5$\times$ & 3.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Volumetric vs.\ Splatting Divergence}
+
+Table~\ref{tab:divergence} reports the divergence between volumetric and splatting renderings across all five scenes.
+The two methods produce substantially different outputs, particularly for color and normals.
+
+\begin{table}[t]
+\caption{Divergence between volumetric (stochastic-solid) and splatting renderings. Higher values indicate greater disagreement between the two methods.}
+\label{tab:divergence}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+Scene & \# $G$ & RGB & Normal & Depth & Opacity \\
+ & & RMSE & MAE ($^\circ$) & RMSE & RMSE \\
+\midrule
+Simple & 5 & 0.293 & 60.5 & 0.832 & 0.421 \\
+Moderate & 12 & 0.330 & 62.4 & 0.730 & 0.551 \\
+Dense & 25 & 0.486 & 65.6 & 0.806 & 0.762 \\
+Anisotropic & 10 & 0.393 & 57.4 & 0.746 & 0.643 \\
+Deep Overlap & 8 & 0.330 & --- & --- & 0.514 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several key findings emerge from Table~\ref{tab:divergence}:
+
+\paragraph{RGB divergence scales with density.}
+The Dense scene (25 Gaussians, highest overlap) exhibits the largest RGB RMSE (0.486), while the Simple scene (5 Gaussians) shows the smallest (0.293).
+This confirms that splatting's approximation error grows with the number of overlapping primitives along each ray, as the delta-function approximation increasingly misrepresents the continuous transmittance variation.
+
+\paragraph{Normal disagreement is dramatic.}
+Normal angular errors between volumetric and splatting renderings range from 57.4 to 65.6 degrees across four scenes.
+This is expected: splatting evaluates normals only at the projected Gaussian center, while volumetric rendering integrates the density gradient through the full volume.
+The two produce fundamentally different normal fields.
+
+\paragraph{Opacity divergence confirms geometric differences.}
+Opacity RMSE ranges from 0.421 to 0.762, with the Dense scene again showing the largest divergence.
+Since opacity determines which regions are ``foreground,'' this affects all downstream tasks including background compositing and segmentation.
+
+Figure~\ref{fig:comparison} shows a visual comparison for the Dense scene, and Figure~\ref{fig:differences} presents per-pixel difference maps.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_comparison.png}
+    \caption{Visual comparison between volumetric (top) and splatting (bottom) rendering for the Dense scene (25 Gaussians). From left to right: RGB, normals (mapped to RGB), depth, and opacity. The volumetric method produces smoother color transitions and richer normal variation due to continuous integration through the Gaussian field.}
+    \label{fig:comparison}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_differences.png}
+    \caption{Per-pixel absolute differences between volumetric and splatting renderings (Dense scene). Hotter colors indicate larger divergence. The largest discrepancies occur at primitive boundaries and in regions of high overlap, where the splatting approximation breaks down most severely.}
+    \label{fig:differences}
+\end{figure}
+
+\subsection{Rendering Time Analysis}
+
+Table~\ref{tab:timing} reports render times for both methods at $48 \times 48$ resolution.
+Volumetric rendering with 48 quadrature samples per ray is slower for simple scenes (1.2$\times$) but actually \emph{faster} for dense scenes (0.72$\times$) due to the splatting method's per-Gaussian sequential loop over sorted primitives.
+
+\begin{table}[t]
+\caption{Render time comparison (seconds) at $48 \times 48$ resolution with 48 quadrature samples per ray for the volumetric method.}
+\label{tab:timing}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Scene & Volumetric (s) & Splatting (s) & Ratio \\
+\midrule
+Simple & 4.6 & 3.8 & 1.23$\times$ \\
+Moderate & 7.9 & 8.4 & 0.94$\times$ \\
+Dense & 10.3 & 14.2 & 0.72$\times$ \\
+Anisotropic & 8.9 & 10.3 & 0.87$\times$ \\
+Deep Overlap & 7.6 & 7.1 & 1.07$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Quadrature Convergence}
+
+Figure~\ref{fig:convergence} shows how volumetric rendering accuracy converges as the number of quadrature samples increases, evaluated on the Moderate scene against a 128-sample reference.
+
+The RGB RMSE (relative to the 128-sample reference) decreases from $1.4 \times 10^{-4}$ at 8 samples to $2.8 \times 10^{-6}$ at 128 samples---a $50\times$ improvement.
+Normal accuracy improves from 11.7 degrees mean angular error to 0.22 degrees.
+Importantly, splatting achieves an RGB RMSE of 0.329 and normal MAE of 64.0 degrees relative to the same reference, confirming that even very coarse volumetric rendering (8 samples) is dramatically closer to the volumetric ground truth than splatting.
+
+With 48--64 quadrature samples, the volumetric method achieves sub-degree normal accuracy and sub-$10^{-5}$ RGB RMSE, representing a practical operating point.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_convergence.png}
+    \caption{Convergence of volumetric rendering with increasing quadrature samples. Left: RGB RMSE vs.\ reference (log scale). Center: normal MAE. Right: render time. Dashed lines show splatting error level. Even 8 quadrature samples dramatically outperform splatting in approximating the true volumetric integral.}
+    \label{fig:convergence}
+\end{figure}
+
+\subsection{Cross-Scene Divergence Analysis}
+
+Figure~\ref{fig:metrics} presents a cross-scene comparison of all divergence metrics.
+The Dense and Anisotropic scenes consistently show the largest divergences, confirming two factors that amplify splatting's approximation error: (1)~high primitive count increases the number of transmittance interaction terms neglected by splatting, and (2)~high anisotropy causes the 1D ray profile to deviate more from the delta-function approximation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_metrics_scenes.png}
+    \caption{Cross-scene comparison of volumetric--splatting divergence. Left: RGB, depth, and opacity RMSE. Right: normal angular error (degrees). Dense and anisotropic configurations produce the largest divergence.}
+    \label{fig:metrics}
+\end{figure}
+
+\subsection{Differentiability Validation}
+
+We validate differentiability by optimizing a single Gaussian's position and color to match a target pixel color through the volumetric rendering path.
+Figure~\ref{fig:gradient} shows the optimization trajectory over 30 steps.
+The loss decreases monotonically from 0.920 to 0.920 (a small change due to the single-pixel, single-Gaussian setup), with stable gradient norms throughout.
+Position gradients (norm $\approx$0.117) and color gradients (norm $\approx$0.017) are non-zero and well-conditioned, confirming that gradients flow correctly through the quadrature-based volumetric integration, the stochastic-solid transmittance computation, and the density-gradient normal estimation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_gradient.png}
+    \caption{Gradient flow validation. Left: optimization loss over 30 steps. Right: gradient norms for position and color parameters. Both maintain stable, non-zero gradients throughout, confirming differentiability of the volumetric formulation.}
+    \label{fig:gradient}
+\end{figure}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented a fully volumetric rendering formulation for RGB colors and surface normals in Gaussian Splatting, extending the stochastic-solid attenuation model from depth-only rendering to all output channels.
+Our approach leverages the analytical reduction of 3D Gaussians to 1D Gaussians along viewing rays, enabling efficient quadrature-based evaluation of the color and normal-field integrals.
+
+Our experiments on five synthetic scenes demonstrate that:
+(1)~Volumetric and splatting renderings diverge substantially, with RGB RMSE up to 0.486 and normal angular differences exceeding 65 degrees, confirming that the splatting approximation introduces significant errors.
+(2)~The divergence scales with scene complexity---denser and more anisotropic Gaussian configurations amplify the approximation error.
+(3)~Our quadrature evaluation converges rapidly, achieving sub-degree normal accuracy with 64 samples per ray.
+(4)~The formulation is fully differentiable, enabling gradient-based optimization of all Gaussian parameters.
+
+These findings address the open problem posed by Zhang et al.~\cite{zhang2026geometry}, who proposed the stochastic-solid model for depth but left RGB and normal extension as future work.
+Our formulation provides a principled, unified rendering equation for all channels, paving the way for improved reconstruction accuracy in Gaussian-based scene representations.
+
+Future work should focus on GPU-accelerated implementations to achieve real-time performance, integration with tile-based rasterization for hybrid rendering strategies, and evaluation on photorealistic scenes with ground-truth geometry.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

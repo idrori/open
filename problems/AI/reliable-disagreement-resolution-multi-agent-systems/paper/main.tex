@@ -1,0 +1,164 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{xcolor}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\title{Reliable Disagreement Resolution in Multi-Agent Systems: Evidence-Weighted and Calibrated Aggregation Mechanisms}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Multi-agent LLM systems promise improved reliability through specialization and cross-checking, but naive aggregation mechanisms can amplify correlated errors and produce poorly calibrated consensus. We formalize the disagreement resolution problem as weighted opinion aggregation under correlated noise and compare four mechanisms: majority voting, evidence-weighted aggregation, diversity-aware aggregation, and calibrated Bayesian aggregation. Through systematic experiments varying agent count (3--21), inter-agent correlation (0.0--0.9), and evidence quality (0.5--0.95), we demonstrate that calibrated Bayesian aggregation achieves the lowest mean absolute error (MAE = 0.200) and the least error amplification (ratio = 0.646), representing a 3.3\% reduction in amplification over majority voting. Our diversity-aware mechanism provides complementary benefits at high correlation levels. These results establish principled baselines for disagreement resolution in production multi-agent systems.
+\end{abstract}
+
+\keywords{multi-agent systems, disagreement resolution, consensus, LLM, aggregation}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+Multi-agent designs in large language model (LLM) systems enable specialization, cross-checking, and collaborative reasoning across complex tasks~\cite{xu2026agent}. However, when multiple agents debate or provide critiques, the aggregation of their opinions into a final consensus is far from trivial. Naive approaches such as majority voting assume independence among agents---an assumption frequently violated when agents share architectures, training data, or prompting strategies~\cite{du2023debate}.
+
+The core challenge, as identified by Xu et al.~\cite{xu2026agent}, is that multi-agent debate can amplify errors if agents share the same blind spots, or if the aggregation mechanism is poorly calibrated. This paper addresses this open problem by formalizing disagreement resolution as weighted opinion aggregation under correlated noise and systematically comparing four mechanisms with increasing sophistication.
+
+Our contributions are:
+\begin{enumerate}
+    \item A formal model of multi-agent opinion generation with tunable correlation, evidence quality, and calibration parameters.
+    \item Four aggregation mechanisms spanning naive to calibrated approaches.
+    \item Systematic evaluation across 500 problems with varying agent counts, correlation levels, and evidence quality.
+    \item Evidence that calibrated Bayesian aggregation provides the best overall accuracy while diversity-aware aggregation excels under high correlation.
+\end{enumerate}
+
+\section{Related Work}
+
+The wisdom of crowds literature establishes that independent estimates, when averaged, can outperform individual experts~\cite{surowiecki2005wisdom}. Hong and Page~\cite{hong2004groups} showed that diversity in problem-solving approaches is more valuable than individual ability. DeGroot~\cite{degroot1974reaching} formalized iterative opinion pooling for reaching consensus.
+
+In the LLM context, Du et al.~\cite{du2023debate} demonstrated multi-agent debate for improving factuality, while Liang et al.~\cite{liang2023encouraging} explored divergent thinking in multi-agent settings. Wang et al.~\cite{wang2024mixture} proposed mixture-of-agents architectures. Chen et al.~\cite{chen2024reconcile} introduced round-table conference protocols for consensus among diverse LLMs.
+
+Our work differs by explicitly modeling correlated errors and evidence quality, providing a framework for analyzing when and why different aggregation mechanisms succeed or fail.
+
+\section{Problem Formulation}
+
+Consider $n$ agents providing opinions $\{o_1, \ldots, o_n\}$ on a problem with true answer $\theta$. Each agent's opinion is modeled as:
+\begin{equation}
+    o_i = \theta + \sqrt{\rho} \cdot z + \sqrt{1-\rho} \cdot \epsilon_i
+\end{equation}
+where $z \sim \mathcal{N}(0,1)$ is a shared error component (blind spots), $\epsilon_i \sim \mathcal{N}(0,1)$ are independent errors, and $\rho \in [0,1]$ controls inter-agent correlation. Noise is scaled by $(1-q) \cdot 2$ where $q$ is evidence quality.
+
+Each agent also provides an evidence score $e_i \sim \text{Beta}(10q, 10(1-q)+1)$ and a confidence value $c_i$ that is partially correlated with accuracy but includes miscalibration noise.
+
+\section{Aggregation Mechanisms}
+
+\subsection{Majority Vote}
+The simple average: $\hat{\theta}_{MV} = \frac{1}{n}\sum_{i=1}^n o_i$.
+
+\subsection{Evidence-Weighted}
+Weights proportional to evidence scores: $\hat{\theta}_{EW} = \sum_{i=1}^n w_i o_i$ where $w_i = e_i / \sum_j e_j$.
+
+\subsection{Diversity-Aware}
+Combines evidence quality with a diversity bonus that penalizes agents whose opinions cluster:
+\begin{equation}
+    d_i = 1 - \frac{1}{n-1}\sum_{j \neq i} \exp(-|o_i - o_j|)
+\end{equation}
+\begin{equation}
+    \hat{\theta}_{DA} = \sum_{i=1}^n \frac{e_i \cdot d_i}{\sum_j e_j \cdot d_j} o_i
+\end{equation}
+
+\subsection{Calibrated Bayesian}
+Penalizes the gap between confidence and evidence:
+\begin{equation}
+    \hat{\theta}_{CB} = \sum_{i=1}^n \frac{e_i(1-|c_i - e_i|)^2}{\sum_j e_j(1-|c_j - e_j|)^2} o_i
+\end{equation}
+
+\section{Experiments}
+
+We evaluate across three experimental axes with 500 problems each, using seed 42 for reproducibility.
+
+\textbf{Experiment A: Agent Count.} We vary $n \in \{3, 5, 7, 9, 11, 15, 21\}$ with fixed $\rho=0.3$ and $q=0.8$.
+
+\textbf{Experiment B: Correlation.} We vary $\rho \in \{0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9\}$ with $n=7$ and $q=0.8$.
+
+\textbf{Experiment C: Evidence Quality.} We vary $q \in \{0.5, 0.6, 0.7, 0.8, 0.9, 0.95\}$ with $n=7$ and $\rho=0.3$.
+
+\subsection{Results}
+
+\begin{table}[h]
+\centering
+\caption{Summary performance across all experimental conditions.}
+\label{tab:summary}
+\begin{tabular}{lcccc}
+\toprule
+Mechanism & Mean MAE & Best MAE & Mean Amp. & Worst Amp. \\
+\midrule
+Majority Vote & 0.2011 & 0.1849 & 0.668 & 0.955 \\
+Evidence Weighted & 0.2014 & 0.1847 & 0.664 & 0.956 \\
+Diversity Aware & 0.2042 & 0.1810 & 0.657 & 0.956 \\
+Calibrated Bayesian & \textbf{0.1997} & \textbf{0.1806} & \textbf{0.646} & \textbf{0.948} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:summary} shows that Calibrated Bayesian aggregation achieves the best performance across all summary metrics, with a mean MAE of 0.200 and the lowest error amplification ratio of 0.646.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/mae_vs_agents.png}
+    \caption{Mean Absolute Error vs. number of agents. All mechanisms improve with more agents, but calibrated methods maintain an edge.}
+    \label{fig:mae_agents}
+\end{figure}
+
+Figure~\ref{fig:mae_agents} shows that all mechanisms benefit from increasing agent count, consistent with the wisdom of crowds effect. The calibrated Bayesian mechanism maintains a consistent advantage, while diversity-aware aggregation shows the steepest improvement at larger $n$.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/error_amp_vs_correlation.png}
+    \caption{Error amplification ratio vs. inter-agent correlation. Values below 1.0 indicate the aggregation reduces error relative to individual agents.}
+    \label{fig:error_corr}
+\end{figure}
+
+Figure~\ref{fig:error_corr} reveals the critical impact of correlation on aggregation quality. As correlation increases, all mechanisms show rising error amplification ratios, but the calibrated Bayesian and diversity-aware mechanisms degrade more gracefully.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/mae_vs_evidence_quality.png}
+    \caption{MAE vs. evidence quality. Higher evidence quality benefits all mechanisms, with evidence-aware methods showing the largest gains.}
+    \label{fig:mae_evidence}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/summary_comparison.png}
+    \caption{Summary comparison of all mechanisms on MAE (left) and error amplification (right).}
+    \label{fig:summary}
+\end{figure}
+
+\section{Discussion}
+
+Our results demonstrate that while all aggregation mechanisms outperform individual agents (amplification ratios below 1.0), the gap between naive and sophisticated approaches widens under adverse conditions. The calibrated Bayesian mechanism provides the best overall balance by jointly considering evidence quality and confidence calibration.
+
+The diversity-aware mechanism offers complementary strengths, particularly at high correlation where its explicit penalization of clustering opinions prevents herding effects. In practice, a hybrid approach---using diversity-aware aggregation when correlation is estimated to be high and calibrated Bayesian otherwise---may offer the best of both worlds.
+
+Key implications for multi-agent LLM system design:
+\begin{itemize}
+    \item Always require evidence-backed critiques rather than bare opinions.
+    \item Monitor and estimate inter-agent correlation to select appropriate aggregation.
+    \item Penalize overconfident agents whose confidence exceeds evidence support.
+    \item Incentivize diversity in agent architectures and prompting strategies.
+\end{itemize}
+
+\section{Conclusion}
+
+We presented a systematic study of disagreement resolution mechanisms for multi-agent LLM systems. Our calibrated Bayesian aggregation achieves the lowest error (MAE = 0.200) and least error amplification (0.646) across all conditions tested. The framework provides principled baselines for designing robust consensus mechanisms in production multi-agent systems and highlights the critical importance of evidence quality and diversity in preventing correlated error amplification.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

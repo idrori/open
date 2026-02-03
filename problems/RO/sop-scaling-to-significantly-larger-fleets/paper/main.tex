@@ -1,0 +1,100 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Scaling Limits of the SOP Actor-Learner Framework for Large Robot Fleets}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We investigate whether the near-linear scaling of the Scalable Online Post-training (SOP) framework persists for significantly larger robot fleets beyond the 1--4 actor regime demonstrated empirically. Through analytical modeling of the SOP actor-learner pipeline with parameterized communication overhead, we simulate scaling behavior for fleets of 1 to 128 robots under three communication models (linear, $\sqrt{N}$, and $\log N$). Under $\sqrt{N}$ communication overhead, the system achieves 57.8$\times$ speedup at 64 actors (90.4\% efficiency) and maintains $>$70\% efficiency up to 162 actors. With $\log N$ overhead, efficiency remains above 92.6\% at 64 actors with a critical fleet size of 256+. Linear communication overhead limits efficient scaling to 46 actors. We identify learner throughput saturation and bandwidth constraints as the primary bottlenecks for large fleets and discuss architectural modifications to extend the near-linear scaling regime.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+The Scalable Online Post-training (SOP) framework~\cite{pan2026sop} couples distributed real-world data collection from a robot fleet with centralized online learning for VLA models. Empirically, SOP demonstrates near-linear speedups when scaling from 1 to 4 actors. Whether this favorable scaling extends to significantly larger fleets remains an open question, as system bottlenecks in communication, learner throughput, and synchronization latency may emerge at scale~\cite{dean2012large}.
+
+Understanding scaling limits is critical for the practical deployment of distributed robotic learning systems~\cite{levine2016end, brohan2023rt2}. We develop an analytical model of the SOP pipeline to predict scaling behavior and identify bottleneck thresholds.
+
+\section{Scaling Model}
+
+\subsection{SOP Architecture}
+
+The SOP system consists of $N$ robot actors collecting experience in parallel and a central learner performing gradient updates. The wall-clock time per training cycle is:
+\begin{equation}
+T(N) = \max\left(\frac{T_{\text{collect}}}{N}, T_{\text{learn}}\right) + T_{\text{comm}}(N)
+\end{equation}
+where $T_{\text{collect}}$ is the serial data collection time, $T_{\text{learn}}$ is the per-step learning time, and $T_{\text{comm}}(N)$ is the communication overhead.
+
+\subsection{Communication Models}
+
+We consider three overhead models reflecting different system architectures:
+\begin{itemize}
+\item \textbf{Linear}: $T_{\text{comm}} = \alpha N$ (point-to-point communication)
+\item \textbf{Sublinear}: $T_{\text{comm}} = \alpha\sqrt{N}$ (aggregation tree)
+\item \textbf{Logarithmic}: $T_{\text{comm}} = \alpha\log_2 N$ (hierarchical protocols)
+\end{itemize}
+
+\subsection{Scaling Metrics}
+
+The speedup $S(N) = T(1)/T(N)$ and scaling efficiency $E(N) = S(N)/N$ quantify how well the system utilizes additional actors.
+
+\section{Results}
+
+\subsection{Speedup Analysis}
+
+\begin{table}[t]
+\caption{Speedup $S(N)$ and efficiency $E(N)$ at key fleet sizes.}
+\label{tab:scaling}
+\begin{tabular}{lcccccc}
+\toprule
+Model & \multicolumn{2}{c}{N=16} & \multicolumn{2}{c}{N=64} & \multicolumn{2}{c}{N=128} \\
+ & $S$ & $E$ & $S$ & $E$ & $S$ & $E$ \\
+\midrule
+Linear & 15.2 & 0.95 & 34.5 & 0.54 & 29.0 & 0.23 \\
+$\sqrt{N}$ & 15.8 & 0.99 & 57.8 & 0.90 & 98.4 & 0.77 \\
+$\log N$ & 15.8 & 0.99 & 59.3 & 0.93 & 107.9 & 0.84 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:scaling} shows that all models achieve near-linear scaling for $N \leq 16$, consistent with SOP's empirical results. Divergence occurs beyond $N = 32$: linear overhead leads to \emph{decreasing} speedup beyond 64 actors, while $\sqrt{N}$ and $\log N$ models maintain useful scaling to 128+ actors.
+
+\subsection{Critical Fleet Size}
+
+The fleet size where efficiency drops below 70\% is: 46 (linear), 162 ($\sqrt{N}$), and 256+ ($\log N$). This suggests that with appropriate communication infrastructure, SOP can scale to over 100 robots while maintaining practical efficiency.
+
+\subsection{Bottleneck Analysis}
+
+Two bottlenecks emerge at scale: (1) bandwidth saturation when aggregate data generation exceeds network capacity, and (2) learner throughput saturation when the GPU cannot process updates as fast as data arrives. Under our default parameters, the learner becomes the primary bottleneck at approximately 300 actors.
+
+\section{Discussion}
+
+Our analysis indicates that near-linear scaling can persist well beyond 4 actors under favorable conditions. The key requirements are:
+\begin{enumerate}
+\item Sublinear communication overhead via hierarchical aggregation
+\item Sufficient network bandwidth (100+ MB/s for 64 actors)
+\item Learner parallelism for $N > 100$ (multi-GPU or pipeline parallelism)
+\end{enumerate}
+
+Amdahl's law~\cite{amdahl1967validity} provides a lower bound assuming fixed serial fraction ($p = 0.95$ gives max speedup of 20), while Gustafson's law~\cite{gustafson1988reevaluating} predicts better scaling for SOP's growing workload model. Our simulation results fall between these bounds, consistent with SOP's moderate serial fraction.
+
+\section{Conclusion}
+
+We predict that SOP's near-linear scaling extends to 64+ actors under $\sqrt{N}$ communication overhead (90.4\% efficiency) and to 128+ actors under $\log N$ overhead (84.3\% efficiency). The critical requirements are hierarchical communication protocols and adequate bandwidth. These results encourage scaling SOP deployments to significantly larger robot fleets.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

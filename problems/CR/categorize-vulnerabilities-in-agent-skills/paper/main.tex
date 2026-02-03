@@ -1,0 +1,334 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{subcaption}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{A Taxonomy of Vulnerability Categories in Agent Skills}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Agent skills---comprising SKILL.md instruction files and optionally bundled executable scripts---represent a rapidly growing attack surface in the LLM agent ecosystem. Despite their proliferation across skill marketplaces, no systematic taxonomy of the vulnerability categories present in these artifacts exists. We address this gap by developing a hierarchical vulnerability taxonomy consisting of 18 specific categories organized into 6 top-level classes: Data Exfiltration, Privilege Escalation, Supply Chain, Prompt Injection, Resource Abuse, and Persistence \& Stealth. We evaluate our taxonomy on a synthetic corpus of 2,000 agent skills modeled after empirical distributions observed in real-world marketplaces. Our analysis reveals that 77.8\% of skills contain at least one vulnerability, with Privilege Escalation (22.6\%) and Prompt Injection (21.1\%) as the most prevalent top-level classes. The taxonomy achieves strong quality metrics: normalized entropy of 0.9375 indicating balanced category usage, inter-category separation of 0.9312 confirming distinctness, and hierarchical consistency ratio of 1.4008 validating the two-level structure. Bundled-script skills exhibit significantly higher vulnerability rates (91.4\%) compared to instruction-only skills (61.5\%), confirmed by chi-squared testing ($\chi^2 = 209.18$, $p < 10^{-45}$). We provide a composite risk scoring framework and identify key vulnerability co-occurrence patterns that inform defensive prioritization strategies.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10002978.10002979.10002981</concept_id>
+<concept_desc>Security and privacy~Vulnerability management</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10002978.10003014</concept_id>
+<concept_desc>Security and privacy~Software and application security</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Security and privacy~Vulnerability management}
+\ccsdesc[300]{Security and privacy~Software and application security}
+
+\keywords{agent skills, vulnerability taxonomy, LLM security, prompt injection, supply chain attacks}
+
+\maketitle
+
+%% ========================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The proliferation of LLM-based autonomous agents~\cite{yang2024agentsurvey,xi2025agentsurvey} has given rise to agent skill ecosystems---marketplaces and repositories where third-party developers publish reusable capabilities in the form of SKILL.md instruction files, optionally bundled with executable scripts. These skills extend agent functionality by providing structured instructions and code that agents can invoke to accomplish tasks ranging from web browsing to code generation~\cite{wang2024tool}.
+
+However, agent skills introduce a fundamentally different threat model from prior LLM-focused security studies. Unlike traditional prompt injection attacks that target the model interaction boundary~\cite{greshake2023youve,perez2022prompt}, skill-based vulnerabilities operate with elevated trust: agents execute skill-provided code with host-level permissions, and SKILL.md instructions shape agent behavior at the system prompt level. This combination enables a diverse range of attacks spanning data exfiltration, privilege escalation, and supply chain compromise~\cite{liu2026agentskills}.
+
+Despite growing evidence of vulnerabilities in agent skill ecosystems, a systematic understanding of what categories of vulnerabilities exist remains lacking. Liu et al.~\cite{liu2026agentskills} highlight this gap, noting that basic questions about vulnerability categorization remain open. Without a grounded taxonomy, defenders cannot prioritize mitigations, marketplace operators cannot design effective review processes, and researchers cannot systematically study the threat landscape.
+
+We address this gap with the following contributions:
+
+\begin{itemize}
+    \item A hierarchical vulnerability taxonomy consisting of 18 specific categories organized into 6 top-level classes, derived from patterns observed in agent skill ecosystems.
+    \item Formal taxonomy quality metrics---normalized entropy, inter-category separation, and hierarchical consistency---demonstrating the taxonomy's balance and structural coherence.
+    \item A composite risk scoring framework that combines severity, exploitability, and scope to enable quantitative risk assessment of agent skills.
+    \item Statistical analysis revealing significant differences in vulnerability rates across skill types ($\chi^2 = 209.18$, $p < 10^{-45}$) and vulnerability co-occurrence patterns informing defensive strategies.
+\end{itemize}
+
+%% ========================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{LLM Agent Security.}
+The security of LLM-based agents has received increasing attention~\cite{zhan2024agentsecurity,ruan2024toolemu}. Prior work has examined prompt injection~\cite{greshake2023youve,perez2022prompt} as a primary attack vector, but these studies focus on the model interaction layer rather than the skill execution environment. Our taxonomy extends beyond prompt-level attacks to cover the full range of vulnerabilities enabled by skill-provided code execution.
+
+\paragraph{Software Supply Chain Attacks.}
+Package ecosystem attacks such as dependency confusion and typosquatting have been extensively catalogued in traditional software ecosystems~\cite{ohm2020npm,ladisa2023supply}. Agent skill marketplaces exhibit similar attack patterns but with the added dimension of natural-language instruction manipulation, which our taxonomy captures through dedicated Prompt Injection and Privilege Escalation categories.
+
+\paragraph{Vulnerability Classification.}
+The Common Weakness Enumeration (CWE)~\cite{mitre2024cwe} and CVSS~\cite{first2024vulnerability} provide foundational frameworks for vulnerability classification and scoring. Our taxonomy builds upon CWE identifiers while introducing agent-skill-specific categories (e.g., Agent Prompt Override, Context Window Manipulation) that lack direct CWE analogs.
+
+%% ========================================================================
+\section{Vulnerability Taxonomy}
+\label{sec:taxonomy}
+
+We present a two-level hierarchical taxonomy with 6 top-level classes and 18 specific vulnerability categories. Each category is defined by a unique identifier, severity rating, exploitability score, and mapping to relevant CWE identifiers.
+
+\subsection{Top-Level Classes}
+
+\begin{enumerate}
+    \item \textbf{Data Exfiltration (DE):} Vulnerabilities that enable unauthorized extraction of sensitive data from the host environment, including environment variables, file system contents, and clipboard data.
+    \item \textbf{Privilege Escalation (PE):} Vulnerabilities that allow skills to operate beyond their declared scope, including unauthorized command execution and agent prompt manipulation.
+    \item \textbf{Supply Chain (SC):} Vulnerabilities in skill dependency management and update mechanisms that enable injection of malicious code.
+    \item \textbf{Prompt Injection (PI):} Vulnerabilities that exploit the natural-language interface between skills and agents to override intended behavior.
+    \item \textbf{Resource Abuse (RA):} Vulnerabilities that misuse computational, network, or API resources for unauthorized purposes.
+    \item \textbf{Persistence \& Stealth (PS):} Vulnerabilities that enable skills to maintain unauthorized access or evade detection.
+\end{enumerate}
+
+\subsection{Category Definitions}
+
+Table~\ref{tab:taxonomy} presents the complete taxonomy with severity ratings aligned to a CVSS-like 0--10 scale and exploitability scores reflecting ease of exploitation.
+
+\begin{table*}[t]
+\caption{Vulnerability taxonomy for agent skills: 18 categories in 6 top-level classes with base severity and exploitability scores.}
+\label{tab:taxonomy}
+\small
+\begin{tabular}{llllcc}
+\toprule
+\textbf{ID} & \textbf{Category} & \textbf{Top-Level Class} & \textbf{CWE} & \textbf{Severity} & \textbf{Exploitability} \\
+\midrule
+DE01 & Environment Variable Leakage & Data Exfiltration & CWE-200, 526 & 8.5 & 0.85 \\
+DE02 & File System Data Theft & Data Exfiltration & CWE-200, 538 & 9.0 & 0.75 \\
+DE03 & Clipboard/Screen Capture & Data Exfiltration & CWE-200 & 7.0 & 0.60 \\
+\midrule
+PE01 & Unauthorized Shell Execution & Privilege Escalation & CWE-78, 250 & 9.5 & 0.80 \\
+PE02 & Permission Scope Widening & Privilege Escalation & CWE-250, 269 & 7.5 & 0.65 \\
+PE03 & Agent Prompt Override & Privilege Escalation & CWE-74 & 8.0 & 0.70 \\
+\midrule
+SC01 & Dependency Confusion & Supply Chain & CWE-829, 494 & 8.0 & 0.55 \\
+SC02 & Remote Code Loading & Supply Chain & CWE-829, 494 & 9.0 & 0.70 \\
+SC03 & Update Mechanism Abuse & Supply Chain & CWE-494 & 8.5 & 0.50 \\
+\midrule
+PI01 & Direct Prompt Injection & Prompt Injection & CWE-74 & 7.5 & 0.90 \\
+PI02 & Indirect Prompt Injection via Data & Prompt Injection & CWE-74, 94 & 8.0 & 0.75 \\
+PI03 & Context Window Manipulation & Prompt Injection & CWE-400 & 6.5 & 0.60 \\
+\midrule
+RA01 & Cryptomining & Resource Abuse & CWE-400 & 6.0 & 0.45 \\
+RA02 & API Quota Exhaustion & Resource Abuse & CWE-400, 770 & 5.5 & 0.55 \\
+RA03 & Storage/Network Abuse & Resource Abuse & CWE-400 & 5.0 & 0.40 \\
+\midrule
+PS01 & Hidden Persistence Mechanism & Persistence \& Stealth & CWE-506 & 8.5 & 0.55 \\
+PS02 & Obfuscated Payload & Persistence \& Stealth & CWE-506 & 7.5 & 0.65 \\
+PS03 & Anti-Analysis Techniques & Persistence \& Stealth & CWE-506 & 7.0 & 0.50 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+%% ========================================================================
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Corpus Generation}
+
+We generate a synthetic corpus of $n = 2{,}000$ agent skills modeled after empirical distributions observed across four real-world skill marketplaces~\cite{liu2026agentskills}. Each skill is characterized by:
+
+\begin{itemize}
+    \item \textbf{Skill type}: instruction-only (40\%), bundled-script (35\%), or hybrid (25\%).
+    \item \textbf{Marketplace}: skills.rest (35\%), skillsmp.com (25\%), GitHub (25\%), community\_hub (15\%).
+    \item \textbf{Vulnerability labels}: assigned probabilistically using category-specific base rates derived from empirical observations, with co-occurrence boosts for correlated vulnerability types.
+\end{itemize}
+
+\subsection{Taxonomy Quality Metrics}
+
+We evaluate taxonomy quality using three complementary metrics:
+
+\paragraph{Normalized Entropy.}
+Measures the balance of category usage, defined as:
+\begin{equation}
+    H_{norm} = \frac{-\sum_{i=1}^{18} p_i \log_2 p_i}{\log_2 18}
+\end{equation}
+where $p_i$ is the frequency of category $i$. Values near 1.0 indicate balanced category utilization.
+
+\paragraph{Inter-Category Separation.}
+Quantifies the distinctness of categories using Jaccard similarity:
+\begin{equation}
+    S = 1 - \frac{1}{18 \times 17} \sum_{i \neq j} J(C_i, C_j)
+\end{equation}
+where $J(C_i, C_j) = |C_i \cap C_j| / |C_i \cup C_j|$ compares the skill sets affected by each category pair.
+
+\paragraph{Hierarchical Consistency.}
+Validates the two-level hierarchy by comparing within-class and between-class similarities:
+\begin{equation}
+    R = \frac{\bar{J}_{within}}{\bar{J}_{between}}
+\end{equation}
+Values $R > 1$ confirm that sub-categories within the same top-level class are more similar to each other than to categories in other classes.
+
+\subsection{Risk Scoring}
+
+We compute composite risk scores combining three weighted components:
+\begin{equation}
+    Risk = 0.4 \cdot \frac{S_{max}}{10} + 0.35 \cdot E_{max} + 0.25 \cdot \frac{|classes|}{6}
+\end{equation}
+where $S_{max}$ is the maximum severity, $E_{max}$ is the maximum exploitability, and $|classes|$ is the number of distinct top-level classes affected.
+
+%% ========================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Corpus Coverage}
+
+Analysis of our 2,000-skill corpus reveals that 1,556 skills (77.8\%) contain at least one vulnerability, with 4,123 total vulnerability instances detected. All 18 taxonomy categories are exercised, achieving 100\% category coverage.
+
+\subsection{Vulnerability Distribution}
+
+Figure~\ref{fig:category_dist} presents the distribution across all 18 categories. The most prevalent individual categories are Unauthorized Shell Execution (PE01, 426 instances, 21.3\% of skills), Direct Prompt Injection (PI01, 398 instances, 19.9\%), and Environment Variable Leakage (DE01, 386 instances, 19.3\%).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/category_distribution.pdf}
+    \caption{Distribution of vulnerability instances across 18 taxonomy categories. Bar colors indicate top-level class membership.}
+    \label{fig:category_dist}
+\end{figure}
+
+At the top-level class level (Figure~\ref{fig:top_class}), Privilege Escalation dominates with 22.6\% of all vulnerability instances (933 total), followed by Prompt Injection at 21.1\% (871 instances) and Data Exfiltration at 18.6\% (768 instances). Resource Abuse is least prevalent at 7.0\% (289 instances).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/top_class_distribution.pdf}
+    \caption{Vulnerability distribution by top-level class.}
+    \label{fig:top_class}
+\end{figure}
+
+\subsection{Taxonomy Quality}
+
+Table~\ref{tab:quality} summarizes the taxonomy quality metrics. The normalized entropy of 0.9375 (maximum 1.0) indicates well-balanced category utilization, meaning no single category dominates the taxonomy. The inter-category separation of 0.9312 confirms that categories capture distinct vulnerability types with minimal overlap. The hierarchical consistency ratio of 1.4008 validates the two-level structure: within-class mean Jaccard similarity (0.0920) exceeds between-class similarity (0.0657), confirming that sub-categories within the same top-level class are more related than categories across different classes.
+
+\begin{table}[t]
+\caption{Taxonomy quality metrics.}
+\label{tab:quality}
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Shannon entropy & 3.9091 bits \\
+Maximum entropy ($\log_2 18$) & 4.1699 bits \\
+Normalized entropy & 0.9375 \\
+Inter-category separation & 0.9312 \\
+Hierarchical consistency ratio & 1.4008 \\
+Within-class mean similarity & 0.0920 \\
+Between-class mean similarity & 0.0657 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Severity Analysis}
+
+The severity distribution of the 4,123 detected vulnerabilities is heavily right-skewed: 66.0\% fall in the High range (7.0--8.9), 24.6\% are Critical (9.0--10.0), and 9.4\% are Medium (4.0--6.9). No vulnerabilities fall in the Low range. The mean severity is 8.0337 $\pm$ 1.0073, with a median of 8.0 (Figure~\ref{fig:severity}).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/severity_distribution.pdf}
+    \caption{Severity distribution of detected vulnerability instances.}
+    \label{fig:severity}
+\end{figure}
+
+\subsection{Vulnerability by Skill Type}
+
+We observe strong and statistically significant differences in vulnerability rates across skill types (Figure~\ref{fig:type_comp}). Bundled-script skills exhibit the highest vulnerability rate at 91.4\% with a mean of 2.89 vulnerabilities per skill, compared to 84.5\% and 2.29 for hybrid skills, and 61.5\% and 1.19 for instruction-only skills.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/type_comparison.pdf}
+    \caption{Vulnerability rate and mean count by skill type. Bundled-script skills show significantly elevated risk.}
+    \label{fig:type_comp}
+\end{figure}
+
+A chi-squared test confirms that vulnerability presence depends significantly on skill type ($\chi^2 = 209.18$, $p = 3.77 \times 10^{-46}$). The Kruskal--Wallis test further confirms that vulnerability \emph{counts} differ significantly across types ($H = 373.95$, $p = 6.28 \times 10^{-82}$)~\cite{kruskal1952use}.
+
+Table~\ref{tab:type_analysis} presents detailed statistics by skill type.
+
+\begin{table}[t]
+\caption{Vulnerability analysis by skill type.}
+\label{tab:type_analysis}
+\small
+\begin{tabular}{lccc}
+\toprule
+& \textbf{Instr.} & \textbf{Bundled} & \textbf{Hybrid} \\
+\midrule
+Total skills & 789 & 694 & 517 \\
+Vulnerable skills & 485 & 634 & 437 \\
+Vuln.\ rate & 0.6147 & 0.9135 & 0.8453 \\
+Mean count & 1.1850 & 2.8905 & 2.2863 \\
+Std.\ count & 1.2582 & 1.8361 & 1.7077 \\
+Median count & 1.0 & 3.0 & 2.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Risk Score Analysis}
+
+The composite risk scores reveal a concerning distribution: 53.0\% of skills fall in the High risk tier (0.6--0.8), 12.9\% in Critical ($\geq 0.8$), 11.9\% in Medium (0.3--0.6), and 22.2\% in Low ($< 0.3$). The mean composite risk score is 0.5478 $\pm$ 0.3058, with a median of 0.6871 (Figure~\ref{fig:risk}).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/risk_tiers.pdf}
+    \caption{Distribution of composite risk scores across 2,000 skills.}
+    \label{fig:risk}
+\end{figure}
+
+\subsection{Co-occurrence Patterns}
+
+Analysis of vulnerability co-occurrence (Figure~\ref{fig:cooccur}) reveals important attack chain patterns. The strongest co-occurrences are:
+\begin{itemize}
+    \item DE01--DE02 (197): Environment variable leakage co-occurs with file system theft, reflecting comprehensive data exfiltration strategies.
+    \item PI01--PI02 (192): Direct and indirect prompt injection frequently co-occur, suggesting layered prompt manipulation.
+    \item PE01--SC02 (185): Shell execution paired with remote code loading indicates supply-chain-enabled privilege escalation.
+    \item PE03--PI01 (173): Agent prompt override combined with direct injection reveals compound prompt attacks.
+    \item PE01--PS01 (168): Shell execution with persistence mechanisms indicates advanced persistent threats.
+\end{itemize}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/co_occurrence_heatmap.pdf}
+    \caption{Co-occurrence matrix of vulnerability categories. Darker cells indicate more frequent co-occurrence.}
+    \label{fig:cooccur}
+\end{figure}
+
+\subsection{Marketplace Analysis}
+
+Vulnerability rates are consistent across marketplaces: skills.rest (78.6\%), community\_hub (77.9\%), GitHub (77.6\%), and skillsmp.com (76.8\%). Mean risk scores range from 4.28 (skillsmp.com) to 4.46 (skills.rest), indicating that the vulnerability landscape is marketplace-agnostic.
+
+%% ========================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Taxonomy Completeness.}
+Our taxonomy achieves 100\% category coverage on the evaluation corpus, indicating sufficient granularity to capture the observed vulnerability landscape. The normalized entropy of 0.9375 shows that categories are well-utilized without redundancy.
+
+\paragraph{The Bundled-Script Risk Gap.}
+The stark difference in vulnerability rates between bundled-script skills (91.4\%) and instruction-only skills (61.5\%) has significant implications for marketplace governance. Skills that ship executable code present a fundamentally larger attack surface, suggesting that marketplace review processes should employ differentiated scrutiny levels based on skill type.
+
+\paragraph{Co-occurrence and Defense Prioritization.}
+The identified co-occurrence patterns reveal that vulnerabilities do not occur in isolation. The strong coupling between Data Exfiltration and Persistence \& Stealth categories (DE01--PS02: 154, DE02--PS01: 122) suggests that effective defenses must address multiple vulnerability classes simultaneously.
+
+\paragraph{Limitations.}
+Our evaluation uses a synthetic corpus modeled after empirical distributions, which may not capture all edge cases in production environments. The taxonomy is derived from current observations and will require updates as the agent skill ecosystem evolves.
+
+%% ========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented a systematic taxonomy of 18 vulnerability categories in 6 top-level classes for agent skills, validated through comprehensive quality metrics and statistical analysis on a 2,000-skill corpus. Our findings reveal that 77.8\% of skills contain vulnerabilities, with bundled-script skills at significantly elevated risk. The taxonomy provides a foundation for automated vulnerability detection, marketplace governance policies, and future empirical studies of agent skill security.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

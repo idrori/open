@@ -1,0 +1,267 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\setcopyright{none}
+\acmYear{2026}
+
+\begin{document}
+
+\title{When Does Widening the Scale Help? A Systematic Study of Score Range Adjustment for Bias Mitigation in LLM-as-a-Judge Evaluations}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Large language models (LLMs) are increasingly used as automated evaluators, yet alignment training introduces systematic numerical biases that compress score distributions toward the center of the rating scale. Score range adjustment---widening the discrete scale offered to the judge---has been proposed as a simple mitigation, but its generalizability across tasks, alignment methods, and scoring configurations remains an open question. We present a controlled simulation framework that models alignment-induced compression via parameterized Beta CDF and power-law distortion functions, and systematically evaluates score range adjustment across five evaluation task types, four alignment profiles, and seven scale granularities (K $\in \{3, 5, 7, 10, 20, 50, 100\}$). Our experiments on 2{,}000-sample synthetic datasets with known ground truth reveal that widening the range from $K{=}5$ to $K{=}50$ improves Spearman rank correlation in 84\% of task--alignment conditions, with the largest gains for strongly compressed models on skewed tasks (e.g., essay scoring under asymmetric DPO, $\rho$: $0.553 \to 0.927$). However, kurtosis reduction is inconsistent and Earth Mover's Distance increases with scale, indicating a distributional mismatch that persists even as ordinal agreement improves. We propose an adaptive two-pass protocol that estimates compression severity from a small calibration set and selects the range accordingly, and show that post-hoc isotonic calibration complements rather than substitutes for range adjustment. Our findings provide actionable guidance for practitioners deploying LLM judges and establish conditions under which score range adjustment generalizes as a bias mitigation strategy.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+The use of large language models as automated evaluators---the ``LLM-as-a-judge'' paradigm---has rapidly expanded across natural language processing tasks including summarization, translation quality estimation, code review, and open-ended generation~\cite{zheng2024judging, liu2023geval}. In this paradigm, an LLM is prompted to assign a numerical score on a discrete scale (e.g., 1--5) to evaluate the quality of a text. While this approach offers scalability advantages over human evaluation, it introduces systematic numerical biases that can undermine the validity of the resulting scores~\cite{wang2024large, ye2024justice, koo2024benchmarking}.
+
+A particularly consequential source of bias arises from alignment training. Reinforcement learning from human feedback (RLHF)~\cite{ouyang2022training} and direct preference optimization (DPO)~\cite{rafailov2023direct} teach models to produce outputs that are ``safe'' and ``helpful,'' but this training implicitly encourages hedging and avoidance of extreme statements. When aligned models are used as judges, this manifests as \emph{score compression}: the empirical score distribution concentrates around the center of the scale, exhibiting elevated kurtosis and reduced effective dynamic range regardless of the true quality distribution of the inputs~\cite{sato2026exploring}.
+
+Sato et al.~\cite{sato2026exploring} evaluated several mitigation strategies---temperature scaling, distribution calibration, and score range adjustment---and found that widening the score range often reduces kurtosis and sometimes improves correlation with human judgments. However, they explicitly noted that their approach is heuristic and task-specific, and that its generalizability remains uncertain. This motivates the central question of our work:
+
+\emph{Under what conditions does score range adjustment reliably mitigate alignment-induced numerical bias, and can we predict when it will or will not generalize?}
+
+We address this question through a controlled simulation framework that allows us to isolate the effects of score range adjustment from confounding factors such as prompt interpretation and rubric semantics. Our contributions are:
+
+\begin{enumerate}
+\item A formal model of alignment-induced score compression using parameterized Beta CDF and power-law distortion functions that captures the key characteristics of different alignment methods.
+\item A systematic generalizability audit across 5 task types $\times$ 4 alignment profiles $\times$ 7 scale granularities, yielding 140 experimental conditions with known ground truth.
+\item An adaptive two-pass protocol that estimates compression severity from a calibration set and selects the score range accordingly, converting the heuristic into a principled, data-driven procedure.
+\item Evidence that post-hoc isotonic calibration and range adjustment are complementary rather than substitutive, with range adjustment providing information-theoretic value beyond what calibration alone achieves.
+\end{enumerate}
+
+\subsection{Related Work}
+
+\paragraph{LLM-as-a-Judge.} The use of LLMs as evaluators has been studied extensively. Zheng et al.~\cite{zheng2024judging} introduced MT-Bench and demonstrated strong agreement between GPT-4 judgments and human preferences. Liu et al.~\cite{liu2023geval} proposed G-Eval for NLG evaluation with chain-of-thought prompting. Li et al.~\cite{li2024survey} provide a comprehensive survey of the LLM-as-a-judge paradigm. However, several studies have documented systematic biases in LLM judges, including position bias~\cite{wang2024large}, verbosity bias~\cite{koo2024benchmarking}, and the numerical biases we study here~\cite{sato2026exploring}.
+
+\paragraph{Bias in LLMs.} Gallegos et al.~\cite{gallegos2024bias} survey bias and fairness issues across LLM applications. Huang et al.~\cite{huang2024bias} study bias control mechanisms. Ye et al.~\cite{ye2024justice} quantify biases specifically in the LLM-as-a-judge setting, finding systematic preferences that correlate with model family. Verga et al.~\cite{verga2024replacing} propose using diverse model panels to mitigate individual model biases, while Shankar et al.~\cite{shankar2024validates} study the alignment between LLM-based and human evaluation.
+
+\paragraph{Score Calibration.} Platt scaling~\cite{platt1999probabilistic} and temperature scaling~\cite{guo2017calibration} are standard post-hoc calibration methods. Isotonic regression~\cite{barber1992isotonic} provides a nonparametric alternative that preserves rank order. Our work studies the interaction between these calibration approaches and score range adjustment, finding that they are complementary.
+
+\paragraph{Alignment and Numerical Bias.} Sato et al.~\cite{sato2026exploring} provide the direct motivation for our work, demonstrating that alignment training compresses score distributions and that range adjustment can partially mitigate this effect. Our contribution extends their analysis by systematically mapping the conditions under which this mitigation generalizes.
+
+\section{Methods}
+
+\subsection{Formal Model of Alignment-Induced Compression}
+
+We model the LLM judge as producing a latent quality estimate $q \in [0, 1]$ that is then distorted by an alignment-induced compression function $g: [0,1] \to [0,1]$ before being discretized to a score $s \in \{1, \ldots, K\}$. The observable score is:
+\begin{equation}
+s = \lfloor g(q) \cdot K \rfloor + 1, \quad s \in \{1, \ldots, K\}
+\end{equation}
+
+We consider two families of compression functions:
+
+\paragraph{Beta CDF Compression.} Models compression as the regularized incomplete Beta function:
+\begin{equation}
+g_{\alpha,\beta}(q) = I_q(\alpha, \beta) = \frac{B(q; \alpha, \beta)}{B(\alpha, \beta)}
+\end{equation}
+When $\alpha = \beta > 1$, the mapping is S-shaped and compresses extreme values toward the center (modeling symmetric RLHF). When $\alpha \neq \beta$, the compression is asymmetric (modeling DPO-style alignment that may favor one end of the scale).
+
+\paragraph{Power-Law Compression.} Models compression centered at the midpoint:
+\begin{equation}
+g_\gamma(q) = \frac{1}{2} + \frac{\text{sign}(2q - 1) \cdot |2q - 1|^\gamma}{2}
+\end{equation}
+When $\gamma > 1$, scores are compressed toward $0.5$; when $\gamma < 1$, they are expanded. Figure~\ref{fig:compression} visualizes the four alignment profiles used in our experiments.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_compression_functions.pdf}
+\caption{Alignment-induced compression functions used in our study. Each curve maps latent quality $q$ to the compressed score $g(q)$. The identity (gray) represents an unaligned base model. Mild RLHF (blue) applies moderate symmetric compression ($\alpha{=}\beta{=}2$). Strong RLHF (red) applies heavy symmetric compression ($\alpha{=}\beta{=}4$). Asymmetric DPO (orange, dashed) applies asymmetric compression favoring higher scores ($\alpha{=}3, \beta{=}5$). Power compression (purple, dash-dot) applies power-law distortion ($\gamma{=}2$). Greater deviation from the diagonal indicates stronger compression.}
+\label{fig:compression}
+\end{figure}
+
+\subsection{Task Profiles}
+
+We define five canonical evaluation task types, each characterized by a distinct ground-truth quality distribution (Table~\ref{tab:tasks}):
+
+\begin{table}[t]
+\caption{Task profiles used in the generalizability audit. Each task has a characteristic ground-truth quality distribution reflecting the typical spread of quality levels encountered in that evaluation domain. Variance quantifies the spread; higher variance tasks have more diverse quality levels to discriminate.}
+\label{tab:tasks}
+\centering
+\small
+\begin{tabular}{llcc}
+\toprule
+Task & Distribution & Mean & Var. \\
+\midrule
+Summarization & Beta(4, 4) & 0.498 & 0.028 \\
+Translation & Beta(2, 2) & 0.500 & 0.050 \\
+Open Generation & Uniform(0, 1) & 0.499 & 0.084 \\
+Code Review & Bimodal Beta & 0.560 & 0.101 \\
+Essay Scoring & Beta(5, 2) & 0.713 & 0.025 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Bias Measurement Metrics}
+
+We evaluate score range adjustment using four complementary metrics:
+
+\begin{itemize}
+\item \textbf{Excess kurtosis} of the LLM score distribution (Fisher definition). Alignment-induced compression typically produces leptokurtic (high kurtosis) distributions; effective mitigation reduces excess kurtosis.
+\item \textbf{Spearman rank correlation} ($\rho$) between LLM scores and human reference scores. This measures ordinal agreement---the ability to correctly rank items by quality.
+\item \textbf{Earth Mover's Distance (EMD)} between the LLM and human score distributions. This measures distributional fidelity---how closely the shape of the score distribution matches the reference.
+\item \textbf{Effective entropy ratio}: $H(s) / \log K$, measuring what fraction of the scale's information capacity the model actually uses.
+\end{itemize}
+
+\subsection{Experimental Design}
+
+\paragraph{Generalizability Audit.} We sweep over all combinations of 5 tasks $\times$ 5 alignment profiles (including no alignment) $\times$ 7 scale granularities ($K \in \{3, 5, 7, 10, 20, 50, 100\}$), yielding 175 experimental conditions. For each condition, we sample $n = 2{,}000$ ground-truth quality scores from the task profile, apply the alignment compression, discretize to the $\{1, \ldots, K\}$ scale, and compute all bias metrics against the uncompressed human reference scores. All experiments use a fixed random seed for reproducibility.
+
+\paragraph{Adaptive Two-Pass Protocol.} For each task--alignment pair, we simulate a practical deployment scenario:
+\begin{enumerate}
+\item \emph{Calibration pass}: Evaluate a small subset ($n_\text{cal} = 200$) on the default scale ($K = 5$).
+\item \emph{Adaptation}: Fit a Beta distribution to the observed scores, estimate compression severity as $\hat{\sigma} = \hat{\alpha} + \hat{\beta}$, and select $K'$ from candidates $\{3, 5, 7, 10, 20, 50, 100\}$ such that the predicted effective entropy ratio $\text{EER}(K') = 1 - \exp(-K'/\hat{\sigma})$ is closest to a target of 0.85.
+\item \emph{Evaluation pass}: Re-evaluate the full dataset on the adapted scale $K'$.
+\end{enumerate}
+
+\paragraph{Calibration Interaction Study.} For each task--alignment pair and $K \in \{5, 10, 20, 50, 100\}$, we split the data into training ($n = 500$) and test ($n = 1{,}500$) sets. We fit an isotonic regression calibrator on the training set and evaluate raw versus calibrated scores on the test set. This reveals whether range adjustment provides value beyond post-hoc calibration.
+
+\section{Results}
+
+\subsection{Generalizability of Score Range Adjustment}
+
+Figure~\ref{fig:kurtosis_heatmap} shows the kurtosis reduction achieved by widening the score range from $K{=}5$ to $K{=}50$ across all task--alignment conditions. The effect is highly heterogeneous. Power compression on summarization shows the largest reduction ($\Delta = 0.58$), while several conditions show negligible or negative change.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_kurtosis_heatmap.pdf}
+\caption{Kurtosis reduction ($\Delta$ = kurtosis at $K{=}5$ minus kurtosis at $K{=}50$) across task and alignment conditions. Positive values (green) indicate that widening the range reduced excess kurtosis. The effect is highly task- and alignment-dependent, with the largest reductions for power compression on summarization and strong RLHF on essay scoring. Several conditions show minimal change, indicating kurtosis alone is insufficient to characterize the benefit of range adjustment.}
+\label{fig:kurtosis_heatmap}
+\end{figure}
+
+However, rank correlation tells a more consistent story. Figure~\ref{fig:spearman} shows Spearman $\rho$ as a function of $K$ across all conditions. In nearly every case, increasing $K$ monotonically improves rank correlation, with diminishing returns beyond $K \approx 20$. The improvement is most dramatic for conditions with strong compression: essay scoring under asymmetric DPO improves from $\rho = 0.553$ at $K{=}5$ to $\rho = 0.927$ at $K{=}50$.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig3_spearman_vs_K.pdf}
+\caption{Spearman rank correlation ($\rho$) between LLM judge scores and human reference scores as a function of the score range $K$, shown separately for each evaluation task. Each line represents a different alignment profile. Rank correlation improves monotonically with $K$ across nearly all conditions, with diminishing returns beyond $K \approx 20$. The improvement is largest for strongly compressed models (red, orange) and for tasks with skewed or complex quality distributions (Essay Scoring, Code Review).}
+\label{fig:spearman}
+\end{figure*}
+
+Table~\ref{tab:verdict} summarizes the overall verdict across conditions using three criteria (kurtosis reduction, Spearman improvement, EMD reduction). Range adjustment ``helps'' (improves at least 2 of 3 metrics) in 7 out of 20 task--alignment conditions, is ``mixed'' (improves exactly 1) in 13 conditions, and never ``hurts'' (worsens all 3).
+
+\begin{table}[t]
+\caption{Generalizability verdict for score range adjustment ($K{=}5 \to K{=}50$). A condition is classified as \textbf{Helps} if at least 2 of 3 metrics (kurtosis, Spearman $\rho$, EMD) improve, \textbf{Mixed} if exactly 1 improves, and \textbf{Hurts} if none improve. Range adjustment never worsens all metrics simultaneously. The ``Mixed'' verdicts arise because EMD systematically increases with $K$, while Spearman almost always improves.}
+\label{tab:verdict}
+\centering
+\small
+\input{figures/table1_verdict}
+\end{table}
+
+The apparent paradox---Spearman improves while EMD worsens---arises because a wider scale allows finer ordinal distinctions (improving rank correlation) but also amplifies absolute distributional differences (increasing EMD). This distinction is important: if the goal is ranking items correctly, wider ranges are almost universally beneficial; if the goal is producing a score distribution that matches the human reference, the picture is more nuanced.
+
+\subsection{Score Distribution Analysis}
+
+Figure~\ref{fig:distributions} illustrates the score distribution comparison for the Translation task under Strong RLHF alignment at six different scale granularities. At $K{=}3$, both human and LLM distributions are coarsely quantized with substantial overlap. As $K$ increases, the human distribution broadens while the LLM distribution remains compressed, making the distributional gap visually apparent despite improved ordinal agreement.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig6_score_distributions.pdf}
+\caption{Score distributions at six scale granularities for Translation quality evaluation under Strong RLHF alignment. Blue histograms show human reference scores (direct discretization of ground truth); red histograms show LLM judge scores (discretization after alignment compression). At small $K$, both distributions are coarsely quantized and overlap substantially. As $K$ increases, the human distribution fills the full range while the LLM distribution remains concentrated near the center, revealing the alignment-induced compression that wider scales make diagnosable.}
+\label{fig:distributions}
+\end{figure*}
+
+Table~\ref{tab:detailed} presents the full numerical comparison of $K{=}5$ versus $K{=}50$ across all conditions. Key observations include: (i) Spearman $\rho$ improves in every condition except the no-alignment baseline; (ii) the largest improvements occur for essay scoring under asymmetric DPO ($+0.374$) and summarization under power compression ($+0.364$); (iii) EMD increases in every condition, with larger increases for stronger compression.
+
+\begin{table*}[t]
+\caption{Detailed comparison of bias metrics at $K{=}5$ versus $K{=}50$ across all task--alignment conditions. Kurt.\ = excess kurtosis, $\rho$ = Spearman rank correlation, EMD = Earth Mover's Distance. Rank correlation improves universally (the largest gain is $+0.374$ for Essay Scoring under Asymmetric DPO), while EMD increases in all conditions due to the amplified scale. Kurtosis changes are inconsistent across conditions, reducing for some (Power Compression) but increasing for others (Asymmetric DPO on Summarization).}
+\label{tab:detailed}
+\centering
+\small
+\input{figures/table2_detailed}
+\end{table*}
+
+\subsection{Adaptive Two-Pass Protocol}
+
+Figure~\ref{fig:adaptive} shows the performance of the adaptive protocol. The protocol selects different $K'$ values depending on the estimated compression severity: for strongly compressed models (e.g., power compression), it selects $K' = 20$--$50$; for mildly compressed models, it often retains $K' = 5$ or selects $K' = 7$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_adaptive_protocol.pdf}
+\caption{Performance of the adaptive two-pass protocol, showing mean Spearman $\rho$ (left) and mean EMD (right) across alignment methods for each task. Blue bars show the baseline ($K{=}5$); red bars show the adapted range ($K'$ selected by the protocol). The adaptive protocol improves rank correlation for Essay Scoring (the most challenging case) while maintaining comparable performance for easier tasks. EMD changes vary by task depending on the selected $K'$.}
+\label{fig:adaptive}
+\end{figure}
+
+Table~\ref{tab:adaptive} gives full results. The adaptive protocol improves Spearman $\rho$ in 15 out of 20 conditions, with the largest gains for essay scoring ($+0.374$ for asymmetric DPO, $+0.187$ for power compression, $+0.181$ for strong RLHF). In 3 conditions (open generation under mild RLHF, strong RLHF, and asymmetric DPO), the protocol selects $K' = 3$, which reduces Spearman $\rho$ but improves entropy ratio and EMD.
+
+\begin{table*}[t]
+\caption{Adaptive two-pass protocol results. $K'$ is the adapted score range selected based on the calibration set. $\rho_\text{base}$ and $\rho_\text{adapt}$ are the Spearman rank correlations for the baseline ($K{=}5$) and adapted ($K'$) scales, respectively; bold indicates improvement. The protocol selects wider ranges ($K'{=}20$--$50$) for strongly compressed conditions (essay scoring, power compression) and narrower ranges for conditions with less compression. Spearman $\rho$ improves in 15 of 20 conditions.}
+\label{tab:adaptive}
+\centering
+\footnotesize
+\input{figures/table3_adaptive}
+\end{table*}
+
+\subsection{Calibration Interaction}
+
+Figure~\ref{fig:calibration} shows how Spearman $\rho$ varies with $K$ for raw versus isotonic-calibrated scores under strong RLHF alignment. Two key findings emerge. First, at small $K$ (e.g., $K{=}5$), isotonic calibration can actually \emph{reduce} rank correlation because the limited resolution means the calibration mapping loses ordinal information. Second, at larger $K$ ($\geq 10$), raw scores achieve high rank correlation comparable to calibrated scores, and the gap between raw and calibrated diminishes as $K$ increases.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig5_calibration_interaction.pdf}
+\caption{Spearman $\rho$ as a function of $K$ for raw (red squares) versus isotonic-calibrated (green circles) scores under Strong RLHF alignment. At small $K$, isotonic calibration can \emph{reduce} rank correlation because the limited discrete resolution constrains the calibration mapping. At larger $K$ ($\geq 10$), both raw and calibrated scores achieve high rank correlation, and the two approaches converge. This demonstrates that range adjustment provides genuine information-theoretic value by encoding finer ordinal distinctions in the raw scores, rather than being merely a distributional cosmetic.}
+\label{fig:calibration}
+\end{figure*}
+
+This finding has a clear interpretation: wider score ranges encode more information in the raw scores, providing calibration methods with richer input. Range adjustment and calibration are thus complementary strategies operating at different stages of the evaluation pipeline.
+
+\subsection{Predictive Analysis}
+
+Figure~\ref{fig:predictive} examines what factors predict when range adjustment is beneficial. Across our 25 task--alignment conditions (including no-alignment baselines), widening from $K{=}5$ to $K{=}50$ improves Spearman $\rho$ in 84\% of cases. The correlation between task variance and improvement is $r = -0.477$ ($p = 0.016$), indicating that tasks with lower ground-truth variance (e.g., summarization, essay scoring) tend to benefit \emph{more} from range adjustment. This is because low-variance tasks produce more compressed human score distributions, making the additional resolution from wider ranges more valuable for distinguishing closely-spaced quality levels.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig7_predictive_scatter.pdf}
+\caption{Predictive factors for score range adjustment effectiveness. Each point represents one task--alignment condition. (a) Task variance vs.\ improvement in Spearman $\rho$ when widening from $K{=}5$ to $K{=}50$. Lower-variance tasks benefit more ($r = -0.477$, $p = 0.016$). (b) Compression severity (estimated from alignment profile) vs.\ improvement; circles indicate conditions where adjustment helps ($\Delta\rho > 0$), crosses where it does not. Colors indicate alignment method.}
+\label{fig:predictive}
+\end{figure}
+
+\subsection{Discussion}
+
+Our results provide a nuanced answer to the open question of whether score range adjustment generalizes as a bias mitigation strategy. The answer depends critically on which metric is prioritized.
+
+\paragraph{Ordinal accuracy vs.\ distributional fidelity.} If the evaluation goal is to correctly \emph{rank} items by quality---which is the most common use case for LLM-as-a-judge evaluations in model development---then range adjustment is broadly beneficial. Spearman $\rho$ improves in 84\% of conditions, and the improvement is monotonically increasing with $K$ in nearly all cases. However, if the goal is to produce a score distribution that matches the human reference (e.g., for calibrated probability estimates), then range adjustment alone is insufficient. The systematic increase in EMD with $K$ reflects the fundamental compression mismatch: the model's internal mapping $g(q)$ does not change when $K$ changes, so the distributional gap is merely rescaled rather than resolved.
+
+\paragraph{Why the adaptive protocol helps.} The adaptive protocol addresses a key practical challenge: choosing $K$ requires knowledge of the compression severity, which varies across models and tasks. By estimating this from a small calibration set, the protocol avoids both under-adjustment (selecting $K$ too small for strongly compressed models) and over-adjustment (selecting $K$ too large for mildly compressed models, which wastes annotator cognitive bandwidth without meaningful gain). The cases where the protocol selects $K' < K_\text{initial}$ (e.g., $K' = 3$ for open generation under mild RLHF) reflect its ability to recognize that the default scale is already adequate.
+
+\paragraph{Practical implications.} For practitioners deploying LLM judges, our findings suggest a simple decision procedure: (1) if the evaluation task involves a narrow quality distribution (e.g., summarization of already-selected outputs) and the model is heavily aligned, use a wider scale ($K \geq 20$); (2) if the task has a broad, uniform quality distribution and the model is lightly aligned, the default scale ($K = 5$--$10$) is likely sufficient; (3) when in doubt, apply the adaptive two-pass protocol, which adds minimal overhead (200 calibration examples) and automatically selects an appropriate range.
+
+\paragraph{Relationship to information theory.} The effective entropy ratio metric provides an information-theoretic perspective on score range adjustment. An entropy ratio of $1.0$ means the model uses the full information capacity of the scale; lower ratios indicate wasted capacity due to compression. Our adaptive protocol targets an entropy ratio of $0.85$, balancing resolution against practical constraints. This connects score range adjustment to the broader literature on quantization and rate-distortion theory: the score range $K$ determines the ``bit budget'' for encoding quality judgments, and compression reduces the effective bit rate.
+
+\section{Conclusion}
+
+We have presented a systematic study of when and why score range adjustment mitigates alignment-induced numerical bias in LLM-as-a-judge evaluations. Our controlled simulation framework, spanning 175 experimental conditions across five task types, five alignment profiles, and seven scale granularities, yields several actionable findings:
+
+\begin{enumerate}
+\item \textbf{Range adjustment is broadly beneficial for ordinal accuracy.} Widening the score range improves Spearman rank correlation in 84\% of conditions, with the largest gains for strongly compressed models on challenging tasks. This benefit is robust across tasks and alignment methods.
+
+\item \textbf{Kurtosis reduction is unreliable as a sole indicator.} While range adjustment often reduces kurtosis, this is inconsistent. EMD systematically increases with scale. Practitioners should evaluate range adjustment using rank correlation rather than distributional shape metrics.
+
+\item \textbf{The optimal range depends on compression severity.} The adaptive two-pass protocol, which estimates compression from a calibration set and selects $K'$ accordingly, improves performance in 75\% of conditions without requiring knowledge of the alignment method.
+
+\item \textbf{Range adjustment and post-hoc calibration are complementary.} Wider ranges encode more information in raw scores, providing calibration methods with richer input. At narrow ranges, calibration can actually degrade performance due to insufficient resolution.
+
+\item \textbf{Task characteristics predict generalizability.} Tasks with lower ground-truth variance benefit more from range adjustment ($r = -0.477$, $p = 0.016$), providing a practical heuristic for practitioners.
+\end{enumerate}
+
+\paragraph{Limitations.} Our study uses synthetic compression functions rather than scores from real aligned LLMs. While this enables controlled analysis, real-world compression patterns may be more complex. The interaction between score range and prompt semantics (e.g., anchoring effects) is not captured. Future work should validate these findings with scores from actual LLM judges across diverse benchmarks.
+
+\paragraph{Broader Impact.} As LLM-as-a-judge becomes standard practice for evaluation, understanding and mitigating numerical biases is essential for the validity of automated evaluation pipelines. Our adaptive protocol provides a practical, drop-in improvement that requires no changes to the underlying model.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

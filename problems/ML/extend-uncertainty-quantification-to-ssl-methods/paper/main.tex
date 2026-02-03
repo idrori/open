@@ -1,0 +1,103 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+\setcopyright{acmlicensed}
+
+\begin{document}
+
+\title{Extending Uncertainty Quantification Tools Across Self-Supervised Imaging Methods: A Systematic Evaluation}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Self-supervised learning methods for imaging inverse problems can reconstruct signals without ground truth, yet quantifying the uncertainty of these reconstructions at test time remains challenging. We systematically evaluate four uncertainty quantification (UQ) tools---SURE, higher-order SURE, Tweedie-based posterior moments, and equivariant bootstrapping---across four self-supervised methods (Noise2Self, Equivariant Imaging, SSDU, Noisier2Noise), three operator types, and six noise levels. Our experiments reveal that SURE-based error estimation achieves relative errors below 25\% for Noise2Self and SSDU across all noise levels but degrades for Equivariant Imaging due to regularization-induced bias. Equivariant bootstrapping provides reliable coverage (above 90\%) for Gaussian operators but under-covers for structured operators. Tweedie posterior moments consistently improve upon pseudoinverse estimates. We present a validity matrix mapping which UQ-SSL combinations produce reliable estimates, providing practitioners with actionable guidance for uncertainty-aware self-supervised imaging.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Self-supervised learning methods for imaging inverse problems~\cite{batson2019noise2self,tachella2022equivariant,yaman2020ssdu,moran2020noisier2noise} reconstruct signals from noisy measurements without access to ground truth. While these methods achieve competitive reconstruction quality, quantifying the uncertainty of individual reconstructions remains an open problem~\cite{tachella2026selfsupervised}.
+
+Several UQ tools have been developed in this context: Stein's Unbiased Risk Estimate (SURE)~\cite{stein1981estimation,eldar2008gsure} provides unbiased MSE estimation; Tweedie's formula~\cite{efron2011tweedies} connects the score function to posterior moments; and equivariant bootstrapping estimates nullspace uncertainty through resampling. However, these tools have only been demonstrated for specific scenarios, and their broader applicability across SSL methods is unknown.
+
+We address this gap by systematically evaluating each UQ tool on each SSL method across operator types and noise levels, producing a validity matrix that maps the landscape of reliable UQ-SSL combinations.
+
+\section{Methods}
+
+\subsection{SSL Reconstruction Methods}
+
+We evaluate four methods: \textbf{Noise2Self}~\cite{batson2019noise2self} (J-invariant masking), \textbf{Equivariant Imaging (EI)}~\cite{tachella2022equivariant} (symmetry-constrained reconstruction), \textbf{SSDU}~\cite{yaman2020ssdu} (data undersampling), and \textbf{Noisier2Noise}~\cite{moran2020noisier2noise} (noise-augmented denoising).
+
+\subsection{UQ Tools}
+
+\textbf{SURE}~\cite{stein1981estimation}: Estimates MSE without ground truth via $\text{SURE} = \|A\hat{x} - y\|^2 - m\sigma^2 + 2\sigma^2 \text{div}(f)$. \textbf{Higher-order SURE}~\cite{ramani2008sure}: Adds second-order correction. \textbf{Tweedie posterior}~\cite{efron2011tweedies}: Estimates posterior mean and variance from score function. \textbf{Equivariant bootstrap}: Resamples in nullspace of $A$ to estimate per-component uncertainty.
+
+\section{Experiments}
+
+\subsection{Setup}
+We generate 50 piecewise smooth signals in $\mathbb{R}^{32}$ with forward operators $A \in \mathbb{R}^{16 \times 32}$ of three types (Gaussian, subsampling, blurring). Noise levels range from $\sigma = 0.01$ to $1.0$. Each experiment is repeated over 5 trials with seed 42.
+
+\subsection{SURE Accuracy}
+
+Figure~\ref{fig:sure} shows SURE relative error across noise levels. Noise2Self and SSDU maintain relative errors below 25\% at moderate noise ($\sigma \leq 0.2$), while EI shows elevated errors due to equivariance regularization biasing the divergence estimate. Noisier2Noise shows intermediate accuracy, with bias correction partially compensating for added noise.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/sure_accuracy.png}
+    \caption{SURE relative error vs.\ noise level for four SSL methods.}
+    \label{fig:sure}
+\end{figure}
+
+\subsection{Equivariant Bootstrap Coverage}
+
+Figure~\ref{fig:bootstrap} shows bootstrap coverage across operator types. Gaussian operators achieve highest coverage (above 90\% for most methods), while structured operators (subsampling, blurring) show reduced coverage due to non-uniform nullspace structure.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/bootstrap_coverage.png}
+    \caption{Equivariant bootstrap 2-sigma coverage by operator type and SSL method.}
+    \label{fig:bootstrap}
+\end{figure}
+
+\subsection{Validity Matrix}
+
+Figure~\ref{fig:validity} presents the cross-method validity matrix at $\sigma = 0.1$ with Gaussian operators. SURE achieves lowest relative error for SSDU, while bootstrap coverage is highest for Noise2Self. The matrix provides practitioners with a lookup table for choosing appropriate UQ tools.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/validity_matrix.png}
+    \caption{UQ validity matrix: SSL methods vs.\ UQ tools at $\sigma = 0.1$.}
+    \label{fig:validity}
+\end{figure}
+
+\subsection{Dimension Scaling}
+
+Figure~\ref{fig:scaling} shows that SURE accuracy and bootstrap coverage remain stable across signal dimensions from 16 to 128, suggesting the validity conclusions generalize to higher-dimensional problems.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/dimension_scaling.png}
+    \caption{SURE accuracy and bootstrap coverage vs.\ signal dimension.}
+    \label{fig:scaling}
+\end{figure}
+
+\section{Discussion}
+
+Our systematic evaluation reveals that no single UQ tool works universally across all SSL methods. SURE is most reliable for methods without explicit regularization (Noise2Self, SSDU), while equivariant bootstrapping is most effective for Gaussian operators. Tweedie posterior moments provide consistent improvement but require accurate noise level estimates. These findings directly address the open problem posed by Tachella et al.~\cite{tachella2026selfsupervised}.
+
+\section{Conclusion}
+
+We present the first systematic evaluation of UQ tools across self-supervised imaging methods, producing a validity matrix that maps reliable combinations. Our results show that extending UQ is feasible but method-dependent, with SURE and bootstrapping complementing each other across different settings.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

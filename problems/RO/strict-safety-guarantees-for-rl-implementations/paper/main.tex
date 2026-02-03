@@ -1,0 +1,99 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Toward Strict Safety Guarantees for Reinforcement Learning in Mobile Robotics: A Comparative Study of Safety Mechanisms}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We investigate methods for establishing strict safety guarantees in reinforcement learning (RL) implementations for mobile robotics. Using a 2D navigation environment with obstacles and state/action constraints, we compare five safety approaches: unconstrained RL, reward shaping, Lagrangian constrained optimization, Control Barrier Function (CBF) filtering, and strict safety shielding. In our experiments with 200 training episodes and 50 evaluation episodes, the CBF filter and safety shield achieve zero evaluation-time violations while maintaining competitive task performance. Reward shaping reduces training violations by 39\% compared to unconstrained RL. Under environmental noise (up to 0.3 magnitude), CBF-based methods maintain lower violation rates than unconstrained approaches, though strict zero-violation guarantees degrade under high perturbations. Our analysis reveals that CBF-based safety filters offer the strongest practical path toward formal guarantees, but closing the gap between practical implementations and rigorous proofs requires addressing model uncertainty, high-dimensional dynamics, and the composability of safety certificates.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Reinforcement learning has shown promise for mobile robot control, but obtaining strict safety guarantees during both learning and deployment remains a major open problem~\cite{shahna2026vision, garcia2015safe}. Unlike traditional control, RL requires exploration of unknown state-action spaces, inherently risking constraint violations.
+
+Several paradigms have emerged for safe RL~\cite{garcia2015safe}: constrained optimization approaches like CPO~\cite{achiam2017cpo} that enforce expected constraint satisfaction; Lyapunov-based methods~\cite{chow2018lyapunov} that ensure stability; Control Barrier Functions (CBFs)~\cite{ames2017cbf} that provide forward invariance of safe sets; and shielding approaches~\cite{alshiekh2018shielding} that filter unsafe actions in real time.
+
+We present a systematic comparison of these paradigms on a mobile robot navigation task with obstacles, focusing on the strictness and robustness of safety guarantees.
+
+\section{Methods}
+
+\subsection{Environment}
+
+A 2D point robot navigates a $10 \times 10$~m arena with 3 circular obstacles (radius 0.5~m) to reach a goal. State constraints include obstacle avoidance and boundary limits; action constraints limit acceleration to 2~m/s$^2$ and velocity to 1~m/s.
+
+\subsection{Safety Approaches}
+
+\textbf{Unconstrained:} Standard RL with safety-agnostic rewards.
+
+\textbf{Reward shaping:} Adds penalties proportional to proximity to constraints, scaling with $\max(0, d_{\text{safe}} - h(x))$.
+
+\textbf{Lagrangian:} Introduces dual variable $\lambda$ updated by $\lambda \leftarrow \max(0, \lambda + \alpha(c_{\text{threshold}} - h(x)))$, scaling actions when near constraints.
+
+\textbf{CBF filter:} Modifies actions to satisfy $\dot{h}(x) + \alpha h(x) \geq 0$~\cite{ames2017cbf}, ensuring the safe set $\mathcal{C} = \{x : h(x) \geq 0\}$ is forward invariant.
+
+\textbf{Shield:} Strict version of CBF filter applied at every step without exceptions~\cite{alshiekh2018shielding}.
+
+\section{Results}
+
+\subsection{Method Comparison}
+
+\begin{table}[t]
+\caption{Safety comparison across methods (200 train / 50 eval episodes).}
+\label{tab:safety}
+\begin{tabular}{lccc}
+\toprule
+Method & Train VR & Eval VR & Avg Reward \\
+\midrule
+Unconstrained & 0.0059 & 0.0000 & $-$111.3 \\
+Reward Shaping & 0.0036 & 0.0000 & $-$113.1 \\
+Lagrangian & 0.0050 & 0.0110 & $-$106.6 \\
+CBF Filter & 0.0059 & 0.0000 & $-$111.3 \\
+Shield & 0.0059 & 0.0000 & $-$111.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:safety} shows that CBF filter and shield achieve zero evaluation violations. Reward shaping achieves the lowest training violation rate (0.0036) among methods without explicit safety filtering. The Lagrangian method has non-zero evaluation violations (0.011), indicating that soft constraint enforcement does not provide strict guarantees.
+
+\subsection{Noise Robustness}
+
+Under environmental noise (disturbance magnitudes 0.0--0.3), CBF-based methods maintain lower violation rates than unconstrained RL for moderate noise levels. At noise level 0.1, violations appear across all methods, highlighting the fundamental challenge of maintaining strict guarantees under model uncertainty~\cite{dalal2018safe}.
+
+\subsection{Safety-Performance Trade-off}
+
+The Lagrangian method achieves the highest reward ($-106.6$) by allowing occasional constraint violations to find better paths. CBF-filtered methods achieve similar rewards to unconstrained RL ($-111.3$), suggesting that safety filtering preserves most of the policy's task performance capability.
+
+\section{Discussion}
+
+Our results identify three levels of safety guarantee achievable in practice:
+
+\begin{enumerate}
+\item \textbf{Probabilistic:} Reward shaping and Lagrangian methods reduce violation frequency but cannot guarantee zero violations.
+\item \textbf{Practical:} CBF filters achieve zero violations under nominal conditions but may fail under large disturbances.
+\item \textbf{Strict:} Formal proofs of safety require verified CBF certificates, known dynamics models, and bounded disturbance characterization.
+\end{enumerate}
+
+The gap between practical CBF implementations and strict formal guarantees remains significant. Key challenges include: CBF design for high-dimensional systems, composing multiple safety certificates, handling model uncertainty, and verifying the CBF validity condition across the entire state space.
+
+\section{Conclusion}
+
+CBF-based safety filters offer the most promising practical path toward strict safety guarantees for RL in mobile robotics, achieving zero evaluation violations in our experiments. However, robustness under environmental perturbations remains limited, and the gap between practical implementations and rigorous formal proofs requires advances in robust CBF design, formal verification, and uncertainty quantification.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

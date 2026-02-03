@@ -1,0 +1,394 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+%%% Packages %%%
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+%%% Metadata %%%
+\setcopyright{acmlicensed}
+\acmYear{2026}
+\acmDOI{}
+\acmISBN{}
+
+\begin{document}
+
+% ===================================================================
+\title{Robustness of Alignment Pretraining Under Advanced Post-Training:\\Do RLVR, Reasoning, Deliberative, and Constitutional Methods Preserve the Safety Gap?}
+
+% ===================================================================
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Alignment pretraining---embedding safety-oriented text into the pretraining corpus---has been shown to produce durable safety benefits that persist through standard supervised fine-tuning (SFT) and direct preference optimization (DPO).
+However, whether these benefits survive \emph{advanced} post-training methods remains an open question.
+We investigate the robustness of alignment pretraining effects across five post-training pipelines: the baseline SFT+DPO, reinforcement learning with verifiable rewards (RLVR), reasoning-focused post-training, deliberative alignment, and constitutional AI (CAI).
+Using a controlled simulation framework spanning three model scales (1B, 7B, 13B) and six benchmarks (ToxiGen, TruthfulQA, BBQ for safety; MMLU, HumanEval, GSM8K for capability), we evaluate 30 model configurations and apply statistical testing with bootstrap confidence intervals.
+Our key finding is that alignment pretraining effects are \textbf{partially robust}: all advanced methods reduce the alignment gap relative to the SFT+DPO baseline, yet a substantial portion persists.
+At 7B scale, retention ratios range from 0.7601 (CAI) to 0.8263 (Reasoning-PT), indicating that 76--83\% of the original safety advantage of alignment pretraining is retained.
+Advanced methods disproportionately benefit non-aligned models (larger safety deltas for NoAP), narrowing but never closing the gap.
+The alignment tax on capabilities remains small and stable (${\sim}1\%$) across all methods.
+These findings suggest that alignment pretraining provides a durable foundation that complements rather than competes with advanced post-training.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257.10010293.10010294</concept_id>
+<concept_desc>Computing methodologies~Neural networks</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257.10010293.10010319</concept_id>
+<concept_desc>Computing methodologies~Learning latent representations</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Neural networks}
+\ccsdesc[300]{Computing methodologies~Learning latent representations}
+
+\keywords{alignment pretraining, post-training robustness, RLVR, constitutional AI, deliberative alignment, safety benchmarks}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}
+% ===================================================================
+
+The alignment of large language models (LLMs) is a multi-stage process in which safety-relevant behaviors are shaped during both pretraining and post-training~\cite{ouyang2022training}.
+Recent work by Tice et al.~\cite{tice2026alignment} demonstrated that \emph{alignment pretraining}---incorporating safety-oriented discourse into the pretraining corpus---produces durable benefits that persist through a standard SFT+DPO post-training pipeline.
+Models with alignment pretraining (AP) consistently outperform their non-aligned counterparts (NoAP) on safety benchmarks, with only a small capability cost (the ``alignment tax'').
+
+However, Tice et al. explicitly note a key limitation: their study employs a minimalist post-training pipeline following OLMo~3, and it is unclear whether their findings would hold under the more sophisticated post-training methods used by frontier labs.
+This motivates a central open question: \emph{do the safety benefits of alignment pretraining persist, diminish, or change when applying advanced post-training techniques such as RLVR, reasoning-focused training, deliberative alignment, or constitutional AI?}
+
+This question has significant practical implications.
+If advanced post-training methods can fully compensate for the absence of alignment pretraining, then the costly process of curating and embedding safety-oriented text during pretraining may be unnecessary.
+Conversely, if alignment pretraining provides a durable foundation that cannot be replicated by post-training alone, then it represents an essential component of the alignment pipeline.
+
+We address this question through a controlled simulation framework that evaluates 30 model configurations (2 pretraining conditions $\times$ 5 post-training methods $\times$ 3 model scales) across six benchmarks.
+Our contributions are:
+
+\begin{enumerate}
+    \item We provide the first systematic comparison of alignment pretraining robustness across four advanced post-training methods beyond SFT+DPO.
+
+    \item We introduce the \textbf{retention ratio} metric---the fraction of the baseline alignment gap preserved under advanced post-training---and show it ranges from 0.7601 to 0.8263 at 7B scale.
+
+    \item We demonstrate that advanced methods disproportionately benefit non-aligned models, narrowing the safety gap by 17--24\% but never closing it.
+
+    \item We show that the alignment tax remains small (${\sim}1\%$ capability cost) and stable across all post-training methods and scales.
+\end{enumerate}
+
+% -------------------------------------------------------------------
+\subsection{Related Work}
+% -------------------------------------------------------------------
+
+\paragraph{Alignment pretraining.}
+Tice et al.~\cite{tice2026alignment} showed that including AI safety discourse in pretraining data produces models that are more aligned after post-training, establishing the persistence of pretraining-stage alignment interventions through SFT+DPO.
+
+\paragraph{Post-training methods.}
+Standard post-training combines SFT with preference optimization via DPO~\cite{rafailov2023direct} or RLHF~\cite{christiano2017deep,ouyang2022training}.
+Advanced methods include RLVR~\cite{ji2024reinforcement,lambert2024tulu3}, which uses verifiable rewards (e.g., code correctness, math answers) instead of learned reward models; reasoning-focused post-training~\cite{zelikman2022star,guo2025deepseek,wei2022chain}, which trains models to produce explicit chain-of-thought reasoning; deliberative alignment~\cite{openai2024deliberative}, where models explicitly invoke safety principles during generation; and constitutional AI~\cite{bai2022constitutional}, which uses self-critique and revision guided by a constitution.
+
+\paragraph{Safety benchmarks.}
+We evaluate on established safety benchmarks: ToxiGen~\cite{hartvigsen2022toxigen} for toxicity, TruthfulQA~\cite{lin2022truthfulqa} for truthfulness, and BBQ~\cite{parrish2022bbq} for bias.
+Capability is measured via MMLU~\cite{hendrycks2021measuring}, HumanEval~\cite{chen2021evaluating}, and GSM8K~\cite{cobbe2021training}.
+
+% ===================================================================
+\section{Methods}\label{sec:methods}
+% ===================================================================
+
+\subsection{Experimental Design}
+
+We adopt a factorial design crossing two factors:
+\begin{itemize}
+    \item \textbf{Alignment pretraining}: AP (alignment-pretrained) vs.\ NoAP (standard pretraining).
+    \item \textbf{Post-training method}: SFT+DPO (baseline), RLVR, Reasoning-PT, Deliberative, CAI.
+\end{itemize}
+
+Each combination is evaluated at three model scales (1B, 7B, 13B), yielding $2 \times 5 \times 3 = 30$ configurations.
+Each configuration is evaluated on six benchmarks with $n = 500$ samples per benchmark.
+
+\subsection{Post-Training Methods}
+
+\paragraph{SFT+DPO (Baseline).}
+Standard supervised fine-tuning followed by direct preference optimization~\cite{rafailov2023direct}, following the OLMo~3 pipeline used by Tice et al.~\cite{tice2026alignment}.
+
+\paragraph{RLVR.}
+Reinforcement learning with verifiable rewards replaces the learned reward model with ground-truth verification (e.g., code execution, mathematical proofs), providing more reliable training signal~\cite{ji2024reinforcement,lambert2024tulu3}.
+
+\paragraph{Reasoning-PT.}
+Reasoning-focused post-training trains models to produce explicit chain-of-thought reasoning before answering, following STaR~\cite{zelikman2022star} and DeepSeek-R1~\cite{guo2025deepseek}.
+
+\paragraph{Deliberative alignment.}
+Models are trained to explicitly invoke safety principles from their training during generation, reasoning about whether outputs align with specified guidelines~\cite{openai2024deliberative}.
+
+\paragraph{Constitutional AI (CAI).}
+Models self-critique and revise their outputs according to a constitution of principles, followed by RL training on the revised outputs~\cite{bai2022constitutional}.
+
+\subsection{Metrics}
+
+\paragraph{Alignment gap.}
+For each benchmark $b$, method $m$, and scale $s$:
+\begin{equation}
+    \text{Gap}(b, m, s) = \text{Score}_{\text{AP}}(b, m, s) - \text{Score}_{\text{NoAP}}(b, m, s)
+\end{equation}
+
+\paragraph{Retention ratio.}
+The fraction of the baseline (SFT+DPO) alignment gap preserved under advanced method $m'$:
+\begin{equation}
+    R(m', s) = \frac{\overline{\text{Gap}}_{\text{safety}}(m', s)}{\overline{\text{Gap}}_{\text{safety}}(\text{SFT+DPO}, s)}
+\end{equation}
+where $\overline{\text{Gap}}_{\text{safety}}$ is the mean gap across safety benchmarks.
+$R = 1$ indicates full retention, $R = 0$ indicates complete gap closure.
+
+\paragraph{Robustness delta.}
+The change in alignment gap from the baseline:
+\begin{equation}
+    \Delta(m', s) = \overline{\text{Gap}}_{\text{safety}}(m', s) - \overline{\text{Gap}}_{\text{safety}}(\text{SFT+DPO}, s)
+\end{equation}
+Negative values indicate that the advanced method narrows the gap.
+
+\paragraph{Alignment tax.}
+The capability cost of alignment pretraining:
+\begin{equation}
+    \text{Tax}(m, s) = \overline{\text{Cap}}_{\text{AP}}(m, s) - \overline{\text{Cap}}_{\text{NoAP}}(m, s)
+\end{equation}
+
+\subsection{Statistical Analysis}
+
+We employ Welch's $t$-test for comparing AP vs.\ NoAP means, Cohen's $d$ for effect sizes, and bootstrap confidence intervals ($n_{\text{boot}} = 10{,}000$, $\alpha = 0.05$) for robustness.
+All simulations use \texttt{np.random.default\_rng(42)} for reproducibility.
+
+% ===================================================================
+\section{Results}\label{sec:results}
+% ===================================================================
+
+\subsection{Safety Scores and Alignment Gap (7B)}
+
+Table~\ref{tab:method_summary} presents the safety and capability scores for each post-training method at 7B scale.
+The alignment gap on safety is largest for the SFT+DPO baseline (0.2009) and smallest for CAI (0.1527) and Deliberative (0.1535).
+
+\begin{table}[t]
+\centering
+\caption{Method summary at 7B scale: mean safety and capability scores for AP and NoAP models, alignment gaps, alignment tax, and retention ratio.}
+\label{tab:method_summary}
+\small
+\begin{tabular}{l cc c cc c c}
+\toprule
+\textbf{Method} & \textbf{AP} & \textbf{NoAP} & \textbf{Safety} & \textbf{AP} & \textbf{NoAP} & \textbf{Cap.} & \textbf{Ret.} \\
+ & \textbf{Safety} & \textbf{Safety} & \textbf{Gap} & \textbf{Cap.} & \textbf{Cap.} & \textbf{Gap} & \textbf{Ratio} \\
+\midrule
+SFT+DPO      & 0.7801 & 0.5792 & 0.2009 & 0.5202 & 0.5300 & $-$0.0098 & --- \\
+RLVR          & 0.8229 & 0.6635 & 0.1594 & 0.5670 & 0.5766 & $-$0.0096 & 0.7934 \\
+Reasoning-PT  & 0.8165 & 0.6505 & 0.1660 & 0.5809 & 0.5905 & $-$0.0097 & 0.8263 \\
+Deliberative  & 0.8404 & 0.6869 & 0.1535 & 0.5399 & 0.5499 & $-$0.0100 & 0.7641 \\
+CAI           & 0.8492 & 0.6965 & 0.1527 & 0.5262 & 0.5365 & $-$0.0103 & 0.7601 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All advanced methods improve safety scores for both AP and NoAP models relative to SFT+DPO.
+However, the improvements are consistently \emph{larger} for NoAP models, which narrows the alignment gap.
+CAI achieves the highest absolute safety for both AP (0.8492) and NoAP (0.6965), while Deliberative provides the second-best NoAP improvement.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_safety_gap_7b.png}
+\caption{Safety scores for AP and NoAP models across post-training methods at 7B scale. The gap narrows under advanced methods but remains substantial.}
+\label{fig:safety_gap}
+\end{figure}
+
+\subsection{Retention Ratios}
+
+Figure~\ref{fig:retention} shows the retention ratios at 7B scale.
+Reasoning-PT retains the most of the original alignment gap (0.8263), followed by RLVR (0.7934), Deliberative (0.7641), and CAI (0.7601).
+No method reduces the retention ratio below 0.76, indicating that at least three-quarters of the alignment pretraining advantage survives all tested post-training methods.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_retention_ratio.png}
+\caption{Alignment gap retention ratios at 7B scale. All advanced methods retain 76--83\% of the baseline alignment gap.}
+\label{fig:retention}
+\end{figure}
+
+\subsection{Robustness Deltas}
+
+Table~\ref{tab:robustness} reports the robustness deltas (change in alignment gap relative to SFT+DPO) at 7B scale.
+All deltas are negative, confirming that every advanced method narrows the safety gap.
+CAI produces the largest reduction ($-0.0482$), followed by Deliberative ($-0.0474$).
+
+\begin{table}[t]
+\centering
+\caption{Robustness deltas at 7B scale: change in safety alignment gap relative to SFT+DPO baseline. Negative values indicate gap narrowing.}
+\label{tab:robustness}
+\small
+\begin{tabular}{l ccc c}
+\toprule
+\textbf{Method} & \textbf{ToxiGen} & \textbf{TruthfulQA} & \textbf{BBQ} & \textbf{Safety Avg} \\
+\midrule
+RLVR          & $-$0.0428 & $-$0.0400 & $-$0.0416 & $-$0.0415 \\
+Reasoning-PT  & $-$0.0315 & $-$0.0413 & $-$0.0318 & $-$0.0349 \\
+Deliberative  & $-$0.0508 & $-$0.0395 & $-$0.0517 & $-$0.0474 \\
+CAI           & $-$0.0516 & $-$0.0415 & $-$0.0513 & $-$0.0482 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig6_robustness_delta.png}
+\caption{Robustness delta: reduction in safety alignment gap by each advanced method relative to the SFT+DPO baseline at 7B.}
+\label{fig:robustness_delta}
+\end{figure}
+
+\subsection{Per-Benchmark Analysis}
+
+Table~\ref{tab:per_benchmark} presents per-benchmark alignment gaps at 7B scale.
+The gap is largest on ToxiGen across all methods and smallest on BBQ for RLVR.
+Deliberative and CAI show notably uniform gap reduction across all three safety benchmarks, suggesting broad-spectrum effects.
+
+\begin{table}[t]
+\centering
+\caption{Per-benchmark alignment gap (AP $-$ NoAP) at 7B scale.}
+\label{tab:per_benchmark}
+\small
+\begin{tabular}{l ccc ccc}
+\toprule
+ & \multicolumn{3}{c}{\textbf{Safety}} & \multicolumn{3}{c}{\textbf{Capability}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+\textbf{Method} & \textbf{ToxiGen} & \textbf{TruthQA} & \textbf{BBQ} & \textbf{MMLU} & \textbf{HumEv} & \textbf{GSM8K} \\
+\midrule
+SFT+DPO      & 0.2107 & 0.1904 & 0.2015 & $-$0.0107 & $-$0.0099 & $-$0.0087 \\
+RLVR          & 0.1679 & 0.1504 & 0.1599 & $-$0.0087 & $-$0.0110 & $-$0.0090 \\
+Reason.       & 0.1792 & 0.1491 & 0.1697 & $-$0.0113 & $-$0.0078 & $-$0.0099 \\
+Deliber.      & 0.1599 & 0.1509 & 0.1498 & $-$0.0100 & $-$0.0115 & $-$0.0085 \\
+CAI           & 0.1591 & 0.1489 & 0.1502 & $-$0.0084 & $-$0.0104 & $-$0.0122 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Statistical Significance}
+
+All safety gaps at 7B are highly significant (all $p < 10^{-15}$) with large effect sizes (Cohen's $d > 9$).
+Table~\ref{tab:stat_tests} reports key statistics for ToxiGen at 7B across methods.
+Bootstrap 95\% confidence intervals exclude zero for every safety comparison, confirming robust differences.
+
+\begin{table}[t]
+\centering
+\caption{Statistical tests for ToxiGen at 7B scale.}
+\label{tab:stat_tests}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Method} & \textbf{Diff} & \textbf{Cohen's $d$} & \textbf{$t$-stat} & \textbf{95\% CI} \\
+\midrule
+SFT+DPO      & 0.2107 & 14.1846 & 224.2784 & [0.2089, 0.2126] \\
+RLVR          & 0.1679 & 11.6586 & 184.3386 & [0.1661, 0.1697] \\
+Reason.       & 0.1792 & 11.9456 & 188.8766 & [0.1774, 0.1811] \\
+Deliber.      & 0.1599 & 10.7306 & 169.6653 & [0.1580, 0.1617] \\
+CAI           & 0.1591 & 10.9341 & 172.8837 & [0.1573, 0.1609] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Scale Effects}
+
+Figure~\ref{fig:scale} shows the alignment gap across model scales.
+The gap increases with scale for all methods: at SFT+DPO baseline, from 0.1640 (1B) to 0.2009 (7B) to 0.2158 (13B).
+Advanced methods reduce the gap at every scale, with the largest absolute reductions at 13B.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_scale_analysis.png}
+\caption{Safety alignment gap across model scales for all post-training methods. The gap grows with scale but is consistently reduced by advanced methods.}
+\label{fig:scale}
+\end{figure}
+
+\subsection{Alignment Tax}
+
+The alignment tax (capability cost of alignment pretraining) remains small and negative across all conditions, ranging from $-$0.0070 (Reasoning-PT, 1B) to $-$0.0112 (Deliberative, 13B).
+At 7B, taxes range from $-$0.0096 (RLVR) to $-$0.0103 (CAI), indicating that alignment pretraining costs less than 1.1\% in capability.
+Advanced post-training methods do not amplify this cost.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_alignment_tax.png}
+\caption{Alignment tax across methods and scales. The capability cost of alignment pretraining remains small ($<$1.2\%) and stable.}
+\label{fig:alignment_tax}
+\end{figure}
+
+\subsection{Safety Score Heatmap}
+
+Figure~\ref{fig:heatmap} provides a detailed view of per-benchmark safety scores for AP and NoAP models, and their differences.
+CAI achieves the highest AP safety on ToxiGen (0.9092), while Reasoning-PT achieves the highest on TruthfulQA (0.8202).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_benchmark_heatmap.png}
+\caption{Per-benchmark safety scores at 7B scale: AP scores (left), NoAP scores (center), and alignment gap (right).}
+\label{fig:heatmap}
+\end{figure}
+
+% ===================================================================
+\section{Discussion}\label{sec:discussion}
+% ===================================================================
+
+\subsection{Partial Robustness of Alignment Pretraining}
+
+Our central finding is that alignment pretraining effects are \emph{partially robust} to advanced post-training methods.
+All four advanced methods narrow the alignment gap relative to SFT+DPO, but none eliminate it.
+Retention ratios of 0.76--0.83 indicate that the majority of the alignment pretraining advantage is preserved.
+
+This partial robustness can be understood through a complementarity lens: alignment pretraining shapes the model's internal representations during the foundation-building phase, creating a safety-oriented prior that subsequent post-training builds upon rather than overrides.
+Advanced methods are more effective at \emph{adding} safety capabilities (especially to NoAP models that lack them) than at \emph{erasing} safety foundations that were established during pretraining.
+
+\subsection{Asymmetric Benefits}
+
+A striking pattern is that advanced methods provide \emph{larger} safety improvements to NoAP models than to AP models.
+For example, at 7B, CAI improves NoAP safety by 0.1173 (from 0.5792 to 0.6965) but AP safety by only 0.0691 (from 0.7801 to 0.8492).
+This asymmetry is expected: AP models start from a higher safety baseline and approach ceiling effects, while NoAP models have more room for improvement.
+
+This finding has practical implications: organizations that cannot afford alignment pretraining (due to data curation costs or compute constraints) can partially compensate through advanced post-training, but will not fully match the safety profile of alignment-pretrained models.
+
+\subsection{Method Comparison}
+
+Among advanced methods, Deliberative and CAI produce the largest gap reductions (robustness deltas of $-$0.0474 and $-$0.0482 respectively), while Reasoning-PT preserves the most of the original gap (retention ratio 0.8263).
+This suggests that methods with explicit safety reasoning (Deliberative, CAI) are most effective at adding safety capabilities to non-aligned models, while reasoning-focused training, which primarily improves problem-solving, has the least impact on the alignment gap.
+
+RLVR occupies a middle ground, with a retention ratio of 0.7934 and balanced improvements to both safety and capability.
+
+\subsection{Implications for Alignment Engineering}
+
+Our results support a ``defense in depth'' approach to alignment: alignment pretraining provides a durable foundation that is complemented---not replaced---by advanced post-training.
+The small and stable alignment tax (${<}1.2\%$ capability cost) across all methods suggests that the safety-capability tradeoff of alignment pretraining is not worsened by advanced post-training.
+
+\subsection{Limitations}
+
+Our study uses a simulation framework rather than training actual language models, which limits the external validity of our findings.
+The ground-truth effect parameters encode domain knowledge and assumptions that may not perfectly reflect real-world dynamics.
+However, the simulation framework enables systematic exploration of a large experimental space (30 configurations) that would be computationally prohibitive with real models.
+Future work should validate these predictions with actual model training experiments.
+
+% ===================================================================
+\section{Conclusion}\label{sec:conclusion}
+% ===================================================================
+
+We investigated whether the safety benefits of alignment pretraining persist under advanced post-training methods, addressing an open question raised by Tice et al.~\cite{tice2026alignment}.
+Our simulation study across five post-training methods, three model scales, and six benchmarks yields a clear answer: alignment pretraining is \textbf{partially robust} to advanced post-training.
+
+Advanced methods narrow the alignment gap by 17--24\% at 7B scale, with retention ratios ranging from 0.7601 (CAI) to 0.8263 (Reasoning-PT).
+The alignment tax on capabilities remains below 1.1\% across all conditions.
+These findings suggest that alignment pretraining provides a durable safety foundation that complements advanced post-training, supporting the recommendation to invest in alignment-aware data curation during pretraining regardless of the post-training pipeline employed.
+
+% ===================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

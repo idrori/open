@@ -1,0 +1,280 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{array}
+
+\settopmatter{printfolios=true}
+
+\begin{document}
+
+\title{Quantifying Error-Correction Overhead for Long-Time\\Quantum Elastic Network Model Simulations}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Quantum Elastic Network Model (QENM) simulations offer super-polynomial speedups for molecular dynamics---exponential in space and polynomial in time---but long-time dynamics require fault-tolerant execution with surface code error correction. We present the first comprehensive quantification of this overhead across system sizes from 10 to 10{,}000 atoms and simulation times from 0.1 to 1{,}000~ps. Our analysis reveals that while logical qubit counts remain modest (23--43 qubits), physical-to-logical overhead ratios range from 1{,}158:1 for small short-time simulations to over $1.6 \times 10^{12}$:1 for large long-time cases, with required code distances of $d = 13$ to $d = 35$. Break-even analysis identifies a crossover at approximately 64{,}047 atoms for 0.1~ps simulations at physical error rate $p = 10^{-3}$. A graphene case study demonstrates that practical quantum advantage emerges for sheet sizes above 500~nm ($\sim$9.55 million atoms), achieving 3.6$\times$ speedup, while 1{,}000~nm sheets yield 75.7$\times$ speedup. These results establish concrete resource targets for fault-tolerant QENM execution and identify physical error rate reduction as the critical lever for practical quantum advantage.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010583.10010588</concept_id>
+<concept_desc>Hardware~Quantum computing</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010583.10010588.10010591</concept_id>
+<concept_desc>Hardware~Quantum error correction and fault tolerance</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Hardware~Quantum computing}
+\ccsdesc[500]{Hardware~Quantum error correction and fault tolerance}
+
+\keywords{quantum error correction, surface codes, quantum simulation, elastic network models, fault-tolerant quantum computing, resource estimation}
+
+\maketitle
+
+\section{Introduction}
+
+Quantum simulation of molecular dynamics is among the most promising applications of quantum computers~\cite{preskill2018quantum, reiher2017elucidating}. The Quantum Elastic Network Model (QENM) algorithm introduced by Kolotouros et al.~\cite{kolotouros2026qenm} achieves super-polynomial advantage for simulating elastic network models---exponential compression in space ($O(\log N)$ qubits for $N$ vibrational modes) and polynomial speedup in time. This is particularly compelling for large-scale applications such as centimeter-scale graphene simulations where classical methods face prohibitive $O(N^3)$ scaling.
+
+However, long-time dynamics in locally connected systems imply circuit depths that necessitate fault-tolerant execution~\cite{kolotouros2026qenm}. Although the algorithm's space advantage is dramatic, the overall practical benefit depends crucially on quantum error correction (QEC) overhead, which was explicitly identified as an open question. The physical qubit requirements and runtime overheads introduced by error correction must be evaluated to establish genuine practical advantage over classical limits.
+
+In this work, we provide the first comprehensive quantification of QEC overhead for QENM simulations. Our contributions include:
+\begin{enumerate}
+    \item Surface code resource estimation across system sizes (10--10{,}000 atoms) and simulation times (0.1--1{,}000~ps), revealing physical qubit requirements from 26{,}626 to $6.97 \times 10^{13}$ and code distances from $d = 13$ to $d = 35$.
+    \item Break-even analysis identifying crossover points where quantum simulation becomes faster than classical $O(N^3)$ methods despite error correction overhead.
+    \item Sensitivity analysis showing that reducing physical error rates from $10^{-3}$ to $10^{-4}$ reduces overhead by approximately 60\%.
+    \item A graphene case study demonstrating quantum speedups of 3.6$\times$ to 75.7$\times$ for nanometer-to-micrometer-scale sheets.
+\end{enumerate}
+
+\section{Background}
+
+\subsection{Quantum Elastic Network Models}
+
+Elastic network models (ENMs) approximate biomolecular dynamics using harmonic potentials between nearby atoms~\cite{bahar1997anm}. The QENM algorithm~\cite{kolotouros2026qenm} encodes $N$ vibrational modes of the Hessian matrix into $O(\log N)$ qubits, exploiting the structure of the coupled-oscillator Hamiltonian~\cite{babbush2023coupled}. For a system with $N_a$ atoms, the number of modes is $3N_a - 6$, requiring $\lceil \log_2(3N_a - 6) \rceil$ system qubits plus ancillas for phase estimation.
+
+The circuit depth scales with simulation time $t$ and Hamiltonian norm $\|H\|$ as $O((t\|H\|)^{1+1/k})$ for order-$k$ Trotterization~\cite{childs2012hamiltonian}, with $O(\log N)$ two-qubit gates per Trotter step.
+
+\subsection{Surface Code Error Correction}
+
+The rotated surface code~\cite{fowler2012surface} encodes one logical qubit in $2d^2 - 1$ physical qubits for code distance $d$. The logical error rate per syndrome extraction round scales as:
+\begin{equation}
+    p_L = 0.1 \cdot \frac{d+1}{2} \cdot \left(\frac{p_{\text{phys}}}{p_{\text{th}}}\right)^{(d+1)/2}
+\end{equation}
+where $p_{\text{phys}}$ is the physical error rate and $p_{\text{th}} \approx 1\%$ is the threshold~\cite{fowler2012surface, google2023suppression}. Each logical gate requires $d$ rounds of syndrome extraction, introducing a time overhead proportional to $d$.
+
+Non-Clifford gates (primarily $T$ gates) require magic state distillation~\cite{litinski2019magic}, with each factory consuming approximately 15{,}000 physical qubits and producing one magic state per $\sim$10~$\mu$s~\cite{gidney2021factor}.
+
+\section{Methods}
+
+\subsection{Resource Estimation Framework}
+
+Our framework estimates total physical resources by combining three components:
+\begin{enumerate}
+    \item \textbf{Circuit analysis}: Compute logical qubit count $n_L$, circuit depth $D$, and $T$-gate count $n_T$ for given system size and simulation time.
+    \item \textbf{Code distance selection}: Choose minimum code distance $d$ such that the total logical error $n_L \cdot D \cdot p_L(d) \leq 1 - F_{\text{target}}$ for target fidelity $F_{\text{target}} = 0.99$.
+    \item \textbf{Physical resource tallying}: Total physical qubits = data qubits ($n_L \cdot (2d^2-1)$) + magic state factories ($n_f \cdot 15{,}000$) + routing overhead ($\sim$50\% of data qubits).
+\end{enumerate}
+
+Total execution time is estimated as $T_{\text{exec}} = D \cdot d \cdot \tau_{\text{cycle}}$ where $\tau_{\text{cycle}} = 1$~$\mu$s is the surface code cycle time.
+
+\subsection{Classical Cost Model}
+
+Classical ENM simulation involves Hessian diagonalization at cost $O(N_m^3)$ plus per-step propagation at $O(N_m^2)$ for $N_m = 3N_a - 6$ modes. We assume a classical throughput of $10^{15}$ FLOPS with a prefactor of 10 for diagonalization and 50 per propagation step.
+
+\subsection{Parameter Space}
+
+We sweep atom counts $N_a \in \{10, 50, 100, 500, 1{,}000, 5{,}000, 10{,}000\}$, simulation times $t \in \{0.1, 1, 10, 100, 1{,}000\}$~ps, physical error rates $p_{\text{phys}} \in [10^{-4}, 10^{-2}]$, and target fidelities $F \in [0.9, 0.9999]$. All simulations use a random seed of 42 for reproducibility.
+
+\section{Results}
+
+\subsection{Logical Qubit Requirements}
+
+The QENM algorithm's exponential space compression yields remarkably compact logical circuits. Table~\ref{tab:logical} summarizes the logical qubit counts across system sizes. Even for $N_a = 10{,}000$ atoms (29{,}994 vibrational modes), only 43 logical qubits are required, confirming the genuine exponential advantage in space.
+
+\begin{table}[t]
+\caption{Logical qubit requirements for QENM simulation.}
+\label{tab:logical}
+\begin{tabular}{rrrrr}
+\toprule
+$N_a$ & Modes & System & Precision & Total $n_L$ \\
+\midrule
+10 & 24 & 5 & 11 & 23 \\
+50 & 144 & 8 & 11 & 29 \\
+100 & 294 & 9 & 11 & 31 \\
+500 & 1{,}494 & 11 & 11 & 35 \\
+1{,}000 & 2{,}994 & 12 & 11 & 37 \\
+5{,}000 & 14{,}994 & 14 & 11 & 41 \\
+10{,}000 & 29{,}994 & 15 & 11 & 43 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Physical Qubit Overhead}
+
+Despite modest logical qubit counts, physical resource requirements are substantial. Figure~\ref{fig:overhead} shows the physical qubit overhead across the parameter space. The minimum configuration (10 atoms, 0.1~ps) requires 26{,}626 physical qubits at code distance $d = 13$, yielding an overhead ratio of 1{,}157.7:1. The maximum configuration (10{,}000 atoms, 1{,}000~ps) requires $6.97 \times 10^{13}$ physical qubits at $d = 35$.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/physical_qubit_overhead.png}
+    \caption{Physical qubit requirements (left) and overhead ratio (right) vs system size for various simulation times.}
+    \label{fig:overhead}
+\end{figure}
+
+Table~\ref{tab:resources} presents detailed resource estimates for selected configurations. The overhead ratio grows dramatically with both system size and simulation time due to increasing circuit depth and the consequent need for stronger error correction (larger code distance).
+
+\begin{table*}[t]
+\caption{Physical resource estimates for selected QENM configurations ($p_{\text{phys}} = 10^{-3}$, $F = 0.99$).}
+\label{tab:resources}
+\begin{tabular}{rrrrrrrr}
+\toprule
+$N_a$ & $t$ (ps) & $n_L$ & $d$ & Physical Qubits & Ratio & $T$-Gates & Runtime (s) \\
+\midrule
+10 & 0.1 & 23 & 13 & 26{,}626 & 1{,}158 & 4{,}830 & 0.02 \\
+10 & 10.0 & 23 & 21 & 7{,}140{,}394 & 310{,}452 & 47{,}319{,}234 & 288.03 \\
+100 & 1.0 & 31 & 19 & 1{,}038{,}526 & 33{,}501 & 6{,}682{,}012 & 27.30 \\
+100 & 100.0 & 31 & 27 & $1.00 \times 10^{10}$ & $3.23 \times 10^{8}$ & $6.68 \times 10^{10}$ & $3.88 \times 10^{5}$ \\
+1{,}000 & 10.0 & 37 & 25 & $8.74 \times 10^{8}$ & $2.36 \times 10^{7}$ & $5.82 \times 10^{9}$ & $2.62 \times 10^{4}$ \\
+1{,}000 & 1{,}000 & 37 & 33 & $8.74 \times 10^{12}$ & $2.36 \times 10^{11}$ & $5.82 \times 10^{13}$ & $3.46 \times 10^{8}$ \\
+10{,}000 & 0.1 & 43 & 19 & 751{,}504 & 17{,}477 & 4{,}649{,}160 & 13.70 \\
+10{,}000 & 1{,}000 & 43 & 35 & $6.97 \times 10^{13}$ & $1.62 \times 10^{12}$ & $4.65 \times 10^{14}$ & $2.52 \times 10^{9}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Circuit Depth and Gate Counts}
+
+Figure~\ref{fig:circuits} presents the circuit analysis. Circuit depth ranges from 140 gates (10 atoms, 0.1~ps) to over $7 \times 10^{7}$ gates (10{,}000 atoms, 1{,}000~ps). The $T$-gate count, which drives magic state distillation requirements, scales proportionally with depth and qubit count. For the reference configuration of 1{,}000 atoms at 10~ps, the circuit requires 5.82 billion $T$-gates, necessitating magic state factories capable of sustained high-throughput distillation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/circuit_analysis.png}
+    \caption{Circuit analysis: (a) logical qubit scaling, (b) circuit depth, (c) $T$-gate count, (d) factory requirements vs system size.}
+    \label{fig:circuits}
+\end{figure}
+
+\subsection{Break-Even Analysis}
+
+Figure~\ref{fig:breakeven} shows the quantum speedup factor across system sizes and simulation times. At $p_{\text{phys}} = 10^{-3}$, the break-even crossover occurs at approximately 64{,}047 atoms for 0.1~ps simulations. For longer simulation times, the increased circuit depth raises the error correction overhead, pushing the break-even point beyond $10^5$ atoms.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/break_even_analysis.png}
+    \caption{Break-even analysis: (a) quantum speedup factor with break-even line at 1$\times$, (b) absolute runtime comparison.}
+    \label{fig:breakeven}
+\end{figure}
+
+The key insight is that while the QENM algorithm provides exponential space advantage, the time overhead from error correction is multiplicative on the circuit depth, which grows with simulation time. The classical $O(N^3)$ scaling in system size ensures that quantum advantage eventually emerges for large enough systems, but the crossover point is sensitive to both the physical error rate and the simulation time.
+
+\subsection{Sensitivity to Physical Error Rate}
+
+Figure~\ref{fig:sensitivity} illustrates the sensitivity of resource requirements to the physical error rate. For a reference configuration of 1{,}000 atoms at 100~ps:
+
+\begin{itemize}
+    \item At $p_{\text{phys}} = 10^{-3}$: code distance $d = 29$, total physical qubits $= 8.74 \times 10^{10}$, overhead ratio $= 2.36 \times 10^{9}$.
+    \item At $p_{\text{phys}} = 5 \times 10^{-4}$: code distance drops to $d \approx 21$, reducing physical qubits by approximately 60\%.
+    \item At $p_{\text{phys}} = 10^{-4}$: code distance $d \approx 11$, yielding overhead ratios below $10^{4}$.
+\end{itemize}
+
+The relationship is highly nonlinear: a $10\times$ improvement in physical error rate yields a $>100\times$ reduction in physical qubit count, primarily through reduced code distance requirements.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/sensitivity_analysis.png}
+    \caption{Sensitivity analysis for $N = 1{,}000$ atoms, $t = 100$~ps: (a) code distance, (b) physical qubits, (c) overhead ratio, (d) execution time vs physical error rate.}
+    \label{fig:sensitivity}
+\end{figure}
+
+\subsection{Graphene Case Study}
+
+Table~\ref{tab:graphene} presents the graphene case study results for a 10~ps simulation. Graphene has approximately 38.2 atoms per nm$^2$, making it an ideal benchmark for the QENM advantage at scale.
+
+\begin{table}[t]
+\caption{Graphene QENM resource estimates ($t = 10$~ps).}
+\label{tab:graphene}
+\begin{tabular}{rrrrrr}
+\toprule
+$L$ (nm) & $N_a$ & $n_L$ & $d$ & Phys.\ Qubits & Speedup \\
+\midrule
+1 & 38 & 27 & 23 & $3.35 \times 10^7$ & $4.6 \times 10^{-9}$ \\
+5 & 955 & 37 & 25 & $8.44 \times 10^8$ & $1.7 \times 10^{-7}$ \\
+10 & 3{,}820 & 41 & 27 & $3.04 \times 10^9$ & $9.1 \times 10^{-7}$ \\
+50 & 95{,}500 & 51 & 29 & $5.57 \times 10^{10}$ & $2.0 \times 10^{-4}$ \\
+100 & 382{,}000 & 55 & 31 & $1.86 \times 10^{11}$ & $3.4 \times 10^{-3}$ \\
+500 & 9{,}550{,}000 & 63 & 33 & $2.81 \times 10^{12}$ & 3.60 \\
+1{,}000 & 38{,}200{,}000 & 67 & 33 & $9.08 \times 10^{12}$ & 75.74 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Quantum advantage (speedup $> 1$) emerges between 100~nm and 500~nm side length, corresponding to 382{,}000 and 9{,}550{,}000 atoms respectively. At 500~nm, the quantum simulation achieves a 3.6$\times$ speedup requiring $2.81 \times 10^{12}$ physical qubits at code distance $d = 33$. At 1{,}000~nm, the speedup grows to 75.7$\times$ with 67 logical qubits encoded into $9.08 \times 10^{12}$ physical qubits (Figure~\ref{fig:graphene}).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/graphene_case_study.png}
+    \caption{Graphene case study: (a) qubit requirements, (b) code distance, (c) runtime comparison, (d) speedup factor for $t = 10$~ps.}
+    \label{fig:graphene}
+\end{figure}
+
+\subsection{Overhead Decomposition}
+
+Figure~\ref{fig:decomp} decomposes the physical qubit overhead for $N_a = 1{,}000$ atoms into three components: encoded data qubits, magic state factories, and routing overhead. For short simulations ($t = 0.1$~ps), encoded data qubits dominate. For long simulations ($t = 1{,}000$~ps), the increased code distance amplifies all three components, with encoded data qubits consuming the largest fraction due to the $2d^2-1$ scaling per logical qubit.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/overhead_decomposition.png}
+    \caption{Decomposition of physical qubit overhead for $N_a = 1{,}000$ atoms across simulation times.}
+    \label{fig:decomp}
+\end{figure}
+
+\section{Discussion}
+
+\subsection{Practical Implications}
+
+Our analysis reveals a tension in the QENM resource landscape. The algorithm's exponential space advantage is robust---even with $10^3$--$10^{12}$:1 physical-to-logical overhead ratios, the quantum approach uses exponentially fewer \emph{logical} qubits than classical bits. However, the time overhead from $d$ rounds of syndrome extraction per logical gate, combined with large circuit depths for long-time simulations, means that practical quantum advantage requires either:
+\begin{enumerate}
+    \item Large system sizes ($>10^5$ atoms) where classical $O(N^3)$ scaling dominates.
+    \item Improved physical error rates ($p_{\text{phys}} < 5 \times 10^{-4}$) to reduce code distance requirements.
+    \item Faster surface code cycle times ($\tau_{\text{cycle}} < 1$~$\mu$s) to reduce absolute runtime.
+\end{enumerate}
+
+\subsection{Comparison with Related Work}
+
+Our resource estimates are consistent with related fault-tolerant resource analyses. Gidney and Eker{\aa}~\cite{gidney2021factor} estimated 20 million physical qubits for RSA factoring at $d = 27$, comparable to our mid-range estimates. Beverland et al.~\cite{beverland2022assessing} identified similar sensitivity to physical error rates for chemistry applications. The unique aspect of QENM is the logarithmic logical qubit scaling, which keeps the base overhead low even for very large systems.
+
+\subsection{Limitations}
+
+Our model makes several simplifying assumptions: (1) uniform error rates across all gate types, (2) idealized magic state distillation throughput, (3) a single surface code cycle time. More detailed models incorporating gate-specific error rates, realistic decoding latencies, and hardware-specific constraints would refine these estimates. Additionally, advanced compilation techniques~\cite{lee2021even} and alternative error correction codes~\cite{campbell2017roads} may reduce overhead.
+
+\section{Conclusion}
+
+We have provided the first quantitative assessment of quantum error correction overhead for QENM simulations. Key findings include:
+
+\begin{itemize}
+    \item Logical qubit counts range from 23 to 43 for systems of 10 to 10{,}000 atoms, confirming the exponential space advantage.
+    \item Physical-to-logical overhead ratios span 1{,}158:1 to $1.62 \times 10^{12}$:1, with code distances $d = 13$ to $d = 35$ at $p_{\text{phys}} = 10^{-3}$.
+    \item Break-even with classical simulation occurs near 64{,}047 atoms for short (0.1~ps) simulations.
+    \item Graphene sheets above 500~nm achieve quantum speedups of 3.6--75.7$\times$ at approximately $10^{12}$--$10^{13}$ physical qubits.
+    \item Reducing physical error rates by $10\times$ yields $>100\times$ reduction in physical qubit requirements.
+\end{itemize}
+
+These results establish that the QENM quantum advantage survives error correction overhead for large-scale molecular simulations, providing concrete hardware targets for the fault-tolerant quantum computing era.
+
+\begin{acks}
+This work addresses the open problem of quantifying error-correction overhead for QENM simulations posed by Kolotouros et al.~\cite{kolotouros2026qenm}.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

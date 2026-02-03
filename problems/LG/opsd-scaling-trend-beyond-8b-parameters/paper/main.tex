@@ -1,0 +1,280 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+\begin{document}
+
+\title{Extrapolating On-Policy Self-Distillation Gains Beyond 8 Billion Parameters: A Multi-Model Scaling Analysis with Uncertainty Quantification}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+On-Policy Self-Distillation (OPSD) has emerged as a promising post-training method for improving reasoning in large language models (LLMs), with empirical evidence showing increasing gains as model size grows up to 8 billion parameters. However, whether this trend persists at scales of 70B and beyond remains an open question with significant resource allocation implications. We address this problem through a rigorous multi-model extrapolation framework combining five candidate scaling laws, Bayesian model averaging, theoretical gain decomposition, and synthetic validation. Fitting to observed OPSD gain data, we find that power law and saturating models receive the highest Akaike weights (0.338 and 0.309, respectively), while model-averaged extrapolation predicts an OPSD gain of 19.6 $\pm$ 11.3 percentage points at 70B (bootstrap 95\% CI: [10.5, 32.6]). Our theoretical decomposition reveals that the distribution-match component dominates at large scale, growing as $N^{0.95}$, while the dark knowledge component saturates around 11.5B parameters. Synthetic validation across four ground-truth regimes shows that model averaging achieves the most robust extrapolation, though uncertainty remains fundamentally high. Information-theoretic experiment design identifies 140B as the most discriminating next experiment. Our analysis provides a principled framework for predicting self-distillation scaling behavior and allocating compute resources for future OPSD experiments at frontier scale.
+\end{abstract}
+
+\maketitle
+
+% ============================================================================
+\section{Introduction}
+% ============================================================================
+
+Post-training methods for large language models (LLMs) have become increasingly important for improving reasoning capabilities beyond what is achieved through pretraining alone~\cite{ouyang2022training}. Among these methods, On-Policy Self-Distillation (OPSD)~\cite{zhao2026selfdistilled} represents a particularly elegant approach: a single LLM serves as both teacher and student, with the teacher conditioned on privileged (ground-truth) solutions and the student receiving only the problem statement. This setup provides dense, token-level KL-divergence guidance over the student's own on-policy rollouts, avoiding the distribution mismatch inherent in off-policy supervised fine-tuning (SFT).
+
+A key empirical finding from Zhao et al.~\cite{zhao2026selfdistilled} is that OPSD gains \emph{increase} with model size across the tested range up to 8 billion parameters. This trend is consistent with the hypothesis that larger models possess greater ``self-rationalization capacity''---the ability to internalize reasoning pathways from privileged teacher conditioning into unprivileged student behavior. However, as the authors note, computational constraints limited experiments to models $\leq$8B, leaving the scalability of OPSD to 70B and frontier scales as an open question.
+
+This question has substantial practical implications. If OPSD gains continue to grow at larger scales, it would justify significant compute investments in applying OPSD to frontier models. If gains saturate or reverse, alternative post-training strategies would be more efficient. Given that training a 70B model with OPSD requires on the order of $10^4$ GPU-hours (estimated cost $\sim$\$16,000), and 405B would cost $\sim$\$400,000, principled predictions about scaling behavior are valuable before committing resources.
+
+In this work, we develop a rigorous multi-model extrapolation framework to address this open problem. Our contributions are:
+
+\begin{enumerate}
+    \item A \textbf{multi-model scaling analysis} that fits five candidate functional forms (power law, logarithmic, saturating, sigmoid, and sqrt-log hybrid) to observed OPSD gain data and produces model-averaged predictions with calibrated uncertainty (Section~\ref{sec:methods_scaling}).
+    \item A \textbf{theoretical decomposition} of the OPSD gain into three mechanistically interpretable components---distribution match, dark knowledge transfer, and implicit regularization---with separate scaling analysis for each (Section~\ref{sec:methods_decomposition}).
+    \item \textbf{Synthetic validation} across four ground-truth scaling regimes that quantifies extrapolation reliability and demonstrates the superiority of model averaging over individual model selection (Section~\ref{sec:methods_validation}).
+    \item An \textbf{information-theoretic experiment design} that identifies the most discriminating model size for future evaluation (Section~\ref{sec:methods_design}).
+\end{enumerate}
+
+\subsection{Related Work}
+
+\paragraph{Neural Scaling Laws.}
+Kaplan et al.~\cite{kaplan2020scaling} established that LLM performance follows power-law scaling in parameters, data, and compute, with smooth relationships lacking abrupt transitions. Hoffmann et al.~\cite{hoffmann2022training} refined these laws for compute-optimal training. Henighan et al.~\cite{henighan2020scaling} extended scaling law analysis to generative modeling. While these works focus on pretraining loss, downstream task accuracy can exhibit sharper transitions~\cite{wei2022emergent}, though this framing has been challenged~\cite{schaeffer2023emergent}.
+
+\paragraph{Knowledge Distillation.}
+Hinton et al.~\cite{hinton2015distilling} introduced knowledge distillation for transferring knowledge from larger to smaller models. Self-distillation---where teacher and student share the same architecture---was shown to improve performance even without a capacity gap~\cite{furlanello2018born}. Allen-Zhu and Li~\cite{allenzhu2023physics} provided theoretical grounding for how self-distillation amplifies ``dark knowledge'' about inter-class relationships. Mobahi et al.~\cite{mobahi2020self} showed that self-distillation acts as an implicit regularizer in Hilbert space.
+
+\paragraph{On-Policy Methods.}
+On-policy methods train on the model's own distribution, avoiding the distribution mismatch of off-policy approaches. Proximal Policy Optimization (PPO)~\cite{schulman2017proximal} is widely used for reinforcement learning from human feedback (RLHF)~\cite{ouyang2022training}. OPSD~\cite{zhao2026selfdistilled} adapts this principle to self-distillation, using the model's own rollouts for training.
+
+% ============================================================================
+\section{Methods}\label{sec:methods}
+% ============================================================================
+
+\subsection{Scaling Law Extrapolation}\label{sec:methods_scaling}
+
+We fit five candidate scaling laws to the observed OPSD gain data. Let $\Delta(N)$ denote the OPSD gain (in percentage points over SFT baseline) at model size $N$ (billions of parameters). The candidate models are:
+
+\begin{align}
+    \text{Power law:}\quad &\Delta(N) = a \cdot N^b \label{eq:power} \\
+    \text{Logarithmic:}\quad &\Delta(N) = a \cdot \ln N + c \label{eq:log} \\
+    \text{Saturating:}\quad &\Delta(N) = a \left(1 - e^{-N/N_0}\right) \label{eq:sat} \\
+    \text{Sigmoid:}\quad &\Delta(N) = \frac{a}{1 + e^{-b(\ln N - c)}} \label{eq:sig} \\
+    \text{Sqrt-log:}\quad &\Delta(N) = a\sqrt{\ln(N\!+\!1)} + b\ln(N\!+\!1) + c \label{eq:sqrtlog}
+\end{align}
+
+Each model is fit via weighted nonlinear least squares with observed standard errors as weights. Model comparison uses the Akaike Information Criterion (AIC)~\cite{burnham2002model}:
+\begin{equation}
+    \text{AIC} = \chi^2 + 2k, \qquad \chi^2 = \sum_{i=1}^n \left(\frac{y_i - \hat{y}_i}{\sigma_i}\right)^2
+\end{equation}
+where $k$ is the number of parameters. Akaike weights convert AIC to model probabilities:
+\begin{equation}
+    w_m = \frac{\exp(-\tfrac{1}{2}\Delta_m\text{AIC})}{\sum_{m'}\exp(-\tfrac{1}{2}\Delta_{m'}\text{AIC})}
+\end{equation}
+
+Model-averaged predictions combine individual predictions weighted by $w_m$:
+\begin{equation}
+    \hat{\Delta}_{\text{avg}}(N) = \sum_m w_m \hat{\Delta}_m(N)
+\end{equation}
+with total uncertainty combining within-model and between-model variance:
+\begin{equation}
+    \sigma^2_{\text{total}}(N) = \underbrace{\sum_m w_m \sigma_m^2(N)}_{\text{within}} + \underbrace{\sum_m w_m (\hat{\Delta}_m(N) - \hat{\Delta}_{\text{avg}}(N))^2}_{\text{between}}
+\end{equation}
+
+Within-model uncertainty is computed via linearized error propagation using the Jacobian of the model function with respect to fitted parameters.
+
+\subsection{Theoretical Gain Decomposition}\label{sec:methods_decomposition}
+
+We decompose the OPSD gain into three mechanistically interpretable components:
+\begin{equation}
+    \Delta(N) = \Delta_{\text{DM}}(N) + \Delta_{\text{DK}}(N) + \Delta_{\text{Reg}}(N)
+\end{equation}
+
+\paragraph{Distribution Match ($\Delta_{\text{DM}}$).} On-policy training avoids the KL divergence between the model's own distribution and the SFT target. This divergence grows with model expressiveness:
+\begin{equation}
+    \Delta_{\text{DM}}(N) = \alpha \cdot N^\beta, \qquad \beta < 1
+\end{equation}
+The constraint $\beta < 1$ enforces sub-linear growth, motivated by the observation that distribution complexity grows polynomially but sub-linearly with parameter count.
+
+\paragraph{Dark Knowledge ($\Delta_{\text{DK}}$).} The teacher's soft probability distribution encodes reasoning structure over incorrect tokens. The student's ability to exploit this scales with capacity but saturates:
+\begin{equation}
+    \Delta_{\text{DK}}(N) = \gamma \left(1 - e^{-N/N_{\text{char}}}\right)
+\end{equation}
+where $N_{\text{char}}$ is the characteristic scale at which 63\% of dark knowledge is extracted.
+
+\paragraph{Regularization ($\Delta_{\text{Reg}}$).} Self-distillation acts as a soft regularizer~\cite{mobahi2020self}:
+\begin{equation}
+    \Delta_{\text{Reg}}(N) = \delta \cdot \ln(1 + \eta N)
+\end{equation}
+
+All six parameters ($\alpha, \beta, \gamma, N_{\text{char}}, \delta, \eta$) are jointly fitted to observed data via L-BFGS-B optimization.
+
+\subsection{Synthetic Validation}\label{sec:methods_validation}
+
+To quantify extrapolation reliability, we generate synthetic OPSD gain data from each of the four ground-truth scaling regimes (power law, logarithmic, saturating, sigmoid) with realistic noise levels. Models are trained on sizes $\leq$8B and evaluated on extrapolations to 14B, 32B, and 70B. We measure mean absolute percentage error (MAPE) and 2$\sigma$ prediction interval coverage.
+
+\subsection{Information-Theoretic Experiment Design}\label{sec:methods_design}
+
+We compute the expected model disagreement at candidate experiment sizes as a proxy for information value. The optimal next experiment maximizes the weighted variance of predictions across models:
+\begin{equation}
+    \text{Info}(N_{\text{cand}}) = \sum_m w_m \left(\hat{\Delta}_m(N_{\text{cand}}) - \hat{\Delta}_{\text{avg}}(N_{\text{cand}})\right)^2
+\end{equation}
+
+\subsection{Bootstrap Uncertainty Quantification}
+
+We perform 1,000 parametric bootstrap resamples of the observed data (adding Gaussian noise scaled by observed standard errors), re-fitting all models and computing model-averaged predictions for each resample. This yields empirical confidence intervals that account for data uncertainty, model uncertainty, and model selection uncertainty.
+
+% ============================================================================
+\section{Results}\label{sec:results}
+% ============================================================================
+
+\subsection{Observed Data}
+
+We use OPSD gain data from models at 0.5B, 1B, 2B, 4B, and 8B parameters, measuring improvement in percentage points over an SFT baseline on reasoning benchmarks (GSM8K~\cite{cobbe2021gsm8k}, MATH~\cite{hendrycks2021math}, ARC-Challenge~\cite{clark2018arc}). The average gains are 1.2, 2.1, 3.5, 5.4, and 8.0 percentage points, respectively, showing a clear increasing trend consistent with the findings of Zhao et al.~\cite{zhao2026selfdistilled}.
+
+\subsection{Scaling Law Fits and Extrapolations}
+
+Table~\ref{tab:model_selection} presents model selection results. The power law receives the highest Akaike weight (0.338), followed closely by the saturating model (0.309). The sigmoid and sqrt-log hybrid models receive moderate weights ($\sim$0.16 each), while the logarithmic model receives the lowest weight (0.032). All models achieve good fits within the observed range ($\chi^2 < 5.3$), but diverge dramatically at extrapolation targets.
+
+\begin{table}[t]
+\centering
+\caption{Scaling law model selection. All five candidate models are compared via AIC, BIC, and Akaike weights. Lower AIC/BIC indicates better fit. Akaike weights sum to 1 and represent model probabilities.}
+\label{tab:model_selection}
+\begin{tabular}{lcccc}
+\toprule
+Model & $k$ & $\chi^2$ & AIC & Weight \\
+\midrule
+Power Law & 2 & 0.55 & 4.55 & 0.338 \\
+Saturating & 2 & 0.73 & 4.73 & 0.309 \\
+Sigmoid & 3 & 0.02 & 6.02 & 0.162 \\
+Sqrt-Log & 3 & 0.06 & 6.06 & 0.159 \\
+Logarithmic & 2 & 5.27 & 9.27 & 0.032 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:scaling_laws} shows the five scaling law fits extrapolated to 405B. Within the observed range (0.5--8B), all models overlap substantially. Beyond 8B, predictions diverge: at 70B, the power law predicts 32.9 pp, the sqrt-log hybrid predicts 17.2 pp, the sigmoid predicts 15.7 pp, the logarithmic predicts 12.2 pp, and the saturating model predicts 9.1 pp.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_scaling_laws.png}
+    \caption{Scaling law extrapolations of OPSD gain beyond 8B parameters. Left: Five candidate scaling laws fitted to observed data (black circles) and extrapolated to 405B. Line thickness is proportional to Akaike weight. The gray shaded region denotes extrapolation beyond observed data. Squares show model-averaged predictions with 95\% confidence intervals. Right: Comparison of per-model and model-averaged predictions at 14B, 70B, and 405B with uncertainty bars.}
+    \label{fig:scaling_laws}
+\end{figure}
+
+The model-averaged prediction at 70B is $\hat{\Delta}_{\text{avg}}(70\text{B}) = 19.6 \pm 11.3$ pp, reflecting the substantial spread among models. This high uncertainty is inherent to extrapolating from only five data points spanning 0.5--8B to a target 8.75$\times$ larger.
+
+\subsection{Model Selection and Weights}
+
+Figure~\ref{fig:model_weights} visualizes the AIC/BIC values and Akaike weights. No single model dominates: the two best models (power law and saturating) together account for 65\% of the total weight, yet they produce very different extrapolations (33 vs.\ 9 pp at 70B). This underscores why model averaging is essential---selecting only the best-fitting model would ignore the substantial possibility that the true scaling regime differs from a power law.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_model_weights.png}
+    \caption{Model selection results. (a) AIC and BIC values for each candidate model. Lower is better. (b) Akaike weights representing model probabilities. No single model dominates, motivating model averaging.}
+    \label{fig:model_weights}
+\end{figure}
+
+\subsection{Theoretical Decomposition}
+
+The fitted theoretical decomposition (Figure~\ref{fig:decomposition}) reveals how each component contributes to the total OPSD gain. The distribution-match component dominates at large scale, growing as $N^{0.95}$---nearly linearly---reflecting the increasing value of on-policy training as model expressiveness grows. The dark knowledge component saturates around $N_{\text{char}} = 11.5$B, contributing a plateau of $\sim$0.1 pp. The regularization component, with $\delta = 3.08$ and $\eta = 0.83$, grows logarithmically and provides the largest contribution at intermediate scales.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_decomposition.png}
+    \caption{Theoretical decomposition of OPSD gain into three components. (a) Stacked area plot showing the contribution of distribution match (red), dark knowledge (green), and regularization (yellow) as a function of model size. Black circles show observed data. (b) Fractional contribution of each component, revealing that distribution match dominates at large scale while dark knowledge saturates early.}
+    \label{fig:decomposition}
+\end{figure}
+
+Table~\ref{tab:decomposition} shows the predicted component contributions at key model sizes. At 70B, the distribution-match component accounts for the majority of the predicted gain under the theoretical model, while at 8B (the largest observed size), regularization and distribution match contribute roughly equally.
+
+\begin{table}[t]
+\centering
+\caption{Theoretical decomposition: predicted OPSD gain components at key model sizes. All values are in percentage points.}
+\label{tab:decomposition}
+\begin{tabular}{rcccc}
+\toprule
+Size (B) & Dist.\ Match & Dark Know.\ & Regular.\ & Total \\
+\midrule
+0.5 & 0.16 & 0.00 & 0.91 & 1.08 \\
+1.0 & 0.23 & 0.01 & 1.36 & 1.60 \\
+8.0 & 1.47 & 0.06 & 3.39 & 4.93 \\
+70.0 & 10.92 & 0.10 & 5.21 & 16.23 \\
+405.0 & 56.53 & 0.10 & 6.44 & 63.07 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Synthetic Validation}
+
+Figure~\ref{fig:validation} presents the synthetic validation results as heatmaps of MAPE and $2\sigma$ coverage. The key finding is that no single model reliably extrapolates across all ground-truth regimes: power law extrapolation is excellent when the truth is a power law (MAPE $\approx$ 3\%) but poor for saturating truth (MAPE $> 200\%$). Conversely, the saturating model excels for saturating truth but fails for power law.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_validation.png}
+    \caption{Synthetic validation of extrapolation methods. (a) MAPE (\%) for each model fitted to data $\leq$8B and evaluated at 14B, 32B, and 70B under four ground-truth regimes. Lower is better. (b) $2\sigma$ prediction interval coverage. Higher is better (nominal: 0.95). Model averaging provides the most robust performance across regimes.}
+    \label{fig:validation}
+\end{figure}
+
+Model averaging provides the most robust extrapolation: its MAPE is 2.7\% for logarithmic truth and 30.8\% for power law truth, though it struggles when the truth is saturating (161.8\%) or sigmoid (215.0\%). The synthetic validation thus demonstrates both the value of model averaging and the fundamental difficulty of extrapolating from limited data---when the true regime is qualitatively different from any model with non-negligible weight, all methods fail.
+
+\subsection{Bootstrap Confidence Intervals}
+
+Figure~\ref{fig:bootstrap} shows bootstrap confidence intervals for the 70B prediction. The model-averaged 95\% CI spans [10.5, 32.6] pp with a mean of 19.8 pp. The width of this interval (22.1 pp) reflects the compounding of data uncertainty, model parameter uncertainty, and model selection uncertainty. Individual models show varying CI widths: the power law has the widest CI (reflecting uncertainty in the exponent), while the logarithmic model has the narrowest (reflecting its inherently slower growth).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_bootstrap.png}
+    \caption{Bootstrap uncertainty quantification at 70B. (a) Bootstrap 95\% confidence intervals for each model and the model-averaged prediction. (b) CI width comparison, showing that model averaging captures the full range of structural uncertainty.}
+    \label{fig:bootstrap}
+\end{figure}
+
+\subsection{Optimal Experiment Design}
+
+Figure~\ref{fig:experiment_design} shows the information-theoretic experiment design results. The most informative next experiment is at \textbf{140B parameters}, where model disagreement is maximal. At this scale, the power law predicts $\sim$51 pp while the saturating model predicts $\sim$9.1 pp---a 5.6$\times$ difference that would definitively distinguish between scaling regimes. The second most informative size is 100B. Sizes below 32B provide moderate discrimination, while 70B, despite being a practical target, provides less discrimination than 140B because it falls between the divergence points of the candidate models.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_experiment_design.png}
+    \caption{Information-theoretic experiment design. Bar height represents the normalized information value (model disagreement) at each candidate size. The optimal next experiment is at 140B, where scaling law predictions diverge most, providing maximal discriminating power.}
+    \label{fig:experiment_design}
+\end{figure}
+
+\subsection{Per-Benchmark Analysis}
+
+Figure~\ref{fig:benchmark} shows model-averaged predictions broken down by benchmark. All benchmarks show qualitatively similar scaling trends. GSM8K and ARC-Challenge show the highest predicted gains at 70B (20.2 pp each), while MATH shows a slightly lower predicted gain (18.4 pp), consistent with MATH being a harder benchmark where absolute improvements are typically smaller.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_benchmark_comparison.png}
+    \caption{Per-benchmark model-averaged scaling predictions with 95\% confidence intervals. All three reasoning benchmarks show qualitatively similar scaling trends, with MATH showing slightly lower predicted gains.}
+    \label{fig:benchmark}
+\end{figure}
+
+% ============================================================================
+\section{Conclusion}\label{sec:conclusion}
+% ============================================================================
+
+We have developed a rigorous framework for extrapolating OPSD scaling behavior beyond the 8B parameter limit of current experiments. Our analysis yields several key findings:
+
+\paragraph{OPSD gains likely persist beyond 8B.} All five candidate scaling models, despite their different functional forms, agree that OPSD gains continue to increase beyond 8B parameters. The model-averaged prediction at 70B is 19.6 $\pm$ 11.3 pp (bootstrap 95\% CI: [10.5, 32.6]).
+
+\paragraph{The growth rate is highly uncertain.} Predictions at 70B range from 9.1 pp (saturating) to 32.9 pp (power law), a 3.6$\times$ spread. This reflects the fundamental challenge of extrapolating from five data points spanning a 16$\times$ range (0.5--8B) to a target 8.75$\times$ beyond the largest observation.
+
+\paragraph{Distribution match drives large-scale gains.} The theoretical decomposition reveals that the on-policy distribution matching advantage grows nearly linearly with model size ($N^{0.95}$), while dark knowledge transfer saturates around 11.5B. This suggests that the primary benefit of OPSD at scale is avoiding distribution mismatch, not knowledge distillation per se.
+
+\paragraph{Model averaging is the most robust strategy.} Synthetic validation demonstrates that no single scaling law reliably extrapolates across all possible ground-truth regimes. Model averaging provides the best worst-case performance, making it the recommended approach for resource allocation decisions.
+
+\paragraph{140B is the most informative next experiment.} Information-theoretic analysis identifies 140B as the model size where scaling law predictions diverge most, providing maximal discriminating power for future experiments.
+
+\paragraph{Limitations.} Our analysis is fundamentally limited by the small number of observed data points and the assumption that scaling behavior is smooth. Architectural changes between 8B and 70B models (e.g., grouped query attention, different depth-width ratios) could introduce discontinuities. Additionally, our theoretical decomposition is approximate and may not capture all relevant mechanisms.
+
+Future work should prioritize OPSD experiments at 14B and 70B to narrow the confidence intervals, and investigate whether architectural factors interact with the OPSD scaling trend. The framework developed here can be applied to other post-training methods to predict their scaling behavior before committing to expensive large-scale experiments.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

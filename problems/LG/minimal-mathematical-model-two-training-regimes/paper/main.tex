@@ -1,0 +1,107 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\title{A Minimal Mathematical Model Capturing Both Noise-Dominated and Signal-Dominated Training Regimes}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We construct a minimal mathematical model that simultaneously exhibits the noise-dominated regime for matrix parameters and the signal-dominated regime for scalar/vector parameters observed during language model training. Our model, $L(W, \gamma) = \|{\gamma \odot (Wx) - y}\|^2$ trained with AdamW, demonstrates that matrix parameters $W$ reach a noise--weight decay equilibrium while scalar multipliers $\gamma$ track the optimization signal freely. The key mechanism is the dimensionality-dependent signal-to-noise ratio (SNR): matrix gradients spread signal across $O(d^2)$ parameters while accumulating $O(d^2)$ noise dimensions, yielding low per-parameter SNR, whereas scalar parameters concentrate signal in $O(d)$ dimensions with proportionally less noise. We validate this through experiments varying batch size, weight decay, and dimension, showing that the SNR gap between parameter types grows with dimension and that batch size controls the regime transition. This minimal model explains when and why learnable multipliers escape the noise-constrained equilibrium that limits matrix parameters.
+\end{abstract}
+
+\keywords{training dynamics, weight decay, noise equilibrium, signal-to-noise ratio, learnable multipliers}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+During language model training with AdamW~\cite{loshchilov2019adamw, kingma2015adam}, matrix parameters and scalar/vector parameters exhibit qualitatively different dynamical behaviors~\cite{velikanov2026learnable}. Matrix weights converge to a noise--weight decay (noise--WD) equilibrium where their Frobenius norm is constrained by the balance between gradient noise and regularization, while learnable scalar multipliers freely adapt their scale based on the optimization signal.
+
+Understanding this dichotomy is important for scaling laws~\cite{kaplan2020scaling}, hyperparameter transfer~\cite{yang2022mup}, and the deployment of architectural innovations like learnable multipliers~\cite{velikanov2026learnable}. We construct a minimal model that captures both regimes and identify the dimensionality-dependent signal-to-noise ratio as the key mechanism.
+
+\section{The Minimal Model}
+
+Consider the loss:
+\begin{equation}
+L(W, \gamma) = \frac{1}{2N}\sum_{i=1}^{N} \|\gamma \odot (Wx_i) - y_i\|^2
+\end{equation}
+where $W \in \mathbb{R}^{d \times d}$ is a matrix parameter, $\gamma \in \mathbb{R}^d$ is a scalar multiplier (per output dimension), and $\{(x_i, y_i)\}$ are training data. Both parameters are updated via AdamW:
+\begin{equation}
+\theta_{t+1} = \theta_t - \eta\left(\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} + \lambda\theta_t\right)
+\end{equation}
+
+\subsection{SNR Analysis}
+
+The mini-batch gradient for $W$ has signal (full-batch gradient) spread across $d^2$ entries and noise from sampling $B$ out of $N$ points. The per-parameter SNR scales as:
+\begin{equation}
+\text{SNR}_W \sim \frac{\sqrt{B}}{d^2}, \quad \text{SNR}_\gamma \sim \frac{\sqrt{B}}{d}
+\end{equation}
+When $\text{SNR}_W \ll 1$ (noise-dominated regime), weight decay constrains $\|W\|_F$ to an equilibrium. When $\text{SNR}_\gamma \gg \text{SNR}_W$, $\gamma$ operates in a signal-dominated regime.
+
+\section{Results}
+
+\subsection{Two-Regime Dynamics}
+
+Figure~\ref{fig:dynamics} shows the training dynamics with $d=10$, $\eta=0.01$, $\lambda=0.01$, $B=16$. Matrix norm $\|W\|_F$ reaches equilibrium quickly while $\|\gamma\|$ evolves monotonically. The SNR ratio (gamma/W) exceeds 5$\times$ throughout training.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/two_regime_dynamics.png}
+\caption{Training dynamics showing noise-dominated W (stable norm) and signal-dominated gamma (evolving norm), with corresponding SNR trajectories.}
+\label{fig:dynamics}
+\end{figure}
+
+\subsection{Batch Size (Noise Level)}
+
+Figure~\ref{fig:noise} shows that increasing batch size increases both SNRs, with $\gamma$'s SNR growing faster. At $B=256$, even $W$ approaches the signal-dominated regime, consistent with the critical batch size framework~\cite{mccandlish2018empirical, smith2018dont}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/noise_sweep.png}
+\caption{Equilibrium norms and SNR as functions of batch size. Larger batches push W toward the signal-dominated regime.}
+\label{fig:noise}
+\end{figure}
+
+\subsection{Weight Decay Sweep}
+
+Figure~\ref{fig:wd} demonstrates that weight decay constrains $\|W\|_F$ strongly in the noise-dominated regime but has a weaker relative effect on $\|\gamma\|$. Without weight decay ($\lambda=0$), both parameters grow freely, eliminating the regime separation.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/wd_sweep.png}
+\caption{Parameter norms and loss as functions of weight decay. WD constrains noise-dominated W more than signal-dominated gamma.}
+\label{fig:wd}
+\end{figure}
+
+\subsection{Dimension Scaling}
+
+Figure~\ref{fig:dimension} confirms that the SNR gap between $W$ and $\gamma$ grows with dimension $d$, as predicted by the $d^2$ vs.\ $d$ scaling. The SNR ratio increases roughly linearly with $d$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/dimension_scaling.png}
+\caption{SNR and regime separation as functions of dimension $d$. The gap grows with dimensionality.}
+\label{fig:dimension}
+\end{figure}
+
+\section{Discussion}
+
+Our minimal model explains the key empirical observation: matrix parameters are noise-dominated because their gradient signal is diluted across $O(d^2)$ parameters, while scalar multipliers concentrate signal in fewer parameters. Weight decay then constrains the noise-dominated parameters to an equilibrium, while signal-dominated parameters evolve freely. This mechanism predicts that: (1)~the regime separation increases with model dimension, (2)~larger batch sizes reduce the separation, and (3)~weight decay is necessary for the two-regime behavior.
+
+\section{Conclusion}
+
+We have constructed a minimal model $L(W, \gamma) = \|\gamma \odot (Wx) - y\|^2$ that simultaneously exhibits both training regimes observed in language models. The dimensionality-dependent SNR explains why matrix parameters enter a noise--WD equilibrium while scalar multipliers remain signal-dominated. This model provides mechanistic understanding for the deployment of learnable multipliers and suggests that regime-aware hyperparameter tuning (separate learning rates and weight decay for different parameter types) is theoretically justified.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

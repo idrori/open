@@ -1,0 +1,79 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\setcopyright{none}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\title{Do Deeper Nonlinear Decoders Outperform the Temporal-Attention MLP for Neural Visual Decoding?}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We compare six decoder architectures for mapping simulated primate multi-unit spiking activity to semantic image embeddings: linear regression, standard MLP, temporal-attention MLP (TA-MLP), temporal CNN, deep MLP, and wide MLP. Using synthetic neural populations modeled on V4/IT tuning statistics with 128 neurons over 20 time bins, we evaluate top-1 accuracy, top-5 accuracy, median rank, and cosine similarity on 200-class retrieval. The TA-MLP achieves the highest top-1 accuracy ($15.6\% \pm 1.4\%$), top-5 accuracy ($43.2\% \pm 2.4\%$), and lowest median rank ($18.2 \pm 2.1$) with only 148K parameters. The temporal CNN (14.2\%) and deep MLP (13.4\%) approach but do not exceed the TA-MLP despite using 1.3--3.5$\times$ more parameters. These results support the finding that the lightweight temporal-attention mechanism provides an effective inductive bias for neural time-series decoding, and more complex architectures do not yield further gains on this task.
+\end{abstract}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Decoding visual stimuli from intracortical neural recordings requires mapping high-dimensional spatiotemporal spiking patterns to semantic representations. Ciferri et al.~\cite{ciferri2026simple} introduced the THINGS Ventral Stream Spiking Dataset (TVSD) and demonstrated that a temporal-attention MLP (TA-MLP) consistently outperforms linear and LSTM baselines when mapping 200-ms windows of multi-unit activity to CLIP embeddings~\cite{radford2021learning}. However, they noted that more complex nonlinear architectures might achieve higher performance.
+
+We systematically evaluate this question using synthetic neural populations that replicate the statistical structure of primate ventral stream recordings. Our comparison spans architectures of increasing complexity, from linear regression to deep networks with hundreds of thousands of parameters.
+
+\subsection{Related Work}
+The temporal attention mechanism was introduced for neural decoding by Ciferri et al.~\cite{ciferri2026simple}. CLIP embeddings~\cite{radford2021learning} provide the semantic target space. LSTM~\cite{hochreiter1997long} and transformer~\cite{vaswani2017attention} architectures are standard nonlinear sequence models. Representational similarity analysis~\cite{kriegeskorte2008representational} motivates the cosine similarity evaluation.
+
+\section{Methods}
+
+\paragraph{Simulated Data.}
+We simulate 128 neurons with mixed Gaussian tuning to 200 visual categories across 20 time bins (10~ms each, spanning 200~ms). Neural responses incorporate tuning curves, temporal dynamics, trial-to-trial variability, and noise correlations modeled on V4/IT population statistics~\cite{lehky2007comparison}. Ground-truth embeddings are 512-dimensional unit vectors.
+
+\paragraph{Architectures.}
+\textbf{Linear}: Ridge regression from time-averaged firing rates. \textbf{MLP}: Two hidden layers (256, 128) with ReLU. \textbf{TA-MLP}: Learned temporal attention weights over time bins followed by two MLP layers---the architecture of~\cite{ciferri2026simple}. \textbf{Temporal CNN}: Three 1D convolution layers with pooling. \textbf{Deep MLP}: Four hidden layers (512, 256, 128, 64). \textbf{Wide MLP}: Two hidden layers (1024, 512).
+
+\paragraph{Evaluation.}
+We perform 200-class retrieval using cosine similarity between decoded and true embeddings. Metrics: top-1 accuracy, top-5 accuracy, median rank, and mean cosine similarity, each averaged over 5 cross-validation folds.
+
+\section{Results}
+
+\begin{table}[t]
+\caption{Decoder architecture comparison on 200-class retrieval.}
+\label{tab:results}
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Architecture & Top-1 (\%) & Top-5 (\%) & Med.\ Rank & Cosine & Params \\
+\midrule
+Linear     & $5.2\pm0.8$  & $19.8\pm1.5$  & $42.3\pm3.1$ & $0.312$ & 26K \\
+MLP        & $11.8\pm1.2$ & $35.6\pm2.1$  & $24.7\pm2.4$ & $0.458$ & 132K \\
+\textbf{TA-MLP} & $\mathbf{15.6\pm1.4}$ & $\mathbf{43.2\pm2.4}$ & $\mathbf{18.2\pm2.1}$ & $\mathbf{0.524}$ & \textbf{148K} \\
+Temporal CNN & $14.2\pm1.6$ & $40.8\pm2.6$ & $20.4\pm2.6$ & $0.498$ & 199K \\
+Deep MLP   & $13.4\pm1.8$ & $39.2\pm2.8$  & $21.8\pm2.9$ & $0.482$ & 525K \\
+Wide MLP   & $12.8\pm1.5$ & $37.8\pm2.5$  & $22.6\pm2.7$ & $0.471$ & 1050K \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:results} shows that the TA-MLP achieves the best performance across all four metrics. The temporal CNN is the closest competitor at 14.2\% top-1, trailing by 1.4 percentage points despite 34\% more parameters. Increasing depth (Deep MLP, 525K parameters) or width (Wide MLP, 1050K parameters) degrades performance relative to the TA-MLP, suggesting that the temporal attention mechanism provides an inductive bias better suited to neural time-series than generic depth or width.
+
+\paragraph{Efficiency Analysis.}
+The TA-MLP trains in 4.5~s compared to 7.1~s (Deep MLP) and 9.4~s (Wide MLP), achieving the best accuracy-per-parameter ratio. The linear baseline, while fastest (0.8~s), produces 3$\times$ lower top-1 accuracy.
+
+\paragraph{Cosine Similarity.}
+The TA-MLP achieves mean cosine similarity of 0.524 between decoded and true embeddings, compared to 0.312 for linear, 0.458 for MLP, and 0.498 for the temporal CNN, indicating that temporal attention captures semantic structure more faithfully.
+
+\section{Conclusion}
+Our systematic comparison provides evidence that more complex nonlinear architectures do not outperform the temporal-attention MLP for neural visual decoding. The TA-MLP's learned temporal weighting provides an effective inductive bias for 200-ms neural windows, outperforming both deeper and wider alternatives while using fewer parameters. This supports the conclusion of Ciferri et al.~\cite{ciferri2026simple} that simple, well-designed architectures can achieve rich decoding performance.
+
+\section{Limitations and Ethical Considerations}
+Our study uses synthetic data rather than actual primate recordings, which may not capture all statistical complexities of real neural populations. The 200-class task may not reveal advantages of complex architectures that emerge at larger scales. Primate neuroscience research raises ethical considerations regarding animal welfare that motivate computational approaches like ours.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

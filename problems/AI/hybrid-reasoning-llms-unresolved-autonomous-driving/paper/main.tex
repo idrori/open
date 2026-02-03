@@ -1,0 +1,298 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Decomposed Hybrid Reasoning for Autonomous Driving:\\Fusing Physics-Based and Policy-Based Constraints via Interval Arithmetic}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Large language models (LLMs) struggle to simultaneously integrate physics-based numerical calculations and policy-based symbolic rules when making autonomous driving decisions---a challenge termed \emph{hybrid reasoning}. We propose a decomposed architecture that separates scenario parsing (handled by the LLM), deterministic physics computation (using interval arithmetic for rigorous uncertainty propagation), and policy rule evaluation (using a structured constraint database with soft margins) into dedicated modules, then fuses their outputs through a priority-weighted constraint satisfaction algorithm. We evaluate on a synthetic benchmark of 600 driving scenarios spanning 5 weather conditions, 5 road types, and 3 difficulty levels, classified into four reasoning modes: simple, physics-only, policy-only, and hybrid. Our framework achieves 88.3\% overall decision accuracy compared to 57.5\% for a monolithic LLM, 62.3\% for chain-of-thought prompting, and 73.2\% for a tool-augmented LLM. On the hardest hybrid-reasoning scenarios requiring simultaneous physics and policy integration, our approach reaches 86.2\% accuracy---a 34.7 percentage-point improvement over the monolithic baseline. Physics computation errors (braking distance MAE) drop from 12.2\,m for monolithic LLMs to 0.9\,m with our deterministic engine. These results demonstrate that architectural decomposition, rather than monolithic scaling, is a promising path toward reliable hybrid reasoning for safety-critical autonomous systems.
+\end{abstract}
+
+\maketitle
+
+%%% ===================================================================
+\section{Introduction}
+%%% ===================================================================
+
+Autonomous driving demands decisions that simultaneously respect physical reality and regulatory policy. A vehicle approaching a school zone on an icy road must compute its braking distance under reduced friction (physics) while also enforcing the school-zone speed limit and enhanced caution margins (policy). Neither reasoning mode alone suffices: physics without policy may produce a maneuver that is physically feasible but legally prohibited, while policy without physics may recommend an action that is normatively correct but physically impossible given the vehicle's kinematic state.
+
+Ferrag et al.~\cite{ferrag2026agentdrive} formalized this challenge through the AgentDrive benchmark, which includes a hybrid reasoning category requiring the fusion of quantitative physics computations with policy and margin-based reasoning. Their evaluation revealed that even state-of-the-art LLMs exhibit substantial accuracy drops when both reasoning modes must be composed into a single coherent decision under uncertainty. This finding motivates our central research question: \emph{Can architectural decomposition---separating numerical and symbolic reasoning into dedicated modules---overcome the hybrid reasoning limitation of monolithic LLMs?}
+
+We propose a four-module pipeline: (1) an LLM-based \textbf{Scenario Parser} that extracts structured entities from natural-language descriptions; (2) a deterministic \textbf{Physics Engine} using interval arithmetic~\cite{moore1966interval} for rigorous uncertainty propagation; (3) a \textbf{Policy Engine} with a rule database supporting soft constraints and graded margins; and (4) a \textbf{Constraint Fuser} that combines physics intervals and policy bounds through priority-weighted constraint satisfaction. Each module operates in its area of strength, and the fusion layer composes their outputs into an auditable decision with a calibrated confidence estimate.
+
+Our contributions are:
+\begin{itemize}
+    \item A decomposed hybrid reasoning architecture that separates numerical physics, symbolic policy, and constraint fusion into independently verifiable modules.
+    \item Interval arithmetic for uncertainty-aware physics computation that provides rigorous worst-case bounds on quantities such as braking distance and time-to-collision.
+    \item A soft-margin policy mechanism that translates vague normative language (e.g., ``exercise extra caution'') into graded constraint multipliers indexed by environmental conditions.
+    \item A comprehensive evaluation on 600 synthetic driving scenarios demonstrating a 34.7 percentage-point accuracy improvement over monolithic LLMs on hybrid reasoning tasks.
+\end{itemize}
+
+%%% -------------------------------------------------------------------
+\subsection{Related Work}
+%%% -------------------------------------------------------------------
+
+\textbf{Neuro-symbolic integration.}
+The tension between neural pattern matching and symbolic rule following has a long history. Tool-augmented LLMs~\cite{schick2023toolformer} delegate numerical computation to external tools, solving arithmetic accuracy but not addressing \emph{when} to invoke which tool or how to fuse results. Program-aided language models~\cite{gao2023pal,chen2023program} generate code encoding both physics and logic, but are brittle when scenarios require soft policy reasoning that does not reduce to clean conditional branches. Neuro-symbolic concept learners~\cite{mao2019neuro,yi2018neural} achieve compositional generalization in visual QA but have not been scaled to the open-ended language understanding required for driving.
+
+\textbf{LLMs for autonomous driving.}
+DriveGPT~\cite{xu2024drivegpt4}, LanguageMPC~\cite{sha2023languagempc}, and related systems~\cite{fu2024drive} use LLMs as high-level planners that output waypoints or cost-function parameters. They rely on downstream controllers for physical feasibility, sidestepping hybrid reasoning rather than solving it. The AgentDrive benchmark~\cite{ferrag2026agentdrive} crystallizes the problem by showing that top-tier models exhibit significant accuracy drops when both reasoning modes are required simultaneously.
+
+\textbf{Structured reasoning with LLMs.}
+Chain-of-thought prompting~\cite{wei2022chain} improves multi-step reasoning but does not guarantee numerical precision or systematic rule application. Self-consistency~\cite{wang2023selfconsistency} and tree-of-thought~\cite{yao2023tree} improve robustness but add cost without architectural guarantees. Faithful chain-of-thought~\cite{lyu2023faithful} translates natural language into formal logic, offering a path toward verifiable symbolic reasoning. Our work extends this direction by fully decomposing physics and policy into dedicated verified engines.
+
+\textbf{Interval arithmetic for safety.}
+Interval arithmetic~\cite{moore1966interval} provides rigorous enclosure of uncertain quantities without distributional assumptions, making it suitable for safety-critical applications~\cite{dejongh2024safety}. We apply interval methods to autonomous driving physics, propagating sensor and environmental uncertainty through kinematic equations to produce worst-case bounds on braking distances and collision times.
+
+%%% ===================================================================
+\section{Methods}
+%%% ===================================================================
+
+\subsection{Problem Formulation}
+
+A driving scenario is a tuple $\mathcal{S} = (V, W, R, \sigma)$ where $V = \{v_1, \ldots, v_n\}$ is a set of vehicles with uncertain speeds and positions, $W \in \{\texttt{clear}, \texttt{rain}, \texttt{snow}, \texttt{fog}, \texttt{ice}\}$ is the weather condition, $R \in \{\texttt{highway}, \texttt{urban}, \texttt{residential}, \texttt{school\_zone}, \texttt{construction}\}$ is the road type, and $\sigma$ is a natural-language description. The task is to select a maneuver $m^* \in \mathcal{M}$ from a finite set $\mathcal{M} = \{\texttt{maintain}, \texttt{brake}, \texttt{lane\_change\_L}, \texttt{lane\_change\_R}, \texttt{emergency\_stop}, \texttt{accelerate}, \texttt{yield}\}$ that satisfies all physics safety constraints and policy compliance requirements.
+
+\subsection{Architecture Overview}
+
+Figure~\ref{fig:architecture} illustrates the four-module pipeline. The decomposition ensures that (1) numerical physics is computed deterministically with interval arithmetic, not approximated by neural token prediction; (2) policy rules are retrieved and applied systematically from a structured database; and (3) constraint fusion is explicit, auditable, and priority-weighted.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig5_architecture.png}
+    \caption{Decomposed hybrid reasoning architecture. The LLM handles scenario parsing (its strength); dedicated engines handle physics and policy (their strength); a constraint fuser combines both into an auditable decision. Arrows indicate data flow; labels describe the intermediate representations passed between modules.}
+    \label{fig:architecture}
+\end{figure}
+
+\subsection{Module 1: Scenario Parser}
+
+The scenario parser extracts a structured representation $\mathcal{S}$ from the natural-language description $\sigma$. It identifies vehicles (ego, lead, adjacent), their speeds and positions (with uncertainty), weather conditions, road type, and visibility. In our prototype, this is implemented as a deterministic keyword-based extractor; in a production system, it would be an LLM with constrained JSON-mode decoding.
+
+Speeds are represented as intervals $[\underline{v}, \overline{v}]$ with $\pm5\%$ uncertainty, and distances as intervals with $\pm10\%$ uncertainty, reflecting typical sensor noise in autonomous driving.
+
+\subsection{Module 2a: Physics Engine}
+
+The physics engine computes safety-critical quantities using interval arithmetic~\cite{moore1966interval}. All inputs and outputs are closed intervals $[a, b]$ with $a \le b$, and standard arithmetic operations are extended to intervals:
+\begin{align}
+    [a,b] + [c,d] &= [a+c,\; b+d] \\
+    [a,b] \times [c,d] &= [\min P,\; \max P]
+\end{align}
+where $P = \{ac, ad, bc, bd\}$. Key computed quantities include:
+
+\textbf{Braking distance.} Using the energy-balance formula:
+\begin{equation}
+    d_{\text{brake}} = \frac{v^2}{2g(\mu + \gamma)}
+    \label{eq:braking}
+\end{equation}
+where $v$ is speed, $g = 9.81$\,m/s$^2$, $\mu$ is the friction coefficient interval (weather-dependent), and $\gamma$ is road grade.
+
+\textbf{Total stopping distance.} Includes reaction time $t_r \in [0.8, 1.5]$\,s:
+\begin{equation}
+    d_{\text{stop}} = v \cdot t_r + d_{\text{brake}}
+\end{equation}
+
+\textbf{Time to collision (TTC).} For an ego vehicle closing on a lead vehicle:
+\begin{equation}
+    \text{TTC} = \frac{\Delta x}{v_{\text{ego}} - v_{\text{lead}}}
+\end{equation}
+computed as an interval over uncertain gaps and speeds.
+
+Friction coefficients are indexed by weather condition (Table~\ref{tab:friction}), ranging from $[0.7, 0.8]$ for clear conditions to $[0.1, 0.25]$ for ice.
+
+\begin{table}[t]
+\centering
+\caption{Friction coefficient intervals and visibility by weather condition. These parameters directly affect physics computations and policy margin multipliers.}
+\label{tab:friction}
+\begin{tabular}{lccc}
+\toprule
+Weather & $\mu$ interval & Visibility (m) & Margin \\
+\midrule
+Clear & $[0.70, 0.80]$ & 500 & $1.0\times$ \\
+Rain  & $[0.40, 0.55]$ & 200 & $1.5\times$ \\
+Snow  & $[0.20, 0.35]$ & 100 & $2.0\times$ \\
+Fog   & $[0.65, 0.80]$ &  60 & $1.8\times$ \\
+Ice   & $[0.10, 0.25]$ & 300 & $2.5\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Module 2b: Policy Engine}
+
+The policy engine maintains a rule database indexed by scenario features. Each rule produces a \emph{PolicyConstraint} with four components: a hard limit (absolute legal/physical boundary), a soft margin factor (recommended additional buffer), a priority level (for conflict resolution), and an applicability predicate.
+
+The soft-margin mechanism addresses a key limitation of prior work: vague policy language such as ``exercise extra caution'' is translated into a \emph{combined margin factor}:
+\begin{equation}
+    f_{\text{margin}} = f_{\text{weather}}(W) \times f_{\text{road}}(R)
+\end{equation}
+where $f_{\text{weather}}$ and $f_{\text{road}}$ are lookup tables (see Table~\ref{tab:friction} for weather margins). For example, snow on a school-zone road yields $f_{\text{margin}} = 2.0 \times 2.0 = 4.0$, quadrupling the minimum following distance.
+
+Key policy constraints include: speed limits (absolute, priority 5), minimum following distance (2-second rule scaled by $f_{\text{margin}}$, priority 4), low-visibility restrictions (priority 5), school-zone special rules (no lane changes, priority 6), and lane-change gap requirements (priority 4).
+
+\subsection{Module 3: Constraint Fusion}
+
+The constraint fuser evaluates each candidate maneuver $m \in \mathcal{M}$ against all physics safety conditions and all policy constraints. A maneuver is \emph{feasible} if and only if it satisfies every hard constraint. Among feasible maneuvers, the fuser selects the one with the highest confidence score, computed as:
+\begin{equation}
+    c(m) = c_{\text{base}} + c_{\text{margin}}(m) + c_{\text{TTC}}(m) - c_{\text{penalty}}(m)
+\end{equation}
+where $c_{\text{base}} = 0.5$, $c_{\text{margin}}$ rewards distance from hard-limit boundaries, $c_{\text{TTC}}$ rewards longer time-to-collision, and $c_{\text{penalty}}$ penalizes aggressive maneuvers in adverse conditions.
+
+If no maneuver is feasible, the system defaults to emergency stop---the safest fallback. The full decision includes a human-readable explanation tracing the physics analysis, policy constraints, and fusion rationale.
+
+\subsection{Benchmark Design}
+
+We generate 600 synthetic scenarios parameterized across 5 weather conditions $\times$ 5 road types $\times$ 3 difficulty levels $\times$ 8 replicates. Each scenario includes ground-truth physics quantities and the correct hybrid decision. Scenarios are classified into four reasoning modes:
+\begin{itemize}
+    \item \textbf{Simple}: No lead vehicle, clear weather, standard road.
+    \item \textbf{Physics-only}: Lead vehicle present, clear weather.
+    \item \textbf{Policy-only}: No lead vehicle, adverse weather or special road.
+    \item \textbf{Hybrid}: Lead vehicle present \emph{and} adverse conditions---requiring simultaneous physics and policy reasoning.
+\end{itemize}
+
+We compare four approaches: (1)~\textbf{Monolithic LLM}: direct prompting; (2)~\textbf{CoT LLM}: chain-of-thought prompting~\cite{wei2022chain}; (3)~\textbf{Tool-Aug.\ LLM}: LLM with physics calculator tool~\cite{schick2023toolformer}; and (4)~\textbf{Hybrid (Ours)}: the proposed decomposed architecture.
+
+%%% ===================================================================
+\section{Results}
+%%% ===================================================================
+
+\subsection{Overall Decision Accuracy}
+
+Table~\ref{tab:accuracy_mode} presents decision accuracy broken down by reasoning mode. Our hybrid framework achieves 88.3\% overall accuracy, compared to 57.5\% (Monolithic LLM), 62.3\% (CoT), and 73.2\% (Tool-Augmented).
+
+\begin{table}[t]
+\centering
+\caption{Decision accuracy by reasoning mode. The hybrid category---requiring simultaneous physics and policy reasoning---is the most challenging. Our decomposed framework shows the largest advantage precisely on these scenarios, while maintaining strong performance on single-mode tasks.}
+\label{tab:accuracy_mode}
+\begin{tabular}{lcccc}
+\toprule
+Mode & Mono.\ LLM & CoT & Tool-Aug. & Hybrid (Ours) \\
+\midrule
+Simple       & 0.750 & 0.833 & 1.000 & 1.000 \\
+Physics-only & 0.700 & 0.767 & 0.917 & 0.967 \\
+Policy-only  & 0.859 & 0.797 & 0.656 & 0.938 \\
+Hybrid       & 0.515 & 0.575 & 0.711 & 0.862 \\
+\midrule
+\textbf{Overall} & \textbf{0.575} & \textbf{0.623} & \textbf{0.732} & \textbf{0.883} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The most notable finding is the performance pattern on hybrid-mode scenarios (Figure~\ref{fig:accuracy_mode}). Monolithic LLMs achieve only 51.5\% on these scenarios---near chance for a 7-way classification---while our framework reaches 86.2\%. The tool-augmented LLM reaches 71.1\% on hybrid scenarios but drops to 65.6\% on policy-only scenarios, suggesting that tool augmentation helps physics but can interfere with policy reasoning. Our approach avoids this trade-off by keeping the two reasoning modes architecturally separate.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig1_accuracy_by_mode.png}
+    \caption{Decision accuracy by reasoning mode. The monolithic LLM and CoT baselines degrade sharply on hybrid scenarios. The tool-augmented LLM improves on physics but degrades on policy. Our decomposed framework maintains high accuracy across all modes.}
+    \label{fig:accuracy_mode}
+\end{figure}
+
+\subsection{Difficulty Scaling}
+
+Figure~\ref{fig:difficulty} and Table~\ref{tab:difficulty} show how accuracy degrades with increasing scenario difficulty. All methods degrade, but the gap between our framework and baselines \emph{widens} at higher difficulty: from 23.0 pp advantage over Monolithic LLM on easy scenarios to 37.5 pp on hard scenarios. This indicates that decomposed reasoning is particularly valuable when scenarios involve tight constraint margins and compounding uncertainty.
+
+\begin{table}[t]
+\centering
+\caption{Decision accuracy by difficulty level. The gap between our framework and baselines widens at higher difficulty, demonstrating that decomposed reasoning provides increasing advantage as constraints tighten.}
+\label{tab:difficulty}
+\begin{tabular}{lcccc}
+\toprule
+Difficulty & Mono.\ LLM & CoT & Tool-Aug. & Hybrid (Ours) \\
+\midrule
+Easy   & 0.710 & 0.755 & 0.850 & 0.940 \\
+Medium & 0.590 & 0.620 & 0.740 & 0.910 \\
+Hard   & 0.425 & 0.495 & 0.605 & 0.800 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig2_accuracy_by_difficulty.png}
+    \caption{Accuracy degradation with increasing difficulty. All methods degrade, but the advantage of our decomposed framework widens from 23.0 pp (easy) to 37.5 pp (hard) over the monolithic LLM.}
+    \label{fig:difficulty}
+\end{figure}
+
+\subsection{Physics Computation Accuracy}
+
+Table~\ref{tab:physics} reports mean absolute errors for braking distance and time-to-collision estimation. Our deterministic physics engine with interval arithmetic achieves 0.9\,m MAE for braking distance, compared to 12.2\,m for the monolithic LLM---a 13$\times$ reduction. For TTC, errors drop from 10.39\,s to 1.03\,s. The tool-augmented LLM achieves 2.6\,m braking distance MAE, confirming that external computation helps but does not eliminate errors introduced during tool invocation and result interpretation.
+
+\begin{table}[t]
+\centering
+\caption{Physics computation errors (mean $\pm$ std). Deterministic interval arithmetic in our framework reduces braking distance error by 13$\times$ and TTC error by 10$\times$ compared to monolithic LLMs.}
+\label{tab:physics}
+\begin{tabular}{lcccc}
+\toprule
+Metric & Mono.\ LLM & CoT & Tool-Aug. & Hybrid (Ours) \\
+\midrule
+Brake MAE (m) & $12.2 \pm 24.1$ & $8.7 \pm 16.0$ & $2.6 \pm 5.1$ & $\mathbf{0.9 \pm 1.5}$ \\
+TTC MAE (s) & $10.4 \pm 28.1$ & $7.5 \pm 18.7$ & $2.8 \pm 6.9$ & $\mathbf{1.0 \pm 2.6}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:physics_errors} visualizes these errors. The high variance of monolithic LLM physics estimates (std = 24.1\,m for braking distance) is particularly concerning for safety-critical applications where worst-case performance matters more than average performance.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig3_physics_errors.png}
+    \caption{Physics computation errors with standard deviation bars. Left: braking distance MAE. Right: time-to-collision MAE. Our deterministic engine achieves the lowest error and variance. Note the high variance of LLM-based estimates, which is unacceptable for safety-critical decisions.}
+    \label{fig:physics_errors}
+\end{figure}
+
+\subsection{Weather and Road Type Analysis}
+
+Figure~\ref{fig:heatmap} shows a heatmap of decision accuracy across weather conditions and road types. The monolithic LLM shows pronounced degradation under ice ($\mu \in [0.1, 0.25]$) and snow ($\mu \in [0.2, 0.35]$), where physics computation is most challenging due to the wide friction uncertainty intervals. Our framework maintains more uniform accuracy because the physics engine handles uncertainty propagation deterministically, and the policy engine applies weather-appropriate margins automatically.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig4_heatmap.png}
+    \caption{Accuracy heatmap across weather conditions and road types. Left: Monolithic LLM shows pronounced degradation under ice and snow, especially on school zones and construction. Right: Our hybrid framework maintains more uniform accuracy across all conditions.}
+    \label{fig:heatmap}
+\end{figure}
+
+Figure~\ref{fig:weather_physics} disaggregates physics errors by weather condition, revealing that the monolithic LLM's braking distance errors are most severe under ice conditions (where friction intervals are widest). Our framework's errors remain consistently low across all conditions because the physics engine applies interval arithmetic regardless of parameter ranges.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig6_weather_physics.png}
+    \caption{Braking distance error by weather condition. The monolithic LLM exhibits the largest errors under ice and snow, precisely where accurate physics matters most. Our framework maintains consistently low errors across all weather conditions.}
+    \label{fig:weather_physics}
+\end{figure}
+
+\subsection{Failure Mode Analysis}
+
+We analyze the remaining errors of our framework (11.7\% overall error rate). The most common failure modes are: (1) \textbf{Parsing ambiguity} (38\% of errors): the scenario parser extracts incorrect speed or distance estimates from ambiguous descriptions. (2) \textbf{Tight margins} (31\%): the scenario has constraints so tight that small uncertainties in the interval bounds flip the feasibility of the correct maneuver. (3) \textbf{Missing policy rules} (21\%): the policy database lacks a rule needed for the specific scenario combination. (4) \textbf{Confidence calibration} (10\%): the correct maneuver is feasible but ranks below another due to confidence scoring.
+
+These failure modes suggest clear improvement paths: better LLM-based parsing with structured output validation, expanded policy databases, and learned confidence calibration from scenario data.
+
+%%% ===================================================================
+\section{Conclusion}
+%%% ===================================================================
+
+We have presented a decomposed hybrid reasoning architecture that addresses the open problem identified by Ferrag et al.~\cite{ferrag2026agentdrive}: current LLMs cannot reliably fuse physics-based numerical reasoning with policy-based symbolic reasoning for autonomous driving. Our key insight is that this fusion should be \emph{architecturally decomposed} rather than left as an implicit capability of a monolithic model.
+
+The architecture separates scenario parsing (LLM), physics computation (interval arithmetic engine), policy evaluation (structured rule database with soft margins), and constraint fusion (priority-weighted satisfaction) into dedicated modules, each operating in its area of strength. Evaluation on 600 synthetic scenarios demonstrates a 34.7 percentage-point improvement over monolithic LLMs on hybrid-reasoning tasks, with physics computation errors reduced by 13$\times$.
+
+Our framework has three limitations that suggest future work. First, the scenario parser relies on keyword matching; replacing it with an LLM with constrained decoding would improve robustness to diverse language. Second, the policy database requires manual construction; learning policy constraints from driving regulations and expert demonstrations could scale coverage. Third, our evaluation uses synthetic scenarios; validation on the full AgentDrive benchmark~\cite{ferrag2026agentdrive} and real-world driving data is needed to confirm generalization.
+
+More broadly, our results suggest that the path to reliable hybrid reasoning in safety-critical domains lies not in larger monolithic models but in architectures that decompose reasoning into specialized modules with verified interfaces. This principle---delegate to the specialist, compose at the boundary---may apply beyond autonomous driving to any domain requiring the fusion of quantitative computation with qualitative rules under uncertainty.
+
+%%% ===================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

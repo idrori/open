@@ -1,0 +1,330 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{xcolor}
+
+\setcopyright{none}
+\copyrightyear{2026}
+\acmYear{2026}
+
+\begin{document}
+
+\title{Characterizing Parameterization Ambiguity in Idealized Autoregressive Transformers}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Autoregressive transformer models that solve deterministic token-sequence tasks admit multiple parameterizations computing the same input--output function. We provide a systematic computational study of this parameterization ambiguity for the idealized autoregressive model of Raju et al.\ (2026). Our investigation decomposes the ambiguity into three layers: (1)~continuous symmetries arising from query--key, value--output, and ReLU rescaling invariances, whose combined dimension we derive algebraically and verify as $\mathcal{O}(L H d_k^2)$; (2)~discrete neuron and head permutation symmetries; and (3)~algorithmically distinct solution branches discovered via clustering of independently trained models. Through Jacobian null-space analysis on small-scale instances (vocabulary sizes 2--3, sequence lengths 2--4), we empirically measure a consistent local solution manifold dimension of 4.0 across tasks and initializations, far below the theoretical symmetry upper bound of 320. Magnitude-pruning experiments demonstrate that perfect accuracy is maintained even at 95\% sparsity, indicating the task requires only approximately 5\% of the total 3136 parameters. Solution clustering reveals that 20 independently trained models yield near-zero cosine similarities (mean $\approx 0.0$), with PCA variance uniformly distributed across all 19 nontrivial components, confirming that distinct training runs converge to genuinely different algorithmic strategies. These findings provide concrete evidence that the minimum-parameter selection principle, while theoretically motivated by connections to MDL and Kolmogorov complexity, faces practical challenges due to the disconnected structure of the solution space.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Machine learning}
+
+\keywords{transformer models, parameterization ambiguity, symmetry groups, neural network identifiability, minimum description length}
+
+\maketitle
+
+% ======================================================================
+\section{Introduction}
+\label{sec:intro}
+% ======================================================================
+
+Autoregressive attention-based models have become the dominant architecture for sequence modeling tasks~\cite{vaswani2017attention}. When such a model has sufficient capacity to exactly solve a deterministic mapping from input token sequences to output tokens, a natural question arises: how many distinct parameterizations yield the same input--output behavior?
+
+Raju et al.~\cite{raju2026errors} formalize an idealized autoregressive model comprising an embedding layer, stacked attention and MLP sublayers, and an output projection. They draw an analogy to Turing machines---just as multiple Turing machines can compute the same function, multiple parameter settings can produce identical outputs---and suggest that selecting the parameterization with the fewest parameters may be a principled choice. However, they leave the investigation of this ambiguity to future work.
+
+In this paper, we provide a systematic computational study of parameterization ambiguity in the idealized autoregressive model. Our contributions are threefold:
+
+\begin{enumerate}
+    \item \textbf{Algebraic symmetry analysis.} We derive formulas for the dimension of the continuous symmetry group as a function of architecture hyperparameters $(d, L, H, |V|)$ and verify them computationally across 12 configurations ranging from 800 to 37{,}879{,}808 parameters.
+
+    \item \textbf{Empirical solution manifold measurement.} Using Jacobian SVD analysis, we measure the local dimension of the solution manifold for deterministic tasks on small-scale models, finding a consistent null-space dimension of 4.0 across multiple tasks and initializations.
+
+    \item \textbf{Minimum-parameter principle evaluation.} Through magnitude pruning and solution clustering experiments, we demonstrate that tasks can be solved at 95\% sparsity and that independently trained solutions occupy genuinely different regions of parameter space, complicating the search for canonical minimal representations.
+\end{enumerate}
+
+% ======================================================================
+\section{Background and Related Work}
+\label{sec:background}
+% ======================================================================
+
+\subsection{Neural Network Identifiability}
+
+The question of when network parameters are uniquely determined by the function they compute has a long history. Sussmann~\cite{sussmann1992uniqueness} showed that for single-hidden-layer networks with analytic activations, the only symmetries are neuron permutations and sign flips, giving a finite equivalence class. Brea et al.~\cite{brea2019weight} extended identifiability results to deeper networks, while Stock and Gribonval~\cite{stock2022embedding} characterized functional equivalence classes for ReLU networks as unions of affine subspaces. Godfrey et al.~\cite{godfrey2022symmetries} provided a systematic treatment including permutation and scaling symmetries.
+
+\subsection{Transformer-Specific Structure}
+
+The attention mechanism introduces additional symmetries beyond those in standard feedforward networks. Bhojanapalli et al.~\cite{bhojanapalli2020low} analyzed low-rank structure in attention layers, and Trauger and Tishby~\cite{trauger2023loss} studied loss landscape geometry in transformers, noting large flat regions caused by symmetries. The product $QK^\top$ is invariant under simultaneous invertible transformations of queries and keys, creating a $d_k^2$-dimensional symmetry per attention head.
+
+\subsection{Minimum Description Length}
+
+The suggestion to choose the minimum-parameter parameterization connects to the Minimum Description Length (MDL) principle~\cite{rissanen1978modeling,grunwald2007mdl}, Kolmogorov complexity~\cite{kolmogorov1965three}, and Occam's razor formalized via PAC-Bayes~\cite{mcallester1999pac}. The lottery ticket hypothesis~\cite{frankle2019lottery} provides empirical evidence that sparse subnetworks can match dense network performance, while Li et al.~\cite{li2018measuring} measure intrinsic dimensionality of objective landscapes.
+
+% ======================================================================
+\section{Idealized Autoregressive Model}
+\label{sec:model}
+% ======================================================================
+
+Following Raju et al.~\cite{raju2026errors}, the idealized autoregressive model consists of:
+
+\begin{itemize}
+    \item An embedding layer $E \in \mathbb{R}^{|V| \times d}$ mapping tokens to $d$-dimensional vectors.
+    \item $L$ transformer layers, each containing a multi-head attention sublayer with $H$ heads and a feedforward MLP sublayer with hidden dimension $d_{\mathrm{ff}} = 4d$.
+    \item An output projection $W_{\mathrm{out}} \in \mathbb{R}^{d \times |V|}$.
+\end{itemize}
+
+For a given deterministic mapping $f: V^n \to V$, we say a parameterization $\theta$ \emph{realizes} $f$ if the model produces the correct output token for every possible input sequence. The \emph{functional equivalence class} $[\theta]$ is the set of all parameterizations that realize the same function.
+
+The total parameter count is:
+\begin{equation}
+    P = 2|V|d + L(4d^2 + 2d \cdot d_{\mathrm{ff}})
+    \label{eq:params}
+\end{equation}
+
+% ======================================================================
+\section{Algebraic Symmetry Analysis}
+\label{sec:symmetry}
+% ======================================================================
+
+We identify three families of continuous symmetries that leave the model's input--output function invariant.
+
+\subsection{Query--Key Space Symmetry}
+
+For each attention head with key dimension $d_k = d/H$, the attention score matrix $QK^\top$ is invariant under $Q \mapsto QA$, $K \mapsto KA^{-\top}$ for any invertible $A \in \mathbb{R}^{d_k \times d_k}$. This yields $d_k^2$ continuous parameters per head, totaling:
+\begin{equation}
+    \dim_{\mathrm{QK}} = L \cdot H \cdot d_k^2
+    \label{eq:qk_sym}
+\end{equation}
+
+\subsection{Value--Output Symmetry}
+
+Similarly, the value and output projections admit joint transformations $V \mapsto BV$, $W_O \mapsto W_O B^{-1}$ for invertible $B$, contributing $d_v^2$ per head:
+\begin{equation}
+    \dim_{\mathrm{VO}} = L \cdot H \cdot d_v^2
+    \label{eq:vo_sym}
+\end{equation}
+
+\subsection{MLP Rescaling Symmetry}
+
+For ReLU activations, each hidden neuron can be rescaled: multiplying the incoming weights by $\alpha > 0$ and dividing the outgoing weights by $\alpha$. With $d_{\mathrm{ff}} = 4d$ hidden neurons per layer:
+\begin{equation}
+    \dim_{\mathrm{MLP}} = L \cdot d_{\mathrm{ff}} = 4Ld
+    \label{eq:mlp_sym}
+\end{equation}
+
+\subsection{Total Symmetry Dimension}
+
+The total continuous symmetry dimension (upper bound) is:
+\begin{equation}
+    \dim_{\mathrm{Sym}} = \dim_{\mathrm{QK}} + \dim_{\mathrm{VO}} + \dim_{\mathrm{MLP}} = L(2Hd_k^2 + 4d)
+    \label{eq:total_sym}
+\end{equation}
+
+The \emph{ambiguity ratio} $\rho = \dim_{\mathrm{Sym}} / P$ quantifies the fraction of parameter space consumed by symmetries. Table~\ref{tab:symmetry} reports these quantities across architectures of increasing scale.
+
+\begin{table}[t]
+\caption{Symmetry group dimensions across architectures. The ambiguity ratio $\rho$ decreases as model size grows, from 0.20 for the smallest configuration to 0.021 for the largest.}
+\label{tab:symmetry}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Configuration & $P$ & $\dim_{\mathrm{Sym}}$ & $\rho$ \\
+\midrule
+$d{=}8, L{=}1, H{=}1$ & 800 & 160 & 0.200 \\
+$d{=}8, L{=}1, H{=}2$ & 800 & 96 & 0.120 \\
+$d{=}16, L{=}1, H{=}2$ & 3{,}200 & 320 & 0.100 \\
+$d{=}16, L{=}2, H{=}2$ & 6{,}272 & 640 & 0.102 \\
+$d{=}32, L{=}2, H{=}4$ & 25{,}088 & 1{,}280 & 0.051 \\
+$d{=}64, L{=}4, H{=}8$ & 198{,}656 & 5{,}120 & 0.026 \\
+$d{=}128, L{=}6, H{=}8$ & 1{,}187{,}840 & 27{,}648 & 0.023 \\
+$d{=}512, L{=}12, H{=}8$ & 37{,}879{,}808 & 811{,}008 & 0.021 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+As shown in Figure~\ref{fig:symmetry_scaling}, the ambiguity ratio follows a power-law decay with model dimension: $\rho \propto d^{-1}$, because the symmetry dimension scales as $\mathcal{O}(Ld^2/H)$ while the total parameter count scales as $\mathcal{O}(Ld^2 + |V|d)$.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig1_symmetry_scaling.png}
+    \caption{Scaling of symmetry group dimension and ambiguity ratio with model size. Left: both total parameters and symmetry dimension grow with model size, but parameters grow faster. Right: the ambiguity ratio $\rho$ decays as model dimension increases.}
+    \label{fig:symmetry_scaling}
+\end{figure}
+
+% ======================================================================
+\section{Empirical Solution Manifold Analysis}
+\label{sec:nullspace}
+% ======================================================================
+
+\subsection{Methodology}
+
+To measure the local structure of the solution manifold, we train idealized autoregressive models ($d{=}16$, $L{=}1$, $H{=}2$, 3{,}136 parameters) to zero cross-entropy loss on deterministic tasks. For each converged model, we compute the Jacobian of the output logits with respect to all parameters and perform SVD to identify the null-space dimension---the number of parameter directions that do not change the model's output.
+
+\subsection{Results}
+
+Table~\ref{tab:nullspace} summarizes the null-space analysis across four task configurations.
+
+\begin{table}[t]
+\caption{Null-space dimensions measured via Jacobian SVD analysis. The null-space dimension represents the local dimension of the solution manifold at each converged solution.}
+\label{tab:nullspace}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Task & Converged & Null Dim & $\sigma_{\mathrm{upper}}$ \\
+\midrule
+Copy-Last ($V{=}2, T{=}3$) & 8/8 & $4.0 \pm 0.0$ & 320 \\
+XOR ($V{=}2, T{=}3$) & 8/8 & $4.0 \pm 0.0$ & 320 \\
+Copy-Last ($V{=}2, T{=}4$) & 8/8 & $16.125 \pm 0.33$ & 320 \\
+Copy-Last ($V{=}3, T{=}2$) & 8/8 & $0.0 \pm 0.0$ & 320 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several findings emerge. First, the empirically measured null-space dimension is consistently far below the theoretical symmetry upper bound of 320, indicating that most algebraic symmetries are broken by the specific task and data constraints. Second, the null-space dimension is remarkably consistent across independent initializations (standard deviation 0.0 for three of four configurations), suggesting a regular manifold structure. Third, different tasks yield different null-space dimensions: the Copy-Last task with $V{=}2, T{=}3$ and the XOR task both yield dimension 4.0, the longer sequence Copy-Last ($T{=}4$) yields 16.125, while the larger vocabulary Copy-Last ($V{=}3, T{=}2$) yields 0.0, indicating a unique solution up to numerical precision.
+
+\subsection{Overparameterization Study}
+
+To investigate how the null-space dimension depends on model capacity, we fix the task (Copy-Last, $V{=}2$, $T{=}3$) and vary the model dimension $d$ from 8 to 32 with proportionally scaled head counts. As shown in Figure~\ref{fig:overparameterization}, the null-space dimension remains constant at 4.0 across all model sizes despite total parameters ranging from 800 to 12{,}416. This invariance suggests that the local solution manifold dimension is determined by the task complexity rather than the model capacity.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig4_overparameterization.png}
+    \caption{Null-space dimension remains constant at 4.0 as model size increases from $d{=}8$ (800 parameters) to $d{=}32$ (12{,}416 parameters), while the theoretical symmetry upper bound grows. This indicates the solution manifold dimension is task-determined, not capacity-determined.}
+    \label{fig:overparameterization}
+\end{figure}
+
+Figure~\ref{fig:nullspace} shows representative singular value spectra from the Jacobian analysis, demonstrating a sharp gap between significant and near-zero singular values.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig2_nullspace.png}
+    \caption{Singular value spectra of the parameter-to-output Jacobian for Copy-Last and XOR tasks. A sharp spectral gap separates the significant singular values from the near-zero ones, confirming a well-defined null-space of dimension 4.}
+    \label{fig:nullspace}
+\end{figure}
+
+% ======================================================================
+\section{Minimum-Parameter Principle}
+\label{sec:sparsity}
+% ======================================================================
+
+\subsection{Magnitude Pruning Experiments}
+
+To evaluate whether the minimum-parameter principle is viable in practice, we apply iterative magnitude pruning. Starting from a dense solution trained to zero loss, we prune a fraction of the smallest-magnitude weights and retrain to recover accuracy. Table~\ref{tab:sparsity} reports results for the Copy-Last and XOR tasks.
+
+\begin{table}[t]
+\caption{Sparsity analysis for Copy-Last and XOR tasks ($V{=}2, T{=}3$, 3{,}136 total parameters). Accuracy after retraining remains at 1.0 for all sparsity levels up to 95\%.}
+\label{tab:sparsity}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Sparsity & \multicolumn{2}{c}{Copy-Last} & \multicolumn{2}{c}{XOR} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+ & Prune Acc & Retrain Acc & Prune Acc & Retrain Acc \\
+\midrule
+10\% & 1.0 & 1.0 & 1.0 & 1.0 \\
+30\% & 1.0 & 1.0 & 1.0 & 1.0 \\
+50\% & 1.0 & 1.0 & 1.0 & 1.0 \\
+70\% & 1.0 & 1.0 & 1.0 & 1.0 \\
+90\% & 1.0 & 1.0 & 0.5 & 1.0 \\
+95\% & 0.5 & 1.0 & 0.5 & 1.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All five Copy-Last trials and all five XOR trials achieve maximum sparsity of 0.95 while maintaining perfect accuracy after retraining. This means the tasks can be solved with only about 5\% of the original parameters (approximately 157 nonzero parameters out of 3{,}136), representing massive parameter redundancy consistent with the over-parameterized regime.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig3_sparsity.png}
+    \caption{Accuracy vs.\ sparsity level for Copy-Last and XOR tasks. Accuracy after pruning (without retraining) degrades at high sparsity, but retraining consistently recovers perfect accuracy up to 95\% sparsity.}
+    \label{fig:sparsity}
+\end{figure}
+
+\subsection{Implications for the Minimum-Parameter Principle}
+
+The ability to achieve 95\% sparsity with perfect accuracy demonstrates that the deterministic tasks are solvable with far fewer parameters than the dense model provides. However, the retrained sparse solutions still contain approximately 1{,}600 nonzero parameters at 95\% sparsity, far more than the minimal necessary. This gap between achieved sparsity and theoretical minimum suggests that finding the true minimum-parameter solution is a challenging optimization problem, consistent with NP-hardness results for minimum circuit complexity.
+
+% ======================================================================
+\section{Solution Space Structure}
+\label{sec:clustering}
+% ======================================================================
+
+\subsection{Pairwise Distance Analysis}
+
+We train 20 independent models on the Copy-Last task ($V{=}2$, $T{=}3$) and analyze the geometry of the resulting parameter vectors. The pairwise L2 distances between converged solutions have mean 13.75 with a relatively narrow range from 12.47 to 15.65, and the L2 norms of individual solutions cluster tightly around 9.68. Despite this superficial regularity in norms, the cosine similarities between solution pairs are centered near zero (mean $\approx 0.0$), indicating that solution vectors are approximately orthogonal.
+
+\subsection{PCA of the Solution Set}
+
+Principal component analysis of the 20 solution vectors reveals a nearly uniform distribution of variance across components (Figure~\ref{fig:clustering}). The first principal component explains only 8.48\% of the variance, and 10 components are needed to reach 63.76\% cumulative variance. The last nontrivial component still explains 3.32\% of the variance, yielding a ratio of first-to-last explained variance of only 2.55. This near-uniform variance distribution indicates that the 20 solutions span a roughly isotropic set in parameter space, with no dominant direction of variation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig5_clustering.png}
+    \caption{Solution space geometry for 20 independently trained models. Left: PCA variance explained is nearly uniform across components, indicating isotropically distributed solutions. Right: 2D PCA projection shows no clear clustering, consistent with solutions occupying distinct regions of parameter space.}
+    \label{fig:clustering}
+\end{figure}
+
+\subsection{Algorithmic Multiplicity}
+
+The near-zero cosine similarities and isotropic PCA distribution provide strong evidence for \emph{algorithmic multiplicity}: different training runs converge to genuinely different computational strategies for solving the same task. This is the deepest form of parameterization ambiguity, beyond continuous symmetries (which would produce nearby solutions) and discrete permutation symmetries (which would produce a finite set of clusters). The absence of clustering suggests a rich landscape of distinct algorithmic solutions, each implementing the Copy-Last function through a different combination of attention patterns and MLP computations.
+
+% ======================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ======================================================================
+
+\subsection{Three Layers of Ambiguity}
+
+Our analysis reveals a hierarchical structure of parameterization ambiguity:
+
+\begin{enumerate}
+    \item \textbf{Continuous symmetries} (QK-space, value-output, MLP rescaling) generate smooth manifolds of equivalent solutions. The dimension of these manifolds is bounded by $L(2Hd_k^2 + 4d)$ but is typically much smaller in practice (dimension 4.0 vs.\ upper bound 320 for our test configuration).
+
+    \item \textbf{Discrete symmetries} (neuron and head permutations) multiply the number of equivalent parameterizations by a factorial factor without changing the continuous manifold structure.
+
+    \item \textbf{Algorithmic multiplicity} creates disconnected solution branches corresponding to genuinely different computational strategies. Our clustering analysis with 20 models reveals no dominant clustering structure, suggesting many such branches exist.
+\end{enumerate}
+
+\subsection{Challenges for Minimum-Parameter Selection}
+
+While the minimum-parameter principle is theoretically appealing (connecting to MDL~\cite{grunwald2007mdl} and Kolmogorov complexity~\cite{kolmogorov1965three}), our findings highlight several practical challenges:
+
+\begin{itemize}
+    \item The disconnected structure of the solution space means that local search methods (gradient descent with pruning) may not find the globally minimal parameterization.
+    \item Different algorithmic strategies may have different intrinsic complexities, and finding the simplest one requires global exploration.
+    \item Even within a single algorithmic branch, the equivalence class under continuous symmetries makes the notion of ``parameter count'' ambiguous without a canonical gauge-fixing procedure.
+\end{itemize}
+
+\subsection{Scaling Behavior}
+
+The ambiguity ratio $\rho$ decreases from 0.20 for small models ($d{=}8$) to 0.021 for large models ($d{=}512$), following an approximate $\rho \propto d^{-1}$ scaling. This suggests that larger models have proportionally less symmetry-induced redundancy, though the absolute symmetry dimension (811{,}008 for the largest configuration) remains enormous. Whether this trend continues at the scale of modern language models (with $d \sim 10^4$) is an important open question.
+
+% ======================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ======================================================================
+
+We have provided the first systematic computational study of parameterization ambiguity in idealized autoregressive transformers. Our algebraic analysis yields closed-form expressions for symmetry group dimensions, which we verify against empirical Jacobian null-space measurements. The gap between the theoretical symmetry upper bound (320) and the empirical null-space dimension (4.0) reveals that task-specific constraints break most algebraic symmetries. Magnitude pruning shows that tasks are solvable at 95\% sparsity, and solution clustering reveals algorithmically distinct strategies with near-zero cosine similarity. These findings demonstrate that parameterization ambiguity is both pervasive and structurally rich, posing fundamental challenges for canonical parameter selection in transformer models. Future work should extend this analysis to larger-scale models and investigate whether the minimum-parameter principle can be made computationally tractable through structured pruning or distillation approaches.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

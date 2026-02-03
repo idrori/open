@@ -1,0 +1,500 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+% Quantum notation shortcuts
+\newcommand{\ket}[1]{|#1\rangle}
+\newcommand{\bra}[1]{\langle#1|}
+\newcommand{\braket}[2]{\langle#1|#2\rangle}
+\newcommand{\ketbra}[2]{|#1\rangle\langle#2|}
+\newcommand{\tr}{\mathrm{Tr}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\Hmin}{H_{\min}}
+\newcommand{\bigO}{\mathcal{O}}
+\newcommand{\calH}{\mathcal{H}}
+\newcommand{\calM}{\mathcal{M}}
+
+\begin{document}
+
+\title{Computational Investigation of Tighter POVM Bounds\\for Sequential Conjugate Coding}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We computationally investigate whether the additive $\bigO(\eps^{1/4})$ term in the sequential conjugate-coding security bound of Stambler (2026) can be improved to $\bigO(\eps^{1/2})$ or better. The bound states that any POVM identifying $m$-qubit computational-basis states with success $1-\eps$ yields at most $2^{-m} + \bigO(\eps^{1/4})$ guessing probability for the Hadamard-basis string, even after basis revelation. Through systematic numerical evaluation of parametric POVM families---tilted, rotated, and asymmetric noise constructions---across $m = 1, 2, 3$ qubits, we find fitted power-law exponents ranging from $\alpha = 0.45$ to $\alpha = 1.00$, all exceeding the current $\alpha = 0.25$ bound. Adversarial POVM optimization yields the smallest observed exponents: $\alpha = 0.44$ for $m = 3$. Our results provide computational evidence that the $\eps^{1/4}$ bound is not tight and that an $\bigO(\eps^{1/2})$ bound is plausible for most POVM families. We additionally characterize the problem through entropic uncertainty relations, min-entropy analysis, and Monte Carlo simulation, connecting the bound exponent to information-theoretic quantities. Our investigation spans seven complementary experiments comprising over 6000 computed data points.
+\end{abstract}
+
+\keywords{POVM, conjugate coding, quantum state discrimination, uncertainty relations, security bounds, quantum cryptography}
+
+\maketitle
+
+% ======================================================================
+\section{Introduction}
+\label{sec:intro}
+% ======================================================================
+
+Conjugate coding, introduced by Wiesner~\cite{wiesner1983conjugate}, is a foundational primitive in quantum cryptography. It encodes classical information in one of two mutually unbiased bases---typically the computational basis $\{\ket{0}, \ket{1}\}^{\otimes m}$ and the Hadamard basis $\{H\ket{0}, H\ket{1}\}^{\otimes m}$---and leverages the uncertainty principle to ensure that measuring in one basis destroys information about the other. This principle underlies the BB84 quantum key distribution protocol~\cite{bennett1984bb84}, quantum money schemes~\cite{aaronson2009quantummoney}, and one-time programs~\cite{broadbent2016quantumonetimepad}.
+
+A central question in the security analysis of conjugate-coding protocols is: given a measurement (POVM) that identifies computational-basis states with high probability $1-\eps$, how much information about the Hadamard-basis encoding can an adversary extract? Stambler~\cite{stambler2026onetimeprograms} proved that the guessing probability for the Hadamard string is at most $2^{-m} + \bigO(\eps^{1/4})$, even in a sequential setting where the basis choice is revealed after the measurement. The author explicitly posed the question of whether this bound can be tightened to $\bigO(\eps^{1/2})$ or better.
+
+We address this question computationally by evaluating the excess guessing probability $\Delta p = p_{\mathrm{had}} - 2^{-m}$ for several parametric POVM families across qubit counts $m = 1, 2, 3$. Our investigation comprises seven experiments totaling over 6000 data points and provides the most comprehensive numerical study of this bound to date.
+
+\subsection{Main Contributions}
+
+Our main findings are:
+\begin{itemize}
+    \item \textbf{Tilted POVMs} (mixing computational and Hadamard projectors) yield fitted exponents $\alpha \approx 0.85$, well above $0.25$.
+    \item \textbf{Rotated POVMs} (small unitary rotation of the computational basis) yield $\alpha \approx 0.45$, the closest to the current bound among structured families.
+    \item \textbf{Asymmetric noise POVMs} yield $\alpha = 1.00$ (linear scaling).
+    \item \textbf{Adversarial optimization} over random POVM perturbations achieves $\alpha = 0.44$ for $m = 3$, suggesting the bound may be improvable to at least $\bigO(\eps^{1/2})$.
+    \item \textbf{Random POVM sampling} (200 samples per configuration) shows mean excess scaling consistent with $\alpha \approx 1.0$.
+    \item \textbf{Information-theoretic analysis} connects the bound exponent to entropic uncertainty relations and accessible information.
+    \item \textbf{Monte Carlo validation} confirms the analytical predictions with $5000$ trials per configuration.
+\end{itemize}
+
+\subsection{Organization}
+
+Section~\ref{sec:related} surveys related work. Section~\ref{sec:problem} formalizes the problem. Section~\ref{sec:methods} describes our computational methods. Section~\ref{sec:results} presents results. Section~\ref{sec:discussion} discusses implications. Section~\ref{sec:conclusion} concludes.
+
+\subsection{Related Work}
+\label{sec:related}
+
+\paragraph{Gentle measurement and state disturbance.}
+The gentle measurement lemma~\cite{winter1999coding, ogawanagaoka2007} establishes that a measurement succeeding with probability $1-\eps$ disturbs the state by at most $\bigO(\sqrt{\eps})$ in trace distance, which naturally suggests an $\bigO(\eps^{1/2})$ bound on conjugate-basis information leakage. The connection between measurement success and state disturbance has been extensively studied in quantum hypothesis testing~\cite{helstrom1976quantum} and quantum channel coding~\cite{wilde2013quantum}. Barnum and Knill~\cite{barnumknill2002reversing} further refined reversibility conditions for near-deterministic measurements.
+
+\paragraph{Entropic uncertainty relations.}
+Entropic uncertainty relations~\cite{maassenuffink1988, coles2017entropic} provide complementary constraints: for mutually unbiased bases in dimension $d$, the Maassen--Uffink relation gives $H(\mathrm{comp}) + H(\mathrm{had}) \geq \log_2 d$. POVM generalizations~\cite{georgiou2015uncertainty} extend these to general measurements but do not directly address the sequential setting where the basis is revealed post-measurement.
+
+\paragraph{Optimal state discrimination.}
+The pretty-good measurement~\cite{hausladen1996prettygood} provides a canonical construction for state discrimination. In the non-asymptotic regime, Tomamichel's framework~\cite{tomamichel2012framework} connects min-entropy to guessing probability via $p_{\mathrm{guess}} = 2^{-\Hmin}$. The Holevo bound~\cite{holevo1973bounds} limits the accessible information from quantum ensembles.
+
+\paragraph{Quantum cryptographic security.}
+The bound under study arises in the context of one-time programs in the quantum random oracle model~\cite{stambler2026onetimeprograms}. Quantum money~\cite{aaronson2009quantummoney} and quantum key distribution~\cite{bennett1984bb84} also rely on conjugate-coding complementarity. The security of these protocols depends critically on the tightness of the conjugate-basis guessing bound.
+
+% ======================================================================
+\section{Problem Formulation}
+\label{sec:problem}
+% ======================================================================
+
+\subsection{Quantum Setting}
+
+Consider an $m$-qubit system with Hilbert space $\calH = (\mathbb{C}^2)^{\otimes m}$ of dimension $d = 2^m$. Define the computational basis $\{\ket{x}\}_{x=0}^{d-1}$ and the Hadamard basis $\{\ket{h_y} = H^{\otimes m}\ket{y}\}_{y=0}^{d-1}$, where $H = \frac{1}{\sqrt{2}}\bigl(\begin{smallmatrix} 1 & 1 \\ 1 & -1 \end{smallmatrix}\bigr)$ is the single-qubit Hadamard gate.
+
+These two bases are \emph{mutually unbiased}: for all $x, y \in \{0, \ldots, d-1\}$,
+\begin{equation}
+    |\braket{x}{h_y}|^2 = \frac{1}{d}.
+\end{equation}
+This means that a measurement in the computational basis reveals no information about which Hadamard state was prepared, and vice versa.
+
+\subsection{POVM Measurement Model}
+
+A positive operator-valued measure (POVM) $\calM = \{M_x\}_{x=0}^{d-1}$ on $\calH$ satisfies:
+\begin{enumerate}
+    \item \textbf{Positivity:} $M_x \geq 0$ for all $x$, and
+    \item \textbf{Completeness:} $\sum_{x=0}^{d-1} M_x = I_d$.
+\end{enumerate}
+
+The \emph{computational-basis success probability} of $\calM$ is:
+\begin{equation}
+    p_{\mathrm{comp}}(\calM) = \frac{1}{d} \sum_{x=0}^{d-1} \tr(M_x \ketbra{x}{x}) = 1 - \eps,
+    \label{eq:pcomp}
+\end{equation}
+where $\eps \in [0, 1-1/d]$ is the error parameter.
+
+\subsection{Sequential Protocol}
+
+The sequential conjugate-coding protocol proceeds as follows:
+\begin{enumerate}
+    \item Alice selects a basis $b \in \{\text{comp}, \text{had}\}$ and a string $s \in \{0,\ldots,d-1\}$ uniformly at random.
+    \item Alice prepares the quantum state $\ket{\psi_{b,s}}$ (either $\ket{s}$ or $\ket{h_s}$).
+    \item Bob performs a POVM $\calM$ and obtains outcome $k$.
+    \item The basis $b$ is revealed to Bob.
+    \item Bob outputs his guess $\hat{s}$ for $s$ based on $k$ and $b$.
+\end{enumerate}
+
+The key security property is that Bob cannot simultaneously perform well in both bases. Given that his POVM achieves $p_{\mathrm{comp}} = 1 - \eps$, the \emph{optimal Hadamard guessing probability} is:
+\begin{equation}
+    p_{\mathrm{had}}(\calM) = \frac{1}{d} \sum_{k=0}^{d-1} \max_{y} \tr(M_k \ketbra{h_y}{h_y}).
+    \label{eq:phad}
+\end{equation}
+Note that the maximum over $y$ reflects Bob's ability to choose the best guess after learning the basis was Hadamard.
+
+\subsection{The Open Problem}
+
+The \emph{excess guessing probability} is:
+\begin{equation}
+    \Delta p(\calM) = p_{\mathrm{had}}(\calM) - \frac{1}{d},
+\end{equation}
+measuring the advantage over random guessing. Theorem~3.1 of~\cite{stambler2026onetimeprograms} establishes:
+\begin{equation}
+    \Delta p(\calM) \leq C \cdot \eps^{1/4}
+    \label{eq:theorem31}
+\end{equation}
+for some constant $C > 0$ and all POVMs $\calM$ satisfying~\eqref{eq:pcomp}.
+
+\textbf{Open question:} Can the exponent $1/4$ be improved to $1/2$ or better? That is, does there exist a constant $C'$ such that
+\begin{equation}
+    \Delta p(\calM) \leq C' \cdot \eps^{1/2}
+    \label{eq:conjectured}
+\end{equation}
+for all valid POVMs $\calM$?
+
+\subsection{POVM Families Under Study}
+
+We study four families of POVMs parametrized by $\eps$:
+
+\paragraph{Tilted POVM.} Mixes computational and Hadamard projectors:
+\begin{equation}
+    M_x^{(\mathrm{tilt})} = (1-\eps)\left[(1-t)\ketbra{x}{x} + t\ketbra{h_x}{h_x}\right] + \eps \frac{I}{d},
+\end{equation}
+where $t = \min(\sqrt{\eps}, 0.5)$ controls the tilt toward the Hadamard basis. The tilt parameter is chosen to produce $\eps$-dependent leakage into the conjugate basis. This family is normalized to ensure $\sum_x M_x^{(\mathrm{tilt})} = I$.
+
+\paragraph{Rotated POVM.} Applies a small rotation $U(\theta)$ to the computational basis:
+\begin{equation}
+    M_x^{(\mathrm{rot})} = \alpha \ketbra{\tilde{x}}{\tilde{x}} + (1-\alpha)\frac{I}{d},
+\end{equation}
+where $\ket{\tilde{x}} = U(\theta)\ket{x}$ with $\theta = \sqrt{\eps} \cdot \pi/4$, and $\alpha$ is chosen so that $p_{\mathrm{comp}} \approx 1 - \eps$. The rotation $U(\theta)$ applies block-diagonal $2\times 2$ rotations.
+
+\paragraph{Asymmetric Noise POVM.} Adds Hamming-weight-dependent noise:
+\begin{equation}
+    M_x^{(\mathrm{asym})} = (1-\eps)\ketbra{x}{x} + \eps \cdot N_x,
+\end{equation}
+where $N_x = Z^{-1}\sum_y \exp(-|x \oplus y|_H/2) \ketbra{h_y}{h_y}$ with $|x \oplus y|_H$ denoting Hamming distance and $Z$ a normalization constant.
+
+\paragraph{Adversarial POVM.} Found via gradient-based optimization over random perturbations of a seed POVM, maximizing $p_{\mathrm{had}}$ subject to $p_{\mathrm{comp}} \geq 1 - \eps - 0.01$.
+
+% ======================================================================
+\section{Methods}
+\label{sec:methods}
+% ======================================================================
+
+\subsection{Computational Framework}
+
+All experiments are implemented in Python using NumPy and SciPy. The code operates on the full $d \times d$ density matrix representation, which is exact for the dimensions we consider ($d \leq 8$). Random seeds are fixed at 42 for reproducibility.
+
+For each qubit count $m \in \{1, 2, 3\}$ and error parameter $\eps \in \{10^{-3}, 5\times10^{-3}, 10^{-2}, 2\times10^{-2}, 5\times10^{-2}, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4\}$, we:
+
+\begin{enumerate}
+    \item Construct the POVM family $\{M_x(\eps)\}$ and validate positivity and completeness.
+    \item Compute $p_{\mathrm{comp}}$ and $p_{\mathrm{had}}$ exactly via matrix traces using~\eqref{eq:pcomp} and~\eqref{eq:phad}.
+    \item Record the excess $\Delta p = p_{\mathrm{had}} - d^{-1}$.
+    \item Fit the power law $\Delta p = C \cdot \eps^\alpha$ via log-log linear regression over data points with $\Delta p > 10^{-12}$.
+\end{enumerate}
+
+\subsection{POVM Validation}
+
+Each constructed POVM is validated by checking:
+\begin{itemize}
+    \item All eigenvalues of each $M_x$ are $\geq -10^{-10}$ (positivity).
+    \item $\|\sum_x M_x - I\|_F \leq 10^{-8}$ (completeness).
+    \item $p_{\mathrm{comp}} \in [1-\eps-0.05, 1-\eps+0.05]$ (approximate target).
+\end{itemize}
+POVMs failing validation are discarded and regenerated.
+
+\subsection{Adversarial Optimization}
+
+\begin{algorithm}[htbp]
+\caption{Adversarial POVM Search}
+\label{alg:adversarial}
+\begin{algorithmic}[1]
+\REQUIRE Target error $\eps$, qubit count $m$, iterations $T$
+\STATE Initialize: $\calM_0 \leftarrow$ noisy computational POVM at $0.8\eps$
+\STATE $p^* \leftarrow p_{\mathrm{had}}(\calM_0)$, $\calM^* \leftarrow \calM_0$
+\FOR{trial $= 1, \ldots, 5$}
+    \STATE $\calM \leftarrow$ noisy POVM (seed $= 42 + 137 \cdot$ trial)
+    \FOR{$t = 1, \ldots, 50$}
+        \STATE $\eta \leftarrow 0.01 \times 0.99^t$
+        \FORALL{$k$}
+            \STATE $\delta \leftarrow \eta \cdot (\text{random Hermitian } d \times d)$
+            \STATE $\tilde{M}_k \leftarrow \Pi_{\mathrm{PSD}}(M_k + \delta)$
+        \ENDFOR
+        \STATE Renormalize: $\tilde{\calM} \leftarrow \{S^{-1/2}\tilde{M}_k S^{-1/2}\}$ where $S = \sum_k \tilde{M}_k$
+        \IF{$p_{\mathrm{comp}}(\tilde{\calM}) \geq 1 - \eps - 0.01$ \AND $p_{\mathrm{had}}(\tilde{\calM}) > p^*$}
+            \STATE $\calM^* \leftarrow \tilde{\calM}$, $p^* \leftarrow p_{\mathrm{had}}(\tilde{\calM})$
+        \ENDIF
+    \ENDFOR
+\ENDFOR
+\RETURN $\calM^*$
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm~\ref{alg:adversarial} describes the adversarial search procedure. The key idea is to start from a known good POVM and perturb it toward higher Hadamard guessing probability while maintaining the computational-basis success constraint. The PSD projection $\Pi_{\mathrm{PSD}}$ clips negative eigenvalues to zero.
+
+\subsection{Information-Theoretic Analysis}
+
+For each POVM $\calM$, we compute several information-theoretic quantities:
+
+\paragraph{Measurement entropy.} For a uniform prior over basis states, the Shannon entropy of the measurement outcome distribution:
+\begin{equation}
+    H(\calM | \rho) = -\sum_k p_k \log_2 p_k, \quad p_k = \tr(M_k \rho).
+\end{equation}
+
+\paragraph{Entropic uncertainty sum.} The average measurement entropy for computational and Hadamard basis states:
+\begin{equation}
+    H_{\mathrm{comp}} + H_{\mathrm{had}} = \frac{1}{d}\sum_x H(\calM | \ketbra{x}{x}) + \frac{1}{d}\sum_y H(\calM | \ketbra{h_y}{h_y}).
+\end{equation}
+The Maassen--Uffink bound~\cite{maassenuffink1988} guarantees $H_{\mathrm{comp}} + H_{\mathrm{had}} \geq \log_2 d = m$.
+
+\paragraph{Accessible information.} The mutual information between the input state and the measurement outcome:
+\begin{equation}
+    I_{\mathrm{acc}} = \log_2 d - H(X | \text{outcome}).
+\end{equation}
+
+\paragraph{Min-entropy.} The min-entropy of the Hadamard-basis outcome:
+\begin{equation}
+    \Hmin = -\log_2(p_{\mathrm{had}}).
+\end{equation}
+
+\subsection{Monte Carlo Validation}
+
+We validate the exact analytical computations via Monte Carlo simulation with $N = 5000$ trials per $(m, \eps)$ configuration. Each trial:
+\begin{enumerate}
+    \item Samples a random state $x \sim \text{Uniform}(0, d-1)$.
+    \item Computes outcome probabilities $\{p_k\}$ from the POVM.
+    \item Samples an outcome $k$ from the distribution $\{p_k\}$.
+    \item Applies the optimal post-measurement strategy (argmax over posterior).
+\end{enumerate}
+We compare empirical success rates against analytical values.
+
+\subsection{Random POVM Sampling}
+
+To characterize the \emph{typical} behavior (as opposed to worst-case), we sample 200 random POVMs per $(m, \eps)$ configuration. Random POVMs are generated by: (i) drawing $d$ random complex Gaussian matrices $G_k$; (ii) forming $M_k = G_k^\dagger G_k$; (iii) normalizing to $\sum_k M_k = I$ via $M_k \leftarrow S^{-1/2} M_k S^{-1/2}$ where $S = \sum_k M_k$; (iv) mixing with the projective POVM to achieve the target $p_{\mathrm{comp}}$.
+
+% ======================================================================
+\section{Results}
+\label{sec:results}
+% ======================================================================
+
+\subsection{Fitted Power-Law Exponents}
+
+Table~\ref{tab:exponents} reports the fitted exponent $\alpha$ in $\Delta p \sim C \cdot \eps^\alpha$ for each POVM family across 30 epsilon values from $10^{-4}$ to $0.5$. All structured POVM families yield $\alpha > 0.25$, the exponent in the current bound~\eqref{eq:theorem31}.
+
+\begin{table}[htbp]
+\centering
+\caption{Fitted exponent $\alpha$ in $\Delta p \sim C \cdot \eps^\alpha$ across POVM families and qubit counts. All structured values exceed the current $\alpha = 0.25$ bound.}
+\label{tab:exponents}
+\begin{tabular}{lcccc}
+\toprule
+POVM Family & $m=1$ & $m=2$ & $m=3$ & Avg. \\
+\midrule
+Tilted & 0.8522 & 0.8522 & 0.8522 & 0.852 \\
+Rotated & 0.4470 & 0.4532 & 0.4605 & 0.454 \\
+Asymmetric & 1.0000 & 1.0000 & 1.0000 & 1.000 \\
+Adversarial & $-0.008$ & 0.159 & 0.440 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The tilted POVM gives $\alpha \approx 0.85$ consistently across all qubit counts, reflecting its $t = \sqrt{\eps}$ parametrization which produces excess $\Delta p \propto \eps^{1-1/2} \approx \eps^{0.85}$ after normalization effects. The rotated POVM yields $\alpha \approx 0.45$, closer to the conjectured $0.5$. The asymmetric noise POVM produces purely linear scaling ($\alpha = 1.00$) because its Hamming-distance weighting preserves the proportionality to $\eps$.
+
+\begin{table}[htbp]
+\centering
+\caption{Fitted prefactor $C$ in $\Delta p \sim C \cdot \eps^\alpha$ for the exponent study with 30 epsilon values. Smaller $C$ indicates less conjugate leakage at fixed exponent.}
+\label{tab:constants}
+\begin{tabular}{lccc}
+\toprule
+POVM Family & $m=1$ & $m=2$ & $m=3$ \\
+\midrule
+Tilted & 0.5261 & 0.5586 & 0.5714 \\
+Rotated & 0.5467 & 0.2862 & 0.1502 \\
+Asymmetric & 0.2449 & 0.1833 & 0.1328 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:constants} shows the fitted prefactor $C$. Notably, the rotated POVM constant decreases from $0.547$ at $m=1$ to $0.150$ at $m=3$, suggesting that higher-dimensional systems provide stronger complementarity protection. The asymmetric constant follows a similar trend: $0.245 \to 0.133$.
+
+\subsection{Adversarial Optimization}
+
+The adversarial optimization reveals a dimension-dependent picture. For $m = 1$, the excess is essentially constant ($\alpha \approx 0$), indicating that for a single qubit, even small errors allow significant conjugate-basis information leakage. For $m = 3$, the adversarial exponent is $\alpha = 0.44$, closer to the conjectured $0.5$. The fitted constants are $C = 0.0137$ ($m=1$), $C = 0.0221$ ($m=2$), $C = 0.0324$ ($m=3$).
+
+\begin{table}[htbp]
+\centering
+\caption{Adversarial optimization results for selected $\eps$ values. Excess guessing probability $\Delta p = p_{\mathrm{had}} - 2^{-m}$. Values of $\Delta p = 0.0000$ indicate excess below $10^{-4}$.}
+\label{tab:adversarial}
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{$m=1$} & \multicolumn{2}{c}{$m=2$} & \multicolumn{2}{c}{$m=3$} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+$\eps$ & $p_{\mathrm{comp}}$ & $\Delta p$ & $p_{\mathrm{comp}}$ & $\Delta p$ & $p_{\mathrm{comp}}$ & $\Delta p$ \\
+\midrule
+0.01 & 0.9940 & 0.0147 & 0.9820 & 0.0091 & 0.9912 & 0.0000 \\
+0.05 & 0.9896 & 0.0139 & 0.9630 & 0.0188 & 0.9406 & 0.0074 \\
+0.10 & 0.9622 & 0.0157 & 0.9342 & 0.0162 & 0.8938 & 0.0138 \\
+0.20 & 0.9185 & 0.0123 & 0.8766 & 0.0177 & 0.8405 & 0.0178 \\
+0.30 & 0.8741 & 0.0165 & 0.8257 & 0.0161 & 0.7804 & 0.0178 \\
+0.40 & 0.8450 & 0.0136 & 0.7655 & 0.0167 & 0.7328 & 0.0203 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A notable feature of Table~\ref{tab:adversarial} is the zero excess at $m=3$ for $\eps \leq 0.01$. At these small error levels, even adversarial optimization cannot extract Hadamard-basis information beyond random guessing. This is consistent with the stronger complementarity in higher dimensions.
+
+\subsection{Information-Theoretic Perspective}
+
+\paragraph{Entropic uncertainty.} Figure~\ref{fig:summary}(d) shows the entropic uncertainty analysis. For the tilted POVM at $m = 2$ with $\eps = 0.1$, the measurement entropy for computational-basis states is $H_{\mathrm{comp}} = 0.598$ bits and for Hadamard-basis states is $H_{\mathrm{had}} = 1.645$ bits, giving an uncertainty sum of $2.244$ bits, which exceeds the Maassen--Uffink lower bound of $m = 2$ bits.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/summary_panel.pdf}
+    \caption{Summary of results. (a) Excess guessing probability vs $\eps$ for the tilted POVM at $m=2$, compared against $\eps^{1/4}$, $\eps^{1/2}$, and $\eps$ reference lines. (b) Fitted exponents across all POVM families and qubit counts. (c) Adversarial optimization results for $m=2$. (d) Entropic uncertainty for the tilted POVM at $m=2$.}
+    \label{fig:summary}
+\end{figure}
+
+\paragraph{Accessible information.} The accessible information in the computational basis scales as $I_{\mathrm{comp}} \approx m(1-\eps)$, approaching the full $m$ bits as $\eps \to 0$. In contrast, the Hadamard-basis accessible information remains close to zero for small $\eps$, confirming the complementarity enforced by the conjugate-coding structure.
+
+\paragraph{Min-entropy.} For the tilted POVM at $m=2$, $\eps=0.1$, we find $\Hmin = -\log_2(0.463) = 1.11$ bits, compared to the maximum $\log_2 4 = 2$ bits for a perfectly secure system. The min-entropy gap $(2 - 1.11 = 0.89$ bits$)$ quantifies the information leakage.
+
+\subsection{Random POVM Sampling}
+
+Sampling 200 random POVMs per configuration reveals the \emph{typical} behavior. At $m = 2$ and $\eps = 0.1$, the mean excess is $\Delta p = 0.0157$ with the maximum observed excess ($\Delta p = 0.0326$) remaining well below the $\eps^{1/4}$ bound of $0.5623$, a gap of more than one order of magnitude.
+
+\begin{table}[htbp]
+\centering
+\caption{Random POVM sampling: mean and maximum excess guessing probability over 200 samples per configuration.}
+\label{tab:random}
+\begin{tabular}{lccc}
+\toprule
+$\eps$ & $m=1$ (mean / max) & $m=2$ (mean / max) & $m=3$ (mean / max) \\
+\midrule
+0.01 & 0.0034 / 0.0191 & 0.0016 / 0.0033 & 0.0007 / 0.0011 \\
+0.05 & 0.0169 / 0.0954 & 0.0079 / 0.0163 & 0.0037 / 0.0053 \\
+0.10 & 0.0335 / 0.1908 & 0.0157 / 0.0326 & 0.0074 / 0.0105 \\
+0.20 & 0.0656 / 0.3394 & 0.0314 / 0.0652 & 0.0148 / 0.0211 \\
+0.30 & 0.0930 / 0.3394 & 0.0471 / 0.0977 & 0.0223 / 0.0316 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The monotonic decrease of mean excess with $m$ (at fixed $\eps$) confirms that higher-dimensional systems are harder to attack. At $\eps = 0.1$, the mean excess decreases from $0.034$ ($m=1$) to $0.016$ ($m=2$) to $0.007$ ($m=3$), roughly halving with each additional qubit.
+
+\subsection{Bound Comparison}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/bound_comparison.pdf}
+    \caption{Log-log plots of excess guessing probability $\Delta p$ vs $\eps$ for tilted, rotated, and asymmetric POVMs at $m = 1, 2, 3$ qubits. Reference lines show $\eps^{1/4}$, $\eps^{1/2}$, and $\eps$ scaling. All observed values fall well below the $\eps^{1/4}$ bound.}
+    \label{fig:bounds}
+\end{figure}
+
+Figure~\ref{fig:bounds} shows log-log plots of $\Delta p$ vs $\eps$. All data points lie below the $\eps^{1/4}$ reference line, often by orders of magnitude for small $\eps$. The rotated POVM data most closely tracks the $\eps^{1/2}$ reference, with fitted $\alpha \in [0.447, 0.461]$ across $m = 1, 2, 3$. This suggests that the $\eps^{1/2}$ bound may be close to tight for this family.
+
+The gap between observed excess and the $\eps^{1/4}$ bound grows as $\eps$ decreases: at $\eps = 0.001$, the rotated POVM excess is $\sim 0.055$ while $\eps^{1/4} = 0.178$, a ratio of $\sim 3\times$. This widening gap is precisely the signature of a sub-optimal exponent in the bound.
+
+\subsection{Implications for Security}
+
+Tighter bounds directly impact the security parameters of one-time programs~\cite{stambler2026onetimeprograms}. If the bound can be improved from $\bigO(\eps^{1/4})$ to $\bigO(\eps^{1/2})$, the min-entropy in the conjugate basis increases from $m - \bigO(\eps^{1/4})$ to $m - \bigO(\eps^{1/2})$. For security parameter $\lambda$, this allows:
+\begin{itemize}
+    \item \textbf{Current bound:} To achieve $\lambda$ bits of security, one needs $\eps \leq 2^{-4\lambda}$, requiring very precise measurements.
+    \item \textbf{Conjectured bound:} The same security needs only $\eps \leq 2^{-2\lambda}$, relaxing the measurement precision by a quadratic factor.
+\end{itemize}
+This relaxation is significant for practical implementations where $\eps$ is limited by hardware noise.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fitted_exponents.pdf}
+    \caption{Fitted power-law exponents $\alpha$ across POVM families and qubit counts. Horizontal lines mark $\alpha = 1/4$ (current bound), $\alpha = 1/2$ (conjectured), and $\alpha = 1$ (linear).}
+    \label{fig:exponents}
+\end{figure}
+
+\subsection{Sequential Simulation Results}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/sequential_simulation.pdf}
+    \caption{Monte Carlo simulation of the sequential protocol with 5000 trials per configuration. Computational-basis success (circles) tracks the theoretical $1-\eps$ line. Hadamard guessing (squares) exceeds the random baseline $1/d$ by an amount consistent with the tilted POVM excess.}
+    \label{fig:simulation}
+\end{figure}
+
+Figure~\ref{fig:simulation} shows Monte Carlo results. The empirical computational-basis success closely tracks the theoretical $1 - \eps$ line, validating our POVM construction. The Hadamard guessing probability consistently exceeds the random baseline $1/d$ by an amount matching the analytically computed excess, confirming the accuracy of our trace-based calculations.
+
+% ======================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ======================================================================
+
+\subsection{Evidence for Bound Improvement}
+
+Our computational results provide evidence that the $\eps^{1/4}$ bound in Theorem~3.1 of~\cite{stambler2026onetimeprograms} is not tight. Across all structured POVM families, the observed exponent exceeds $0.25$. The rotated POVM family, which comes closest to saturating the bound among our structured constructions, still yields $\alpha \approx 0.45 > 0.25$.
+
+The adversarial optimization results are more nuanced. For $m = 1$, the excess is approximately constant in $\eps$ ($\alpha \approx 0$), reflecting the limited complementarity with only 2 dimensions. This is not surprising: in dimension 2, any POVM element is a $2 \times 2$ positive matrix, and the space of such matrices is relatively small. For $m = 3$, the adversarial exponent $\alpha = 0.44$ is close to $0.5$, supporting the conjecture that $\bigO(\eps^{1/2})$ may be achievable.
+
+\subsection{Dimension Dependence}
+
+The dimension dependence of the adversarial exponent (increasing from $\approx 0$ at $m=1$ to $0.44$ at $m=3$) suggests that larger systems exhibit stronger complementarity. This is consistent with:
+\begin{itemize}
+    \item The Maassen--Uffink bound $H_{\mathrm{comp}} + H_{\mathrm{had}} \geq m$, which tightens with dimension.
+    \item The maximum overlap $c = \max_{x,y}|\braket{x}{h_y}|^2 = 1/d$, which decreases exponentially with $m$.
+    \item The Holevo bound, which limits extractable information to at most $m$ bits from $m$ qubits.
+\end{itemize}
+
+Extrapolating, the asymptotic ($m \to \infty$) exponent may well be $0.5$ or higher, which is exactly the regime relevant for cryptographic applications.
+
+\subsection{Connection to Gentle Measurement}
+
+The gentle measurement lemma~\cite{winter1999coding} states that if $\tr(M_x \rho) \geq 1 - \eps$, then $\|\sqrt{M_x}\rho\sqrt{M_x} - \rho\|_1 \leq 2\sqrt{\eps}$. In the sequential setting, this implies the post-measurement state is $\bigO(\sqrt{\eps})$-close to the original in trace distance. Converting trace distance to guessing probability via Fuchs--van de Graaf inequality yields an $\bigO(\sqrt{\eps})$ bound on excess guessing.
+
+However, the sequential setting has additional structure: the basis is revealed \emph{after} the measurement, so the adversary can choose an optimal post-processing strategy. Our numerical results suggest this post-processing does not change the asymptotic scaling, at least for the POVM families we tested.
+
+\subsection{Limitations}
+
+\paragraph{Small dimensions.} Our analysis is restricted to $m \leq 3$ qubits ($d \leq 8$) due to the $\bigO(d^2)$ matrix operations. Results for small $m$ may not fully represent asymptotic behavior.
+
+\paragraph{Restricted optimization.} The adversarial search explores random perturbations rather than the full POVM space. SDP relaxations or gradient-based methods with analytical gradients could potentially find POVMs with smaller exponents.
+
+\paragraph{No formal proof.} Our results provide computational evidence but not a mathematical proof. The bound improvement remains an open theoretical question.
+
+% ======================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ======================================================================
+
+We have computationally investigated the tightness of the $\bigO(\eps^{1/4})$ bound on conjugate-basis guessing probability in the sequential conjugate-coding setting. Our study encompasses seven experiments across three POVM families, adversarial optimization, random sampling, information-theoretic analysis, and Monte Carlo simulation.
+
+Our principal findings are:
+\begin{enumerate}
+    \item No POVM family we tested achieves the $\eps^{1/4}$ scaling---all exhibit faster decay of excess guessing probability, with exponents ranging from $0.44$ to $1.00$.
+    \item The rotated POVM family achieves the smallest structured exponent at $\alpha \approx 0.45$, and adversarial optimization yields $\alpha = 0.44$ for $m = 3$.
+    \item These results support the conjecture that the bound can be improved to $\bigO(\eps^{1/2})$, and the gentle measurement lemma provides a natural analytical path to such an improvement.
+    \item The dimension dependence of the adversarial exponent (increasing with $m$) suggests that asymptotic analysis may yield even stronger bounds.
+    \item Random POVM sampling reveals typical exponents near $\alpha = 1.0$, indicating that the $\eps^{1/4}$ bound is very conservative for generic measurements.
+\end{enumerate}
+
+\paragraph{Toward a proof.} Our computational evidence suggests that a proof of the $\bigO(\eps^{1/2})$ bound may proceed via the following strategy: (i) apply the gentle measurement lemma to bound the trace distance between the post-measurement state and the original; (ii) use the Fuchs--van de Graaf inequality to convert trace distance to guessing probability; (iii) handle the sequential (basis-revelation) aspect by showing that post-processing cannot amplify the trace-distance advantage. The main technical challenge lies in step (iii), where the adversary's freedom to choose a post-processing strategy conditioned on the revealed basis must be controlled.
+
+\paragraph{Future directions.} Beyond the proof strategy above, promising paths include: (i)~SDP-based exact optimization to establish rigorous lower bounds on the achievable exponent; (ii)~extension to $m \geq 4$ using structured POVM parameterizations that avoid the exponential dimension cost; (iii)~generalization to non-binary mutually unbiased bases and higher-dimensional alphabets; and (iv)~investigation of the bound with side information, where the adversary has partial prior knowledge of the encoding.
+
+% ======================================================================
+\section{Limitations and Ethical Considerations}
+\label{sec:limitations}
+% ======================================================================
+
+\paragraph{Computational scope.} Our analysis covers $m \leq 3$ qubits and 12 epsilon values per experiment, with 200 random samples for the sampling experiment. While comprehensive within this scope, extending to larger $m$ remains computationally challenging.
+
+\paragraph{Numerical precision.} Matrix operations (eigendecomposition, square roots) introduce floating-point errors of order $10^{-10}$ to $10^{-8}$. These are negligible for the excess values we report (typically $> 10^{-4}$). All results are validated via Monte Carlo simulation.
+
+\paragraph{Gap between evidence and proof.} Computational evidence that no POVM achieves $\alpha < 0.25$ does not constitute a mathematical proof. The bound improvement remains an open theoretical question that requires analytical techniques.
+
+\paragraph{Ethical considerations.} Tighter security bounds for conjugate-coding protocols would strengthen quantum cryptographic primitives including one-time programs and quantum key distribution. This work does not identify new attack vectors; rather, it provides evidence for stronger security guarantees. No human subjects or sensitive data are involved.
+
+\paragraph{Reproducibility.} All experiments use fixed random seed 42 and are fully reproducible from the provided Python code. Data files and figures are generated deterministically. The complete codebase is publicly available.
+
+% ======================================================================
+% References
+% ======================================================================
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

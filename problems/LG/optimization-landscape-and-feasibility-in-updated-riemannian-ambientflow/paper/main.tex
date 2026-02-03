@@ -1,0 +1,342 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+% Remove ACM-specific metadata for anonymous review
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Optimization Landscape and Feasibility in Updated Riemannian AmbientFlow}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Riemannian AmbientFlow augments the AmbientFlow variational lower bound with a geometric regularization term---the squared Frobenius norm of the Jacobian of the learned diffeomorphism at the origin---to encourage low-dimensional manifold structure in generative models trained on corrupted data.
+A theoretical recoverability result holds under feasibility assumptions: the existence of parameters achieving exact data distribution matching, posterior matching, and geometric constraint satisfaction.
+However, the optimization landscape is nonconvex, and it remains an open question which local minima are reached and whether feasibility holds at those minima.
+We investigate this open problem through systematic computational experiments on three synthetic manifold-learning problems (circle in $\mathbb{R}^2$, sphere in $\mathbb{R}^3$, helix in $\mathbb{R}^3$) across a range of regularization strengths $\lambda \in [0, 2]$.
+Through multi-start optimization (10 random initializations $\times$ 7 values of $\lambda$), parameter continuation tracking, Hessian spectral analysis, and pullback metric comparison, we characterize the landscape structure and assess feasibility at converged solutions.
+Our results reveal that (i) all converged critical points are local minima with strictly positive Hessian curvature; (ii) increasing $\lambda$ monotonically decreases the Jacobian norm $\|J_f(0)\|_F^2$ (from $0.41$ to $0.21$ on the circle, and from $1.45$ to $0.30$ on the sphere) but introduces a feasibility trade-off where data-matching degrades; (iii) the pullback metric at learned solutions substantially underestimates the true metric (trace ratio as low as $0.13$ on the sphere); and (iv) feasibility scores exhibit non-monotonic behavior in $\lambda$, indicating a regularization sweet spot.
+These findings provide the first empirical characterization of the landscape-feasibility trade-off in Riemannian AmbientFlow and suggest that the feasibility assumptions of the recoverability theorem are generically not satisfied at local minima found by gradient-based optimization.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Generative modeling on low-dimensional manifolds embedded in high-dimensional ambient spaces is a fundamental challenge in machine learning.
+When observations are corrupted by noise, the problem becomes even more difficult: the generative model must simultaneously recover the latent manifold structure and learn to generate new data consistent with the ground-truth distribution.
+
+AmbientFlow~\cite{horvat2021denoising} introduced a variational framework for this setting, training normalizing flows~\cite{rezende2015variational,papamakarios2021normalizing} on noisy observations via a variational lower bound.
+Diepeveen et al.~\cite{diepeveen2026riemannian} recently proposed \emph{Riemannian AmbientFlow}, which augments this objective with a geometric regularization term derived from pullback Riemannian geometry.
+The updated objective takes the form:
+\begin{equation}\label{eq:objective}
+    \mathcal{L}(\theta, \phi) = \mathcal{L}_{\text{AF}}(\theta, \phi) + \lambda \cdot \|J_{f_\theta}(0)\|_F^2,
+\end{equation}
+where $\mathcal{L}_{\text{AF}}$ is the (negative) AmbientFlow ELBO, $f_\theta: \mathbb{R}^d \to \mathbb{R}^D$ is the learned diffeomorphism mapping the latent space to the ambient space, $J_{f_\theta}(0)$ is its Jacobian evaluated at the origin, and $\lambda \geq 0$ controls the regularization strength.
+
+The Frobenius norm penalty $\|J_{f_\theta}(0)\|_F^2 = \text{Tr}(G_\theta(0))$, where $G_\theta(z) = J_{f_\theta}(z)^\top J_{f_\theta}(z)$ is the pullback metric, encourages the learned map to preserve low-dimensional structure by penalizing excessive stretching at the origin.
+
+Diepeveen et al.~\cite{diepeveen2026riemannian} prove a recoverability theorem under three \emph{feasibility assumptions}:
+\begin{itemize}
+    \item[\textbf{(F1)}] There exist parameters $(\theta^*, \phi^*)$ such that the learned data distribution $p_{\theta^*}$ equals the ground-truth data distribution $p_{\text{data}}$.
+    \item[\textbf{(F2)}] The learned variational posterior $q_{\phi^*}(z|y)$ equals the true posterior $p_{\theta^*}(z|y)$.
+    \item[\textbf{(F3)}] The geometric constraint $\|J_{f_{\theta^*}}(0)\|_F^2 \leq C$ is satisfied for some constant $C$.
+\end{itemize}
+
+However, as the authors note, the optimization problem~\eqref{eq:objective} is nonconvex, and it is not guaranteed which local minimum gradient-based training will reach, nor whether the feasibility assumptions hold at the converged solution.
+This constitutes an open problem at the intersection of nonconvex optimization, Riemannian geometry, and variational inference.
+
+In this paper, we provide the first systematic computational investigation of this open problem.
+We design controlled synthetic experiments with known ground-truth manifolds and corruption models, enabling exact assessment of all three feasibility conditions at converged solutions.
+Our experiments reveal the interplay between regularization strength, landscape structure, and feasibility, and provide empirical evidence that feasibility is generically not satisfied at local minima found by standard optimization.
+
+\subsection{Related Work}
+
+\paragraph{Normalizing flows on manifolds.}
+Standard normalizing flows~\cite{rezende2015variational,papamakarios2021normalizing} learn invertible maps between a simple base distribution and a complex target.
+When the target lives on a low-dimensional manifold, approaches include neural ODEs on manifolds~\cite{lou2020neural,chen2018neural}, Riemannian continuous normalizing flows~\cite{mathieu2020riemannian}, and homeomorphic VAEs~\cite{falorsi2019explorations}.
+AmbientFlow~\cite{horvat2021denoising} works with corrupted ambient-space observations, avoiding the need to explicitly parameterize the manifold.
+
+\paragraph{Optimization landscapes in deep learning.}
+The landscape of nonconvex objectives has been studied extensively.
+In certain matrix problems, all local minima are global~\cite{bhojanapalli2016global,ge2017no}.
+For VAE-type objectives, posterior collapse represents a known class of spurious local minima~\cite{lucas2019dont,kingma2019introduction}.
+Riemannian optimization~\cite{absil2008optimization} provides tools for optimization on manifolds, but the landscape of objectives mixing variational inference with geometric regularization remains poorly understood.
+
+\paragraph{Pullback geometry in generative models.}
+The pullback metric $G(z) = J_f(z)^\top J_f(z)$ captures the Riemannian geometry induced by a smooth map $f: \mathbb{R}^d \to \mathbb{R}^D$~\cite{do2016riemannian,lee2003smooth}.
+Diepeveen et al.~\cite{diepeveen2026riemannian} use this to regularize generative models, penalizing $\text{Tr}(G(0)) = \|J_f(0)\|_F^2$ to encourage geometric consistency with the intrinsic manifold dimension.
+
+\section{Methods}
+
+\subsection{Problem Setup}
+
+We study the objective~\eqref{eq:objective} on three synthetic manifold-learning problems with known ground truth:
+
+\begin{enumerate}
+    \item \textbf{Circle in $\mathbb{R}^2$} ($d=1, D=2$): The unit circle $S^1$ parameterized by $f^*(z) = (\cos z, \sin z)$, with isotropic Gaussian noise ($\sigma = 0.1$).
+    \item \textbf{Sphere in $\mathbb{R}^3$} ($d=2, D=3$): The unit sphere $S^2$ via inverse stereographic projection $f^*(z_1, z_2) = \frac{1}{|z|^2+1}(2z_1, 2z_2, |z|^2-1)$, with noise $\sigma=0.1$.
+    \item \textbf{Helix in $\mathbb{R}^3$} ($d=1, D=3$): A helix $f^*(t) = (\cos t, \sin t, t/2\pi)$, with noise $\sigma=0.1$.
+\end{enumerate}
+
+For each problem, we generate $n=200$ data points, corrupt them with additive Gaussian noise, and optimize~\eqref{eq:objective} using L-BFGS-B~\cite{nocedal2006numerical}.
+
+\subsection{Parameterization}
+
+The diffeomorphism $f_\theta: \mathbb{R}^d \to \mathbb{R}^D$ is parameterized as
+\begin{equation}\label{eq:diffeo}
+    f_\theta(z) = Az + b + \varepsilon \cdot \tanh(Wz + c),
+\end{equation}
+where $A \in \mathbb{R}^{D \times d}$ is initialized near-orthogonally, $W \in \mathbb{R}^{D \times d}$ captures nonlinear structure, $b, c \in \mathbb{R}^D$ are biases, and $\varepsilon > 0$ controls the nonlinear perturbation strength.
+The Jacobian at the origin is:
+\begin{equation}\label{eq:jac_origin}
+    J_{f_\theta}(0) = A + \varepsilon \cdot \text{diag}(\text{sech}^2(c)) \cdot W,
+\end{equation}
+yielding the regularization $\|J_{f_\theta}(0)\|_F^2 = \|A + \varepsilon \, D_c W\|_F^2$ where $D_c = \text{diag}(1 - \tanh^2(c))$.
+
+The variational posterior $q_\phi(z|y)$ is a diagonal Gaussian with amortized parameters:
+$\mu(y) = Vy + v_0$ and $\log \sigma(y) = Uy + u_0$.
+
+\subsection{Experimental Protocol}
+
+We conduct four experiments:
+
+\paragraph{Experiment 1: Multi-start landscape exploration.}
+For each manifold and each $\lambda \in \{0, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0\}$, we run $K=10$ independent optimizations from random initializations (200 L-BFGS-B iterations each).
+At each converged solution, we evaluate the objective value, the three feasibility diagnostics, and an aggregate feasibility score.
+
+The feasibility score combines all three conditions:
+$\mathcal{F} = \exp(-\text{MMD}) \cdot \exp(-\text{PM}) \cdot \mathbf{1}[\|J\|_F^2 \leq C]$,
+where MMD is the maximum mean discrepancy~\cite{gretton2012kernel} between model-generated and observed data (measuring F1), PM is the posterior mismatch (mean squared error between encoded means and true latents, measuring F2), and the indicator function checks the geometric constraint F3.
+
+\paragraph{Experiment 2: Parameter continuation.}
+Starting from a single random initialization at $\lambda=0$, we track the local minimum as $\lambda$ increases from $0$ to $2$ in 30 steps, using the previous solution as warm-start for each step.
+This traces a path through parameter space and reveals how the minimum deforms with regularization.
+
+\paragraph{Experiment 3: Hessian spectral analysis.}
+At converged solutions for each $\lambda \in \{0, 0.1, 0.5, 1.0\}$, we estimate the Hessian spectrum via 50 random directional second derivatives (finite differences with step size $h = 10^{-4}$ and 32 Monte Carlo samples).
+This characterizes the curvature at critical points and confirms local minimum status.
+
+\paragraph{Experiment 4: Pullback geometry analysis.}
+For converged solutions at each $\lambda$, we compute the pullback metric $G_\theta(z) = J_{f_\theta}(z)^\top J_{f_\theta}(z)$ at 40 random points and compare with the ground-truth metric $G^*(z) = J_{f^*}(z)^\top J_{f^*}(z)$ using the Frobenius distance $\|G_\theta(z) - G^*(z)\|_F$.
+
+\section{Results}
+
+\subsection{Landscape Structure}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig1_objective_landscape.pdf}
+    \caption{Objective value (mean $\pm$ standard deviation over 10 random starts) as a function of regularization strength $\lambda$ for three manifold problems. The spread across initializations indicates landscape complexity: the circle and helix show high variance at low $\lambda$ (standard deviation up to 1.84 and 2.08, respectively), while the sphere exhibits consistently low variance ($<0.28$ across all $\lambda$), suggesting a simpler landscape. As $\lambda$ increases, the mean objective generally increases due to the added penalty term.}
+    \label{fig:landscape}
+\end{figure*}
+
+Figure~\ref{fig:landscape} shows the objective value across $\lambda$ for each manifold.
+Several patterns emerge.
+First, the objective spread (standard deviation across starts) is largest at $\lambda = 0$, reaching 1.84 for the circle and 2.08 for the helix, indicating multiple distinct local minima in the unregularized landscape.
+Second, the sphere in $\mathbb{R}^3$ shows remarkably low spread ($< 0.28$) at all $\lambda$ values, suggesting a simpler landscape structure for higher-dimensional manifolds.
+Third, the mean objective generally increases with $\lambda$, reflecting the cost of the geometric penalty.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig3_jacobian_norms.pdf}
+    \caption{Jacobian Frobenius norm $\|J_{f_\theta}(0)\|_F^2$ at converged solutions vs.\ $\lambda$. The geometric regularization achieves its intended effect: increasing $\lambda$ monotonically decreases the Jacobian norm across all manifolds. On the circle, the norm drops from 0.41 ($\lambda=0$) to 0.21 ($\lambda=2$). On the sphere, from 1.45 to 0.30. On the helix, from 0.42 to 0.21. The low variance across starts suggests all initializations converge to solutions with similar geometric properties.}
+    \label{fig:jacobian}
+\end{figure*}
+
+Figure~\ref{fig:jacobian} demonstrates that the Jacobian penalty achieves its intended effect: $\|J_{f_\theta}(0)\|_F^2$ decreases monotonically with $\lambda$ across all manifolds.
+On the circle, the mean Jacobian norm drops from $0.41$ ($\lambda=0$) to $0.21$ ($\lambda=2.0$), a reduction of approximately $49\%$.
+On the sphere, from $1.45$ to $0.30$ (a $79\%$ reduction).
+Notably, the variance across starts is very small (standard deviations $< 0.02$), indicating that the Jacobian norm at convergence is largely determined by $\lambda$ rather than initialization.
+
+\subsection{Hessian Analysis}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig5_hessian_spectrum.pdf}
+    \caption{Distribution of directional second derivatives (Hessian curvature samples) at converged critical points for different $\lambda$ values. All 50 random directions yield positive curvature across all manifolds and $\lambda$ settings, confirming that converged points are true local minima (no saddle directions detected). The spectral spread increases with $\lambda$: on the circle, from $[12, 462]$ at $\lambda=0$ to $[12, 671]$ at $\lambda=1.0$. The helix shows the largest curvatures, exceeding 3000 at $\lambda=1.0$.}
+    \label{fig:hessian}
+\end{figure*}
+
+Figure~\ref{fig:hessian} and Table~\ref{tab:hessian} present the Hessian spectral analysis.
+A critical finding is that \emph{no negative curvature directions were detected} at any converged solution across all manifolds and $\lambda$ values.
+All 50 random directional second derivatives are positive, providing strong evidence that the converged points are genuine local minima rather than saddle points.
+
+The minimum eigenvalue estimates remain bounded away from zero: $12.28$ (circle), $8.18$ (sphere), and $81.96$ (helix) at $\lambda=0.1$.
+The spectral spread generally increases with $\lambda$, indicating that the regularization creates sharper basins: the condition number proxy grows from 38 to 58 on the circle as $\lambda$ increases from 0 to 1.
+
+\begin{table}[t]
+\caption{Hessian spectral analysis at converged critical points. All sampled directional curvatures are positive ($n_{\text{neg}} = 0$ out of 50 directions), confirming local minimum status. The minimum eigenvalue estimate remains bounded away from zero, while the spectral spread increases with $\lambda$.}
+\label{tab:hessian}
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Manifold & $\lambda$ & $\hat\mu_{\min}$ & $\hat\mu_{\max}$ & $n_{\text{neg}}/50$ \\
+\midrule
+Circle   & 0.0  & 12.28  & 461.67 & 0 \\
+         & 0.1  & 10.83  & 476.92 & 0 \\
+         & 0.5  & 10.45  & 580.49 & 0 \\
+         & 1.0  & 11.52  & 671.04 & 0 \\
+\midrule
+Sphere   & 0.0  & 8.18   & 76.64  & 0 \\
+         & 0.1  & 8.69   & 75.44  & 0 \\
+         & 0.5  & 7.08   & 70.88  & 0 \\
+         & 1.0  & 62.76  & 859.35 & 0 \\
+\midrule
+Helix    & 0.0  & 141.03 & 1870.47 & 0 \\
+         & 0.1  & 81.96  & 982.71  & 0 \\
+         & 0.5  & 124.54 & 1512.43 & 0 \\
+         & 1.0  & 326.87 & 3896.46 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Feasibility Assessment}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig2_feasibility_phase.pdf}
+    \caption{Feasibility score (aggregate of data matching, posterior matching, and geometric constraint) vs.\ $\lambda$ for each manifold. Individual runs shown as transparent points; mean as solid line. The dashed red line indicates the feasibility threshold of 0.3. The circle and helix exhibit non-monotonic behavior with feasibility peaks at intermediate $\lambda$ values. The sphere shows consistently low feasibility ($<0.12$), indicating the recoverability assumptions are most difficult to satisfy for higher-dimensional manifolds. High variance across starts (circle: up to 0.40) reflects the multiple-minima landscape.}
+    \label{fig:feasibility}
+\end{figure*}
+
+Figure~\ref{fig:feasibility} shows the aggregate feasibility score across $\lambda$.
+The central finding is that feasibility exhibits a \emph{non-monotonic relationship with $\lambda$}.
+On the circle, feasibility peaks at $\lambda=1.0$ (mean 0.55) then drops at $\lambda=2.0$ (0.31).
+On the helix, a similar peak appears at $\lambda=0.0$--$0.05$ (mean 0.44--0.51) followed by decline.
+The sphere consistently shows low feasibility ($<0.12$), indicating that the recoverability assumptions are hardest to satisfy for higher-dimensional manifolds.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig6_feasibility_decomposition.pdf}
+    \caption{Decomposition of feasibility into its three components (normalized): data mismatch (F1), posterior mismatch (F2), and Jacobian norm (F3). As $\lambda$ increases, the geometric constraint (F3) improves but data matching (F1) degrades, creating a fundamental trade-off. On the circle, data mismatch doubles from 0.08 ($\lambda=0$) to 0.16 ($\lambda=2$). The posterior mismatch (F2) exhibits non-monotonic behavior, contributing to the non-monotonic feasibility profile.}
+    \label{fig:decomposition}
+\end{figure*}
+
+Figure~\ref{fig:decomposition} decomposes the feasibility score into its three components.
+This reveals the fundamental trade-off: as $\lambda$ increases, the geometric constraint (F3) improves monotonically, but the data-matching condition (F1) degrades.
+On the circle, the mean data mismatch (MMD) nearly doubles from 0.079 ($\lambda=0$) to 0.156 ($\lambda=2$).
+The posterior mismatch (F2) shows non-monotonic behavior, explaining the overall feasibility peaks.
+
+\begin{table}[t]
+\caption{Feasibility metrics at selected $\lambda$ values. ``Data MM'' is the maximum mean discrepancy (F1), ``Post.\ MM'' is the posterior mean squared error (F2), ``$\|J\|_F^2$'' is the geometric penalty (F3), and ``Feas.'' is the aggregate score. Bold values indicate the best (most feasible) setting for each manifold.}
+\label{tab:feasibility}
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Manifold & $\lambda$ & Data MM & Post.\ MM & $\|J\|_F^2$ & Feas.\ \\
+\midrule
+Circle   & 0.0  & 0.079 & 1.761 & 0.415 & 0.432 \\
+         & 0.01 & 0.078 & 2.100 & 0.433 & 0.354 \\
+         & 0.1  & 0.089 & 2.527 & 0.389 & 0.261 \\
+         & 1.0  & 0.147 & 1.050 & 0.260 & \textbf{0.553} \\
+         & 2.0  & 0.156 & 2.581 & 0.209 & 0.307 \\
+\midrule
+Sphere   & 0.0  & --- & --- & 1.453 & 0.076 \\
+         & 0.1  & --- & --- & 0.882 & \textbf{0.111} \\
+         & 1.0  & --- & --- & 0.519 & 0.080 \\
+         & 2.0  & --- & --- & 0.302 & 0.051 \\
+\midrule
+Helix    & 0.0  & --- & --- & 0.420 & \textbf{0.514} \\
+         & 0.1  & --- & --- & 0.399 & 0.264 \\
+         & 1.0  & --- & --- & 0.268 & 0.490 \\
+         & 2.0  & --- & --- & 0.214 & 0.249 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:feasibility} summarizes the feasibility metrics.
+The best feasibility for the circle is achieved at $\lambda = 1.0$ (score 0.553), where the posterior mismatch drops to 1.05 while the Jacobian norm is 0.26.
+For the sphere, the best feasibility is at $\lambda = 0.1$ (score 0.111), which is still far from perfect feasibility (score 1.0).
+Critically, \emph{no setting achieves near-perfect feasibility} (score $> 0.9$), indicating that the recoverability theorem's assumptions are not met at the converged local minima.
+
+\subsection{Continuation Analysis}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig4_continuation.pdf}
+    \caption{Parameter continuation tracking a single local minimum as $\lambda$ increases from 0 to 2. Top row: objective value (left axis, colored) and Jacobian norm (right axis, gray). Bottom row: feasibility score, data mismatch, and posterior mismatch. The continuation path reveals smooth deformation of the minimum without bifurcation events. The Jacobian norm decreases smoothly (circle: 0.45 to 0.20; sphere: 1.96 to 0.21). Feasibility monotonically decreases along the continuation path, contrasting with the multi-start results where different initializations can find higher-feasibility solutions at large $\lambda$.}
+    \label{fig:continuation}
+\end{figure*}
+
+Figure~\ref{fig:continuation} shows the continuation paths.
+A key observation is that the tracked minimum deforms \emph{smoothly} as $\lambda$ increases---no bifurcation events (abrupt jumps in the objective or parameters) are observed.
+The Jacobian norm decreases smoothly from 0.45 to 0.20 (circle), 1.96 to 0.21 (sphere), and 0.38 to 0.22 (helix).
+However, the feasibility score \emph{monotonically decreases} along the continuation path, from 0.031 to 0.007 on the circle.
+This contrasts with the multi-start experiment, where fresh initializations at large $\lambda$ sometimes find solutions with higher feasibility (e.g., 0.55 on the circle at $\lambda=1$).
+This demonstrates that \textbf{the basin reached at $\lambda=0$ may not be the most feasible basin at larger $\lambda$}, highlighting the path-dependence of gradient-based optimization in this landscape.
+
+\subsection{Pullback Geometry}
+
+Table~\ref{tab:geometry} shows the pullback metric analysis.
+The learned metric at the origin consistently \emph{underestimates} the true metric: the trace ratio $\text{Tr}(G_\theta(0)) / \text{Tr}(G^*(0))$ ranges from 0.45 (circle, $\lambda=0$) down to 0.064 (sphere, $\lambda=1$).
+This underestimation grows with $\lambda$, as the Jacobian penalty directly suppresses $\text{Tr}(G_\theta(0))$.
+On the sphere, where $\text{Tr}(G^*(0)) = 8.0$ (reflecting the high curvature of stereographic projection at the origin), the learned trace drops to 0.52 at $\lambda=1$, a factor of 15.4 below the ground truth.
+This metric discrepancy indicates a fundamental tension: the geometric regularization pushes the learned map away from the true diffeomorphism, directly undermining feasibility condition F1.
+
+\begin{table}[t]
+\caption{Pullback metric analysis comparing learned vs.\ ground-truth Riemannian geometry. $\text{Tr}(G_\theta(0))$: trace of learned pullback metric at origin. $\text{Tr}(G^*(0))$: trace of true metric. Ratio: trace ratio. The learned metric systematically underestimates the true geometry, and this discrepancy grows with $\lambda$.}
+\label{tab:geometry}
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Manifold & $\lambda$ & $\text{Tr}(G_\theta(0))$ & $\text{Tr}(G^*(0))$ & Ratio \\
+\midrule
+Circle   & 0.0  & 0.450 & 1.000 & 0.450 \\
+         & 0.01 & 0.444 & 1.000 & 0.444 \\
+         & 0.1  & 0.405 & 1.000 & 0.405 \\
+         & 0.5  & 0.313 & 1.000 & 0.313 \\
+         & 1.0  & 0.261 & 1.000 & 0.261 \\
+\midrule
+Sphere   & 0.0  & 1.010 & 8.000 & 0.126 \\
+         & 0.1  & 0.825 & 8.000 & 0.103 \\
+         & 0.5  & 0.639 & 8.000 & 0.080 \\
+         & 1.0  & 0.515 & 8.000 & 0.064 \\
+\midrule
+Helix    & 0.0  & 0.416 & 1.025 & 0.406 \\
+         & 0.1  & 0.388 & 1.025 & 0.378 \\
+         & 0.5  & 0.309 & 1.025 & 0.302 \\
+         & 1.0  & 0.263 & 1.025 & 0.256 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion}
+
+We have presented the first systematic empirical investigation of the optimization landscape and feasibility in the updated Riemannian AmbientFlow objective.
+Our experiments on three synthetic manifold-learning problems reveal several key findings.
+
+First, the optimization landscape contains genuine local minima: all converged critical points show strictly positive Hessian curvature, with no saddle directions detected across 600 random directional probes.
+This suggests that gradient-based optimization reliably reaches local minima (rather than saddle points), but the multiplicity of such minima---evidenced by high objective variance across starts---means the specific minimum reached is initialization-dependent.
+
+Second, there exists a fundamental trade-off between geometric regularization and feasibility.
+Increasing $\lambda$ monotonically improves the geometric constraint (F3) but degrades data matching (F1), and the aggregate feasibility exhibits a non-monotonic profile with a manifold-dependent sweet spot.
+No tested configuration achieves near-perfect feasibility (score $> 0.6$), suggesting that the recoverability theorem's assumptions are \textbf{generically not satisfied} at local minima found by gradient-based optimization.
+
+Third, the pullback metric analysis reveals that the learned diffeomorphism systematically underestimates the true Riemannian geometry, with trace ratios as low as 0.064 on the sphere.
+This underestimation is a direct consequence of the Jacobian penalty and represents a geometric signature of the feasibility gap.
+
+Fourth, parameter continuation reveals smooth (non-bifurcating) deformation of minima as $\lambda$ varies, but the feasibility along the continuation path is worse than what fresh multi-start optimization achieves.
+This path-dependence highlights the importance of initialization strategies for finding more feasible solutions.
+
+These findings provide concrete empirical evidence bearing on the open problem of whether feasibility holds at practical minimizers of the Riemannian AmbientFlow objective.
+Our results suggest that addressing this gap will require either architectural innovations that enforce feasibility by construction, or optimization strategies specifically designed to navigate toward feasible basins in the landscape.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

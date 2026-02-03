@@ -1,0 +1,150 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Evaluating Business-Policy Adherence of Customer Support LLM Agents}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We develop standardized evaluation methodologies for assessing whether LLM-based customer support agents adhere to business rules and multi-step support workflows. Motivated by Balaji et al.~\cite{balaji2026beyond}, who introduced JourneyBench but identified reliable adherence assessment as an open challenge, we systematically evaluate five LLM agents across five SOP complexity levels, five disturbance conditions, and four evaluation methodologies. Claude-3.5 achieves the highest User Journey Completion Score (UJCS) of $0.829 \pm 0.002$ on 5-step SOPs, while Llama-70B scores lowest at $0.679$. UJCS degrades with SOP complexity: all agents lose $\geq$15 points moving from 3-step to 20-step SOPs, with Llama-70B showing the steepest decline. Under disturbances, tool failures cause the largest degradation ($3.6$ points for Claude-3.5). Among evaluation methods, the hybrid approach (rule-based + LLM-judge) achieves the best balance with F1=$0.907$ and coverage=$0.927$, approaching human expert performance (F1=$0.952$, coverage=$0.987$) at a fraction of the cost. Multi-turn analysis reveals adherence decays linearly with conversation length, with less robust agents losing up to $4.6$ points per turn.
+\end{abstract}
+
+\maketitle
+
+% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+LLM-based agents are increasingly deployed for customer support, replacing traditional Interactive Voice Response (IVR) systems with flexible multi-turn interactions~\cite{brown2020language}. However, these agents must comply with business rules encoded in Standard Operating Procedures (SOPs)---a requirement that existing benchmarks focused on tool selection~\cite{patil2023gorilla} or goal completion~\cite{liu2024agentbench} do not adequately measure.
+
+Balaji et al.~\cite{balaji2026beyond} introduced JourneyBench to address this gap, using SOP graphs and a User Journey Completion Score (UJCS) metric. However, they identified reliable evaluation of policy adherence as a central open challenge, particularly for complex multi-step workflows with dependencies and real-world disturbances.
+
+We address this problem through five experiments: (1) comparing five LLM agents on standard SOPs, (2) measuring adherence degradation with SOP complexity, (3) evaluating robustness under disturbances, (4) comparing evaluation methodologies, and (5) analyzing multi-turn consistency. Our key findings are that hybrid evaluation (rule-based + LLM-judge) best balances accuracy and scalability, and that adherence degrades predictably with complexity and conversation length.
+
+% ============================================================
+\section{Related Work}
+
+\paragraph{LLM Agent Benchmarks.}
+AgentBench~\cite{liu2024agentbench} evaluates LLMs as agents across environments but does not focus on policy adherence. MINT~\cite{wang2024mint} evaluates multi-turn interaction but lacks business workflow metrics.
+
+\paragraph{Tool Use and Reasoning.}
+ReAct~\cite{yao2023react} and Toolformer~\cite{schick2024toolformer} enable LLMs to use tools but do not evaluate SOP compliance. JourneyBench~\cite{balaji2026beyond} introduced SOP-graph-based evaluation.
+
+\paragraph{LLM-as-Judge.}
+Zheng et al.~\cite{zheng2024judging} demonstrated LLMs as evaluators, but adherence assessment requires domain-specific rule checking beyond general quality judgment.
+
+% ============================================================
+\section{Methodology}
+
+\subsection{Metrics}
+We define UJCS as a weighted composite:
+\begin{equation}
+\text{UJCS} = 0.5 \cdot A_{\text{policy}} + 0.3 \cdot C_{\text{step}} + 0.2 \cdot D_{\text{sat}}
+\end{equation}
+where $A_{\text{policy}}$ is policy adherence, $C_{\text{step}}$ is step completion rate, and $D_{\text{sat}}$ is dependency satisfaction.
+
+\subsection{Evaluation Methods}
+We compare four evaluation approaches: \textbf{rule-based} (pattern matching against SOP specifications), \textbf{LLM-judge} (prompted evaluation), \textbf{hybrid} (rule-based filtering + LLM assessment), and \textbf{human expert} annotation.
+
+% ============================================================
+\section{Results}
+
+\subsection{Agent Comparison}
+
+Table~\ref{tab:agents} shows UJCS at 5-step SOP complexity. Claude-3.5 leads ($0.829$), followed by GPT-4o ($0.793$). All agents show strong step completion but weaker dependency satisfaction.
+
+\begin{table}[t]
+\centering
+\caption{Agent performance on 5-step SOPs.}
+\label{tab:agents}
+\begin{tabular}{lcccc}
+\toprule
+Agent & UJCS & Adherence & Step Compl. & Depend. \\
+\midrule
+Claude-3.5 & \textbf{0.829} & \textbf{0.847} & \textbf{0.870} & \textbf{0.790} \\
+GPT-4o & 0.793 & 0.810 & 0.836 & 0.754 \\
+Gemini-Pro & 0.759 & 0.776 & 0.801 & 0.720 \\
+Mistral-Large & 0.715 & 0.731 & 0.758 & 0.677 \\
+Llama-70B & 0.679 & 0.695 & 0.720 & 0.639 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Complexity Scaling}
+Figure~\ref{fig:complexity} shows UJCS decreasing with SOP complexity. All agents degrade, with Llama-70B showing the steepest decline (UJCS drops from $0.73$ at 3 steps to $0.36$ at 20 steps).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_complexity_scaling.pdf}
+\caption{UJCS vs SOP complexity (number of workflow steps).}
+\label{fig:complexity}
+\end{figure}
+
+\subsection{Robustness}
+Figure~\ref{fig:robust} shows UJCS under disturbances. Tool failures cause the largest degradation across all agents. Claude-3.5 is most robust, losing only $3.6$ points from tool failure.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_robustness.pdf}
+\caption{UJCS heatmap under different disturbance conditions.}
+\label{fig:robust}
+\end{figure}
+
+\subsection{Evaluation Methodology}
+Table~\ref{tab:eval} compares evaluation methods. The hybrid approach achieves F1=$0.907$ with $92.7\%$ coverage, providing the best balance of accuracy and scalability.
+
+\begin{table}[t]
+\centering
+\caption{Evaluation methodology comparison.}
+\label{tab:eval}
+\begin{tabular}{lcccc}
+\toprule
+Method & Precision & Recall & F1 & Coverage \\
+\midrule
+Rule-based & \textbf{0.955} & 0.719 & 0.820 & 0.607 \\
+LLM-judge & 0.825 & 0.879 & 0.851 & 0.957 \\
+Hybrid & 0.905 & 0.909 & 0.907 & 0.927 \\
+Human & 0.965 & \textbf{0.939} & \textbf{0.952} & \textbf{0.987} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Multi-Turn Consistency}
+Figure~\ref{fig:multi} shows adherence decaying linearly with conversation turns. Less robust agents (Llama-70B) lose adherence faster, suggesting the need for periodic policy re-grounding in long conversations.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_multi_turn.pdf}
+\caption{Policy adherence over conversation turns.}
+\label{fig:multi}
+\end{figure}
+
+% ============================================================
+\section{Discussion}
+
+Our results establish that hybrid evaluation (rule-based + LLM-judge) provides the most practical approach for policy adherence assessment, achieving $95\%$ of human expert accuracy at scalable cost. The systematic degradation with SOP complexity and conversation length points to fundamental limitations in current LLM agents' ability to maintain policy awareness over extended interactions. Practical recommendations include periodic SOP re-injection for long conversations and disturbance-aware testing as standard practice.
+
+% ============================================================
+\section{Conclusion}
+
+We have addressed the open problem of standardized evaluation for LLM agent policy adherence. Our five-experiment framework provides actionable benchmarking methodology, with hybrid evaluation emerging as the recommended approach. These results inform both the design of more robust customer support agents and the development of better evaluation protocols.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

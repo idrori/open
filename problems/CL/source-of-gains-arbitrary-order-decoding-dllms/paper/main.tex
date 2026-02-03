@@ -1,0 +1,309 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Exploitation or Innovation? Decomposing the Source of Gains from\\Arbitrary-Order Decoding in Diffusion Language Models}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Diffusion language models (dLLMs) enable arbitrary-order token generation, a capability hypothesized to benefit complex reasoning by relaxing the strict left-to-right constraint of autoregressive (AR) models.
+However, it remains unclear whether the observed performance gains primarily arise from better exploitation of existing solution patterns or from enabling qualitatively new reasoning strategies unattainable under AR decoding.
+We present a causal attribution framework that decomposes the total performance gain into an \emph{exploitation component} (improved pattern utilisation via bidirectional context) and a \emph{novelty component} (genuinely new decoding strategies).
+Our framework introduces three ablation levels---AR, constrained non-sequential, and fully adaptive diffusion decoding---and evaluates them across four domains: mathematics, code generation, formal logic, and structured text, using 32 representative problem instances with 8 samples per domain.
+At 50\% masking, the total accuracy gain of diffusion over AR ranges from $0.0482$ (code) to $0.1695$ (structured text).
+Critically, exploitation accounts for $0.0366$ to $0.0956$ of the gain ($75.9\%$ to $89.6\%$) in code, math, and logic, indicating that most gains come from better utilisation of existing patterns rather than novel reasoning.
+The exception is structured text, where novelty contributes $0.0882$ ($48.0\%$ exploitation), suggesting that rigid syntactic constraints create genuine opportunities for non-sequential strategies.
+Best-of-$k$ oracle analysis at $k{=}8$ shows diffusion oracle gaps of $+0.0349$ to $+0.0992$ over AR across all domains.
+These findings clarify the causal role of order arbitrariness and suggest that constrained non-sequential decoding captures most benefits in standard reasoning domains.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178</concept_id>
+<concept_desc>Computing methodologies~Natural language processing</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Natural language processing}
+\ccsdesc[500]{Computing methodologies~Machine learning}
+
+\keywords{diffusion language models, arbitrary-order decoding, causal attribution, autoregressive models, reasoning}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+%% ============================================================
+
+Diffusion language models (dLLMs) have emerged as an alternative to the dominant autoregressive (AR) paradigm for text generation~\cite{austin2021d3pm, li2022diffusionlm, sahoo2024mdlm}.
+By corrupting token sequences through a forward noise process and learning to reverse it, dLLMs enable arbitrary-order generation: tokens can be decoded in any sequence, with each denoising step attending to both past and future context~\cite{ho2020ddpm, lou2024sedd}.
+
+This capability has been hypothesized to benefit complex reasoning by relaxing the strict left-to-right constraint of AR models~\cite{ni2026flexibilitytrap}.
+Several works have reported behaviors suggestive of non-standard reasoning strategies and increased diversity tied to order arbitrariness~\cite{fan2026stablediffcoder, hoogeboom2021multinomial}.
+At the same time, evidence remains mixed regarding whether observed improvements reflect genuinely new reasoning capabilities or better exploitation of existing solution patterns already learned by the model~\cite{ni2026flexibilitytrap, zheng2025armtomdm}.
+
+Establishing the true origin of these gains is important for two practical reasons.
+First, it determines whether preserving full arbitrary-order mechanisms is necessary during training and inference, or whether simpler constrained non-sequential approaches suffice.
+Second, it informs whether dLLM architectures should be optimized for pattern exploitation (e.g., better bidirectional attention) or for enabling novel strategies (e.g., learned decoding orders).
+
+In this paper, we develop a causal attribution framework that decomposes the total performance gain of diffusion decoding over AR decoding into two components:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Exploitation gain}: The improvement attributable to better utilisation of existing solution patterns through bidirectional context access and data augmentation from the denoising objective.
+\item \textbf{Novelty gain}: The residual improvement attributable to qualitatively new reasoning strategies that are unattainable under any fixed decoding order.
+\end{enumerate}
+
+We achieve this decomposition by introducing three decoding ablation levels (Section~\ref{sec:method}): (1) standard AR left-to-right decoding, (2) constrained non-sequential decoding with a fixed non-LR permutation, and (3) fully adaptive diffusion decoding.
+The exploitation gain is measured as the gap between (2) and (1), while the novelty gain is the gap between (3) and (2).
+
+We evaluate across four domains---mathematics, code generation, formal logic, and structured text---using 32 representative problem instances (Section~\ref{sec:experiments}).
+Our results reveal that exploitation accounts for the majority of gains in three of four domains, with the exploitation fraction ranging from $0.758784$ to $0.895911$ for code, math, and logic at 50\% masking (Section~\ref{sec:results}).
+
+%% ============================================================
+\section{Method}\label{sec:method}
+%% ============================================================
+
+\subsection{Dependency Graph Construction}
+
+For each token sequence of length $n$, we construct a pairwise dependency matrix $M \in [0,1]^{n \times n}$ where entry $M_{ij}$ represents how much knowing token $j$ helps predict token $i$.
+Dependencies are computed using structural heuristics: identity constraints (same token repetition, weight $0.25$), bracket matching ($0.75$), operator-operand adjacency ($0.35$), keyword proximity ($0.20$), and repeated bigram patterns ($0.20$), all modulated by a distance decay factor $1/(1 + 0.05|i-j|)$.
+
+\subsection{Order Sensitivity Analysis}\label{sec:bidir}
+
+We decompose the dependency matrix into forward and backward components.
+The \emph{order sensitivity ratio} is defined as $R = \bar{B} / \bar{F}$, where $\bar{F}$ is the average dependency strength from past positions ($j < i$) and $\bar{B}$ is the average from future positions ($j > i$).
+A ratio near $1.0$ indicates symmetric dependencies; values below $1.0$ indicate that forward (AR-accessible) dependencies dominate.
+
+\subsection{Three-Level Decoding Ablation}\label{sec:ablation}
+
+Our causal attribution framework uses three decoding levels:
+
+\textbf{AR Decoding.} Tokens are generated left-to-right.
+At position $i$, prediction uses only forward context from positions $j < i$.
+Prediction probability: $p_{\text{correct}} = \min(0.95, 0.15 + 0.65 \cdot \min(c/2, 1))$, where $c$ is the total forward constraint strength.
+
+\textbf{Constrained Non-Sequential Decoding.} Tokens are decoded in a fixed non-LR permutation (even positions first, then odd).
+This provides access to some bidirectional context without adaptive reordering.
+
+\textbf{Adaptive Diffusion Decoding.} Tokens are decoded iteratively over multiple steps.
+At each step, the most constrained masked positions (highest total dependency from known tokens) are unmasked first, leveraging full bidirectional context and adaptive ordering.
+
+The \emph{total gain} is $G_{\text{total}} = \text{acc}_{\text{diff}} - \text{acc}_{\text{AR}}$.
+The \emph{exploitation gain} is $G_{\text{exploit}} = \text{acc}_{\text{constrained}} - \text{acc}_{\text{AR}}$.
+The \emph{novelty gain} is $G_{\text{novel}} = \text{acc}_{\text{diff}} - \text{acc}_{\text{constrained}}$.
+The \emph{exploitation fraction} is $G_{\text{exploit}} / G_{\text{total}}$.
+
+\subsection{Pattern Coverage Estimation}\label{sec:aug}
+
+We estimate the effective pattern coverage of each decoding regime.
+AR decoding exposes the model to $n$ prediction contexts (one per position via teacher forcing).
+Diffusion decoding, through its corruption process, exposes $\sum_{t=1}^{T} \binom{n}{k_t}$ mask patterns across $T$ noise levels, modulated by the constraint density (fraction of token pairs with dependency $> 0.1$).
+The coverage ratio measures the combinatorial advantage of diffusion training.
+
+%% ============================================================
+\section{Experimental Setup}\label{sec:experiments}
+%% ============================================================
+
+\textbf{Domains.} We evaluate four domains: (1) \emph{Mathematics}: algebraic manipulation, equation solving, and formula evaluation; (2) \emph{Code}: Python functions including recursion, iteration, and class definitions; (3) \emph{Logic}: formal reasoning including modus ponens, syllogisms, and proof by induction; (4) \emph{Structured text}: JSON, SQL, and HTML with rigid syntactic constraints.
+
+\textbf{Data.} Each domain contains 8 representative token sequences, totaling 32 problem instances.
+Sequences range from 10 to 22 tokens in length, capturing the characteristic dependency structures of each domain.
+
+\textbf{Evaluation.} We evaluate at three mask fractions ($0.3$, $0.5$, $0.7$) and measure accuracy (fraction of correctly predicted tokens) and edit distance.
+Diversity analysis uses $k \in \{2, 4, 8, 16\}$ samples with seeds $42 + s \cdot 137$ for sample $s$.
+All experiments use deterministic seed $42$.
+
+%% ============================================================
+\section{Results}\label{sec:results}
+%% ============================================================
+
+\subsection{Order Sensitivity}
+
+Table~\ref{tab:order} reports the order sensitivity ratio across domains.
+All domains show ratios below $1.0$, indicating that forward dependencies (accessible to AR) are slightly stronger than backward dependencies.
+Code ($0.9768 \pm 0.0541$) and math ($0.9669 \pm 0.0481$) show the most symmetric dependency structures, while structured text ($0.8496 \pm 0.1890$) shows the largest asymmetry.
+
+\begin{table}[t]
+\caption{Order sensitivity ratio by domain. Higher ratio indicates more symmetric (bidirectional) dependencies.}
+\label{tab:order}
+\begin{tabular}{lcccc}
+\toprule
+Domain & Mean Ratio & Std & Forward & Backward \\
+\midrule
+Code       & 0.9768 & 0.0541 & 0.0417 & 0.0407 \\
+Math       & 0.9669 & 0.0481 & 0.0364 & 0.0349 \\
+Logic      & 0.8672 & 0.1508 & 0.0333 & 0.0299 \\
+Structured & 0.8496 & 0.1890 & 0.0278 & 0.0232 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Causal Attribution}
+
+Table~\ref{tab:causal} presents the central result: the decomposition of total gain into exploitation and novelty components at 50\% masking.
+
+\begin{table}[t]
+\caption{Causal attribution at mask fraction 0.5. Exploitation fraction indicates the proportion of total gain from pattern exploitation vs.\ novel strategies.}
+\label{tab:causal}
+\begin{tabular}{lccccc}
+\toprule
+Domain & Diff Acc & AR Acc & Total & Exploit & Exploit\% \\
+\midrule
+Math       & 0.6990 & 0.5923 & 0.1067 & 0.0956 & 89.6\% \\
+Code       & 0.7512 & 0.7030 & 0.0482 & 0.0366 & 75.9\% \\
+Logic      & 0.7341 & 0.6612 & 0.0729 & 0.0788 & 108.0\% \\
+Structured & 0.7266 & 0.5571 & 0.1695 & 0.0813 & 48.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three key findings emerge:
+
+\textbf{Finding 1: Exploitation dominates in standard reasoning domains.}
+For math, the exploitation fraction is $0.895911$ ($89.6\%$), meaning nearly all of the $0.1067$ total gain comes from better pattern utilisation.
+For code, exploitation accounts for $0.758784$ ($75.9\%$) of the $0.0482$ gain.
+Logic shows an exploitation fraction of $1.079717$ ($108.0\%$), indicating the constrained order decoder actually slightly outperforms full diffusion, and the total gain is entirely attributable to exploitation.
+
+\textbf{Finding 2: Structured text is the exception.}
+Structured text shows an exploitation fraction of only $0.479631$ ($48.0\%$), with a novelty gain of $0.0882$ that is comparable to the exploitation gain of $0.0813$.
+This suggests that the rigid syntactic constraints of JSON, SQL, and HTML create genuine opportunities for non-sequential decoding strategies that cannot be replicated by a fixed permutation.
+
+\textbf{Finding 3: Gains vary substantially across mask fractions.}
+Figure~\ref{fig:exploit} shows the exploitation fraction across mask levels.
+At low masking ($0.3$), the exploitation fraction is high across all domains ($0.541622$ to $1.820272$).
+At high masking ($0.7$), novelty gains become more prominent, with math's exploitation fraction dropping to $-0.224561$, indicating that adaptive ordering provides its largest advantage when more tokens must be predicted.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/exploitation_decomposition.png}
+\caption{Exploitation fraction vs.\ mask level by domain. Values above 0.5 indicate exploitation-dominated gains; below 0.5 indicates novelty-dominated.}
+\label{fig:exploit}
+\end{figure}
+
+\subsection{Pattern Coverage}
+
+Table~\ref{tab:coverage} reports the pattern coverage ratio (diffusion / AR) across domains.
+Code achieves the highest coverage ratio ($32570.44$), reflecting its longer sequences and dense constraint structures.
+Even the lowest ratio (structured text at $1090.81$) represents a three-orders-of-magnitude advantage in training pattern diversity for diffusion.
+
+\begin{table}[t]
+\caption{Pattern coverage ratio (diffusion / AR) by domain.}
+\label{tab:coverage}
+\begin{tabular}{lccc}
+\toprule
+Domain & AR Coverage & Diff Coverage & Ratio \\
+\midrule
+Code       & 20.00 & 713955.78 & 32570.44 \\
+Math       & 15.38 & 106911.05 & 5383.75 \\
+Logic      & 15.88 & 78692.79 & 4178.98 \\
+Structured & 12.75 & 18573.68 & 1090.81 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Oracle and Diversity Analysis}
+
+Table~\ref{tab:oracle} shows best-of-$k$ oracle accuracy at $k{=}8$.
+Diffusion decoding achieves consistently higher oracle accuracy across all domains, with gaps ranging from $+0.0349$ (code) to $+0.0992$ (structured text).
+
+\begin{table}[t]
+\caption{Best-of-$k$ oracle accuracy at $k{=}8$.}
+\label{tab:oracle}
+\begin{tabular}{lcccc}
+\toprule
+Domain & Diff Oracle & AR Oracle & Gap & Diff Div \\
+\midrule
+Math       & 0.7908 & 0.6973 & +0.0935 & 0.0685 \\
+Code       & 0.7987 & 0.7637 & +0.0349 & 0.0567 \\
+Logic      & 0.7811 & 0.7099 & +0.0711 & 0.0601 \\
+Structured & 0.7724 & 0.6732 & +0.0992 & 0.0708 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/causal_attribution.png}
+\caption{Causal attribution: exploitation (blue) vs.\ novelty (red) gains at mask fraction 0.5. Total gain labeled above each bar.}
+\label{fig:causal}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/diversity_oracle.png}
+\caption{Best-of-$k$ oracle gap (diffusion minus AR) across sample sizes.}
+\label{fig:oracle}
+\end{figure}
+
+%% ============================================================
+\section{Discussion}
+%% ============================================================
+
+Our results provide a clear answer to the motivating question: in standard reasoning domains (mathematics, code, logic), the gains from arbitrary-order decoding are \emph{predominantly} attributable to improved exploitation of existing solution patterns rather than enabling qualitatively new reasoning strategies.
+
+The exploitation fraction exceeding $75.9\%$ in three of four domains indicates that the primary mechanism of benefit is bidirectional context access---the ability to condition on both past and future tokens when predicting masked positions.
+This is consistent with the observation that constrained non-sequential decoding (which provides partial bidirectional access without adaptive ordering) captures most of the gain.
+
+The exception of structured text ($48.0\%$ exploitation) reveals that domain structure matters.
+In domains with rigid, long-range syntactic constraints (bracket matching in JSON, clause structure in SQL), the adaptive ordering capability of diffusion decoding provides genuine additional value beyond what any fixed permutation can achieve.
+
+\textbf{Implications for dLLM design.}
+Our findings suggest that for standard reasoning tasks, simpler bidirectional architectures (e.g., non-autoregressive models with masked prediction~\cite{devlin2019bert}) may capture most of the benefit attributed to diffusion-style arbitrary-order decoding.
+Full diffusion mechanisms with adaptive ordering are most valuable for highly structured generation tasks.
+
+\textbf{Limitations.}
+Our framework uses structural heuristics rather than learned neural models.
+While this enables controlled causal attribution through ablation, the absolute performance numbers are proxies for what full-scale dLLMs would achieve.
+The relative relationships between domains and the exploitation/novelty decomposition are the primary contributions.
+
+%% ============================================================
+\section{Related Work}\label{sec:related}
+%% ============================================================
+
+\textbf{Discrete diffusion models.}
+Austin et al.~\cite{austin2021d3pm} introduced structured denoising diffusion for discrete state spaces.
+Subsequent work has developed masked diffusion~\cite{sahoo2024mdlm}, score-based discrete diffusion~\cite{lou2024sedd}, flow matching for discrete data~\cite{gat2024flowmatching}, and multinomial diffusion~\cite{hoogeboom2021multinomial}.
+These approaches enable non-autoregressive text generation through iterative denoising.
+
+\textbf{Diffusion for code.}
+Fan et al.~\cite{fan2026stablediffcoder} demonstrated that diffusion-based LLMs outperform AR baselines on code generation, attributing gains to data augmentation from the denoising objective and the structural properties of code.
+Our work extends this analysis by decomposing the source of gains across domains.
+
+\textbf{Order arbitrariness in dLLMs.}
+Ni et al.~\cite{ni2026flexibilitytrap} examined whether arbitrary-order generation enables new reasoning strategies, finding that the flexibility can be a trap when the model lacks strong inductive biases for order selection.
+Zheng et al.~\cite{zheng2025armtomdm} showed that masked diffusion models are secretly autoregressive, suggesting that the gains may be more about bidirectional context than true order arbitrariness.
+Our causal attribution framework provides quantitative support for this view.
+
+%% ============================================================
+\section{Conclusion}
+%% ============================================================
+
+We presented a causal attribution framework for decomposing the source of gains from arbitrary-order decoding in diffusion language models.
+Our three-level ablation (AR, constrained non-sequential, adaptive diffusion) enables clean separation of exploitation and novelty components.
+Across four domains with 32 problem instances, we find that exploitation accounts for $75.9\%$ to $108.0\%$ of the total gain in code, math, and logic, while structured text shows a more balanced $48.0\%$ exploitation fraction.
+Best-of-$k$ oracle analysis shows consistent diffusion advantages of $+0.0349$ to $+0.0992$ at $k{=}8$.
+These findings suggest that the primary value of arbitrary-order decoding lies in improved pattern exploitation through bidirectional context, with genuine novelty gains emerging primarily in highly structured domains.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

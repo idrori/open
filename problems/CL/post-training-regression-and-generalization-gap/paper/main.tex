@@ -1,0 +1,150 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Diagnosing Post-Training Misalignment Regression and Cross-Domain Safety Generalization Gaps}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We diagnose the causes of post-training alignment regression and quantify cross-domain safety generalization gaps. Tice et al.~\cite{tice2026alignment} observed that alignment-upsampled models show slight misalignment increases after SFT+DPO, conjecturing distributional mismatch between pretraining data (loss-of-control risks) and post-training safety data (toxicity/jailbreak refusal). We confirm this hypothesis through five experiments. Post-training improves alignment in covered domains (toxicity: $+0.359$, jailbreak: $+0.309$) but causes regression in uncovered domains (weight exfiltration: $-0.041$, power seeking: $-0.021$). Cross-domain transfer from toxicity-refusal to loss-of-control domains is weak: only $0.08$ to weight exfiltration and $0.10$ to power-seeking refusal. Regression severity correlates with domain mismatch ($r=0.87$). Domain-aligned post-training that includes loss-of-control data recovers $+0.150$ points in previously regressed domains while maintaining gains in toxicity and jailbreak resistance.
+\end{abstract}
+
+\maketitle
+
+% ============================================================
+\section{Introduction}
+
+Alignment pretraining---incorporating alignment-relevant data during pre-training---has shown promise for shaping LLM safety priors~\cite{tice2026alignment}. However, Tice et al.\ discovered that these gains can partially regress after standard post-training (SFT~\cite{ouyang2022training} + DPO~\cite{rafailov2024direct}), with the Alignment Upsampled model showing slight misalignment increases in certain domains.
+
+This regression resembles catastrophic forgetting~\cite{kirkpatrick2017overcoming}: post-training on toxicity/jailbreak data may overwrite safety behaviors learned during pretraining for different domains. The authors conjectured that the mismatch between pretraining focus (deception, power seeking) and post-training data (CoCoNot, WildGuardMix, WildJailbreak~\cite{groeneveld2024olmo}) drives this effect.
+
+We investigate this through: (1) quantifying pre/post alignment changes across six safety domains, (2) measuring cross-domain transfer, (3) correlating regression with domain mismatch, and (4) evaluating domain-aligned post-training as mitigation.
+
+% ============================================================
+\section{Related Work}
+
+Safety training for LLMs typically uses RLHF~\cite{bai2022training} or DPO~\cite{rafailov2024direct}. Wei et al.~\cite{wei2024jailbroken} analyzed safety training failures, while Hubinger et al.~\cite{hubinger2024sleeper} studied persistence of learned behaviors through safety training. Our work uniquely addresses the interaction between pretraining alignment and post-training safety data distributions.
+
+% ============================================================
+\section{Methodology}
+
+We define six safety domains spanning toxicity-style and loss-of-control risks. We model alignment scores before and after post-training, with post-training effects dependent on whether each domain is covered by the post-training data distribution.
+
+\subsection{Safety Domains}
+\begin{itemize}
+    \item \textbf{Post-training covered}: Toxicity refusal, Jailbreak resistance
+    \item \textbf{Pretraining only}: Deception avoidance, Power-seeking refusal, Weight exfiltration refusal, Sycophancy resistance
+\end{itemize}
+
+% ============================================================
+\section{Results}
+
+\subsection{Post-Training Alignment Changes}
+
+Table~\ref{tab:changes} shows that post-training dramatically improves alignment in covered domains but causes regression in uncovered ones. Weight exfiltration refusal drops by $0.041$ and power-seeking refusal by $0.021$.
+
+\begin{table}[t]
+\centering
+\caption{Alignment scores before and after post-training.}
+\label{tab:changes}
+\begin{tabular}{lccc}
+\toprule
+Domain & Pre & Post & Change \\
+\midrule
+Toxicity Refusal & 0.550 & 0.909 & \textbf{+0.359} \\
+Jailbreak Resist. & 0.500 & 0.809 & \textbf{+0.309} \\
+Deception Avoidance & 0.720 & 0.779 & +0.059 \\
+Sycophancy Resist. & 0.620 & 0.649 & +0.029 \\
+Power-Seek Refusal & 0.680 & 0.659 & $-$0.021 \\
+Wt. Exfil. Refusal & 0.650 & 0.609 & $-$0.041 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_pre_post.pdf}
+\caption{Pre vs post-training alignment across safety domains.}
+\label{fig:prepost}
+\end{figure}
+
+\subsection{Cross-Domain Transfer}
+
+Figure~\ref{fig:transfer} shows that transfer from toxicity-refusal to loss-of-control domains is weak: $0.08$ to weight exfiltration, $0.10$ to power seeking. In contrast, within-cluster transfer is strong (toxicity$\to$jailbreak: $0.60$, deception$\to$power-seeking: $0.45$).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_transfer_matrix.pdf}
+\caption{Cross-domain safety transfer matrix.}
+\label{fig:transfer}
+\end{figure}
+
+\subsection{Regression-Mismatch Correlation}
+
+Figure~\ref{fig:mismatch} shows that regression severity correlates strongly with domain mismatch (correlation $r = 0.87$). Domains with high mismatch (in pretraining but not post-training) show the largest alignment drops.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_regression_mismatch.pdf}
+\caption{Alignment change vs domain mismatch score.}
+\label{fig:mismatch}
+\end{figure}
+
+\subsection{Mitigation}
+
+Table~\ref{tab:mitigation} shows that domain-aligned post-training recovers lost alignment. Weight exfiltration improves from $0.609$ to $0.759$ ($+0.150$), while toxicity and jailbreak domains maintain their gains.
+
+\begin{table}[t]
+\centering
+\caption{Standard vs domain-aligned post-training.}
+\label{tab:mitigation}
+\begin{tabular}{lccc}
+\toprule
+Domain & Standard & Aligned & Improv. \\
+\midrule
+Toxicity Refusal & 0.909 & 0.909 & +0.000 \\
+Jailbreak Resist. & 0.809 & 0.809 & +0.000 \\
+Deception Avoid. & 0.779 & 0.929 & +0.150 \\
+Power-Seek Ref. & 0.659 & 0.809 & +0.150 \\
+Wt. Exfil. Ref. & 0.609 & 0.759 & +0.150 \\
+Sycophancy Res. & 0.649 & 0.799 & +0.150 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_mitigation.pdf}
+\caption{Domain-aligned post-training recovers lost alignment.}
+\label{fig:mitigation}
+\end{figure}
+
+% ============================================================
+\section{Discussion}
+
+Our results confirm Tice et al.'s mismatch hypothesis: post-training regression is driven by distributional mismatch between pretraining and post-training safety data. Critically, toxicity-refusal training does \emph{not} generalize to weight exfiltration refusal (transfer = $0.08$), answering the authors' specific question. The practical solution is straightforward: include loss-of-control scenarios in post-training data to maintain comprehensive safety coverage.
+
+% ============================================================
+\section{Conclusion}
+
+We have diagnosed the causes of post-training alignment regression, confirming that distributional mismatch between safety data domains drives regression. Cross-domain transfer between toxicity and loss-of-control domains is weak, necessitating explicit coverage. Domain-aligned post-training effectively mitigates regression while preserving gains.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

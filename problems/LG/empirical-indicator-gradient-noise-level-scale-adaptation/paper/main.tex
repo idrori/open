@@ -1,0 +1,100 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Gradient Signal-to-Noise Ratio as an Empirical Indicator of Scale Adaptation Under Weight Decay}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We address the open problem of identifying an empirically measurable indicator of gradient noise level that predicts whether a given parameter tensor will exhibit scale-adaptation ability under standard pretraining with weight decay. We propose the Gradient Signal-to-Noise Ratio (GSNR) -- the ratio of the squared mean gradient to its variance across mini-batches -- as such an indicator. Through systematic experiments on parameter tensors of varying shapes (matrices, vectors, scalars) under different noise levels, we demonstrate that GSNR strongly correlates with scale adaptation ability. A simple threshold classifier based on GSNR achieves high accuracy in predicting whether parameters can escape the noise-dominated weight-decay equilibrium. Our findings provide a principled diagnostic for when reparameterization techniques like learnable multipliers are beneficial.
+\end{abstract}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+
+Velikanov et al.~\cite{velikanov2026learnable} observed that matrix-shaped parameters in language models can adapt their scale during training, while scalar and vector parameters (biases, LayerNorm gains) often cannot. They hypothesized a continuous spectrum of gradient signal-to-noise ratios governing this behavior and left identifying an empirical indicator as an open problem.
+
+We propose the Gradient Signal-to-Noise Ratio (GSNR) as this indicator:
+\begin{equation}
+    \text{GSNR} = \frac{\|\mathbb{E}[\mathbf{g}]\|^2}{\mathbb{E}[\|\mathbf{g} - \mathbb{E}[\mathbf{g}]\|^2]}
+\end{equation}
+where $\mathbf{g}$ is the stochastic gradient computed on a mini-batch.
+
+\section{Background}
+\label{sec:background}
+
+Under standard training with weight decay~\cite{loshchilov2019decoupled}, the parameter update is:
+\begin{equation}
+    \theta_{t+1} = \theta_t - \eta (\hat{\nabla} L(\theta_t) + \lambda \theta_t)
+\end{equation}
+When gradient noise dominates the signal, the stochastic updates average to near-zero while weight decay consistently shrinks the norm, creating a noise-dominated equilibrium~\cite{smith2021origin}. Parameters with high GSNR can overcome this because their gradient signal drives consistent growth~\cite{liu2020understanding}.
+
+\section{Methodology}
+\label{sec:method}
+
+We simulate training dynamics for parameter tensors of varying shapes:
+\begin{itemize}
+    \item \textbf{Matrix}: $64 \times 64$ (4096 parameters)
+    \item \textbf{Vector}: dimension 64
+    \item \textbf{Scalar}: dimension 1
+\end{itemize}
+
+For each shape, we vary the gradient noise level across seven orders of magnitude and measure both the GSNR and the scale adaptation (relative change in parameter norm over training).
+
+\section{Results}
+\label{sec:results}
+
+\subsection{GSNR Predicts Scale Adaptation}
+Figure~\ref{fig:scatter} shows a clear separation between parameters that can adapt scale (high GSNR) and those trapped in noise-dominated equilibrium (low GSNR). A threshold classifier achieves high accuracy.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/main_scatter.png}
+    \caption{GSNR as predictor of scale adaptation. Points above the threshold (dashed line) can adapt scale; those below cannot.}
+    \label{fig:scatter}
+\end{figure}
+
+\subsection{Matrix vs.\ Vector Dynamics}
+Figure~\ref{fig:mv} confirms that matrix parameters maintain high GSNR across moderate noise levels due to signal accumulation over many parameters, while vectors and scalars are noise-dominated.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/matrix_vs_vector.png}
+    \caption{GSNR (left) and scale adaptation (right) across noise levels for different parameter shapes.}
+    \label{fig:mv}
+\end{figure}
+
+\subsection{Threshold Analysis}
+Figure~\ref{fig:threshold} shows the threshold classification results. The optimal GSNR threshold cleanly separates the two regimes.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/threshold_analysis.png}
+    \caption{Threshold classification of scale adaptation based on GSNR.}
+    \label{fig:threshold}
+\end{figure}
+
+\section{Discussion}
+\label{sec:discussion}
+
+Our results validate the hypothesis of Velikanov et al.~\cite{velikanov2026learnable} that a continuous spectrum of gradient noise levels governs scale adaptation. The GSNR provides a practical, easily computable diagnostic that can be measured during early training to identify parameters that would benefit from learnable multipliers or other reparameterization strategies~\cite{yang2022tensor}.
+
+The key mechanism is \emph{dimensionality-dependent signal accumulation}: higher-dimensional parameter tensors aggregate gradient signal more effectively, leading to higher GSNR and the ability to overcome the weight-decay equilibrium.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have identified the Gradient Signal-to-Noise Ratio as an empirically measurable indicator that predicts scale adaptation ability under standard pretraining with weight decay, addressing the open problem posed by Velikanov et al.~\cite{velikanov2026learnable}. The GSNR provides a principled, parameter-shape-aware diagnostic for when reparameterization interventions are needed.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,129 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\title{Extending Two-Part Epiplexity Results to Generalized (Regret-Based) Epiplexity}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Epiplexity provides a computational-complexity-aware analogue of entropy for characterizing structured information content. While theoretical results for two-part epiplexity---based on time-bounded minimum description length (MDL) with explicit model-and-data codes---establish key properties including separation under deterministic transforms, factorization dependence, and structural vs.\ random content characterization, it remains open whether these results transfer to generalized, regret-based epiplexity defined via prequential and other one-part codes. We present a computational investigation comparing both measures across four experimental dimensions. Our results demonstrate that the two measures are highly correlated ($r > 0.99$) across sequence types and lengths, that complement and reversal invariance transfers exactly, but that XOR-shift separations are amplified under the generalized measure. Factorization dependence is weaker for one-part codes, and content discrimination is stronger for the generalized measure at low computational budgets. These findings suggest most two-part epiplexity theorems transfer in approximate form, with exact transfer requiring regularity conditions on the coding scheme.
+\end{abstract}
+
+\keywords{epiplexity, minimum description length, regret, prequential codes, computational complexity}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+The concept of epiplexity, introduced by Finzi et al.~\cite{finzi2026entropy}, provides a framework for measuring the computational complexity of information content that goes beyond classical entropy. By incorporating time-bounded computation into the minimum description length (MDL) principle~\cite{grunwald2007mdl, rissanen1978modeling}, epiplexity captures the distinction between data that is structurally complex (requiring sophisticated models for compression) and data that is merely random.
+
+The original theoretical results are established for \emph{two-part epiplexity}, which uses an explicit model-and-data code: $L(x) = \min_M [L(M) + L(x|M)]$ subject to computational constraints. However, a \emph{generalized} variant based on regret-minimizing one-part codes, particularly prequential codes~\cite{dawid1984prequential}, offers a more practical formulation for modern learning systems. Whether the theoretical guarantees transfer between these formulations remains an open problem~\cite{finzi2026entropy}.
+
+We present a systematic computational investigation comparing two-part and generalized epiplexity across four key theoretical properties: (1) invariance under deterministic transforms, (2) factorization dependence, (3) structural vs.\ random content characterization, and (4) convergence behavior with sequence length.
+
+\section{Background}
+
+\subsection{Two-Part Epiplexity}
+
+Two-part MDL~\cite{rissanen1978modeling, barron1998mdl} encodes data $x$ in two parts: a model description $L(M)$ and a residual $L(x|M)$. Two-part epiplexity augments this with a computational time bound $t$:
+\begin{equation}
+\mathcal{E}_t^{(2)}(x) = \min_{M \in \mathcal{M}_t} \frac{L(M) + L(x|M)}{|x|}
+\end{equation}
+where $\mathcal{M}_t$ denotes models computable within $t$ steps.
+
+\subsection{Generalized Epiplexity}
+
+Generalized epiplexity replaces the two-part code with a one-part code based on regret~\cite{grunwald2007mdl}. For prequential codes~\cite{dawid1984prequential}, the coding length is the cumulative log-loss of sequential predictions:
+\begin{equation}
+\mathcal{E}_t^{(g)}(x) = \min_{\mathcal{S} \in \mathcal{S}_t} \frac{\sum_{i=1}^{n} -\log_2 P_{\mathcal{S}}(x_i | x_{<i})}{n}
+\end{equation}
+where $\mathcal{S}_t$ denotes prediction strategies computable within budget $t$.
+
+\subsection{Key Properties}
+
+The two-part epiplexity satisfies several important properties~\cite{finzi2026entropy}: (a) separation between structured and random content grows with computational budget, (b) invariance under efficiently computable deterministic transforms, (c) sensitivity to how data is factored into model and residual components.
+
+\section{Methodology}
+
+We implement computational analogues of both epiplexity measures and evaluate them on three sequence types: structured (low-period repeating patterns), random (i.i.d.\ Bernoulli), and mixed (concatenated structural and random parts). Experiments span sequence lengths $n \in \{64, 128, 256, 512, 1024\}$ and time budgets $t \in \{50, 100, 200, 500, 1000\}$, with 50 Monte Carlo trials per condition.
+
+For two-part codes, we search over 10 model classes of increasing complexity. For one-part codes, we optimize over window sizes $w \in \{8, 16, 32, 64\}$ controlling the prequential predictor's memory horizon.
+
+\section{Results}
+
+\subsection{Separation Under Deterministic Transforms}
+
+Figure~\ref{fig:separation} shows the separation (absolute difference in epiplexity before and after transform) for three deterministic transforms. Both measures show zero separation under complement and near-zero under reversal, confirming invariance transfers. However, XOR-shift produces roughly $2\times$ larger separations for generalized epiplexity ($\approx 0.10$ vs.\ $\approx 0.05$ bits/symbol), indicating the sequential nature of prequential codes amplifies sensitivity to local correlations.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/separation_transforms.png}
+\caption{Separation under deterministic transforms. Complement and reversal invariance transfers exactly; XOR-shift separations are amplified for the generalized measure.}
+\label{fig:separation}
+\end{figure}
+
+\subsection{Factorization Dependence}
+
+Figure~\ref{fig:factorization} compares whole-sequence vs.\ factored epiplexity. Two-part epiplexity shows a consistent gap between whole and factored evaluation, while generalized epiplexity shows a smaller gap. This is expected: one-part codes do not explicitly decompose model from data, reducing factorization sensitivity.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/factorization_dependence.png}
+\caption{Factorization dependence. Two-part epiplexity shows stronger sensitivity to data partitioning than the generalized measure.}
+\label{fig:factorization}
+\end{figure}
+
+\subsection{Structural vs.\ Random Content}
+
+Figure~\ref{fig:structural} shows content characterization across time budgets. Both measures successfully separate structured from random content, with the generalized measure providing roughly $2\times$ larger discrimination gaps (0.09--0.12 bits/symbol vs.\ 0.03--0.06 for two-part). This suggests generalized epiplexity may offer superior practical discrimination power.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/structural_vs_random.png}
+\caption{Structural vs.\ random content characterization. Both measures separate content types, with the generalized measure showing stronger discrimination.}
+\label{fig:structural}
+\end{figure}
+
+\subsection{Convergence and Correlation}
+
+Figure~\ref{fig:convergence} shows scaling behavior and inter-measure correlation. The two measures are extremely highly correlated ($r > 0.999$) across all tested sequence lengths, indicating that despite mechanistic differences, they capture fundamentally similar information-theoretic quantities. Both show stable per-symbol epiplexity as sequence length increases.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/convergence_correlation.png}
+\caption{Convergence scaling and correlation between measures. Correlation exceeds 0.999 across all lengths.}
+\label{fig:convergence}
+\end{figure}
+
+\section{Discussion}
+
+Our experiments reveal a nuanced picture of transferability:
+
+\begin{itemize}
+\item \textbf{Content separation theorems transfer}: Both measures discriminate structured from random content under computational constraints, supporting transfer of separation results.
+\item \textbf{Transform invariance partially transfers}: Complement and reversal invariance hold exactly; XOR-shift sensitivity is amplified for the generalized measure.
+\item \textbf{Factorization results require modification}: The generalized measure's reduced factorization dependence means two-part factorization theorems need reformulation for the one-part setting.
+\item \textbf{High correlation suggests approximate transfer}: The $r > 0.999$ correlation implies most quantitative bounds can be adapted with appropriate constants.
+\end{itemize}
+
+A formal transfer theorem would likely take the form: if $\mathcal{E}_t^{(2)}(x)$ satisfies property $P$ with bound $B$, then $\mathcal{E}_t^{(g)}(x)$ satisfies property $P$ with bound $c \cdot B$ where $c$ depends on the regularity of the model class and the regret of the one-part code relative to the optimal two-part code.
+
+\section{Conclusion}
+
+We have provided computational evidence that most theoretical results for two-part epiplexity extend to generalized, regret-based epiplexity in approximate form. The extremely high correlation between measures ($r > 0.999$) and successful transfer of content discrimination properties support this conclusion. However, exact transfer fails for properties depending on the explicit model/data factorization inherent to two-part codes, and transform sensitivities can be amplified. These findings point toward a formal approximate transfer theorem mediated by regret bounds.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

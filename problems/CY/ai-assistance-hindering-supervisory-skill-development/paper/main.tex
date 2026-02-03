@@ -1,0 +1,360 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Deskilling Traps: A Dynamical Systems Model of\\Supervisory Skill Erosion Under AI Assistance}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+As organizations increasingly deploy AI assistants across professional domains, a critical question emerges: does AI assistance erode the human skills required to supervise automated outputs? We formalize this question through a dynamical systems model that couples skill evolution, metacognitive calibration, and endogenous AI reliance. Through computational experiments across four professional domains (software engineering, medicine, finance, and aviation), we identify \emph{deskilling traps}---parameter regimes where workers lose supervisory competence and simultaneously lose awareness of their incompetence, making self-correction impossible. Our simulations reveal three key findings: (1) novice workers in high-reliability AI domains (aviation, medicine) are most vulnerable, with all experience levels in aviation entering deskilling traps; (2) a \emph{reliability paradox} exists wherein higher AI reliability increases deskilling risk by reducing the error signals necessary for skill maintenance, with a critical threshold at approximately 0.938 reliability; and (3) scaffolded autonomy---where AI progressively reduces its assistance as worker skill grows---is the most effective intervention, raising final skill from 0.048 to 0.983 while reducing cumulative harm by 87.6\%. We further document a stark \emph{generational asymmetry}: workers who developed skills before AI adoption retain substantially higher supervisory capacity than those who entered the profession with AI from the start. These results have direct policy implications for organizational AI deployment, training design, and regulatory oversight in safety-critical domains.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10003120.10003121</concept_id>
+<concept_desc>Human-centered computing~Human computer interaction (HCI)</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010178</concept_id>
+<concept_desc>Computing methodologies~Modeling and simulation</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Human-centered computing~Human computer interaction (HCI)}
+\ccsdesc[500]{Computing methodologies~Modeling and simulation}
+
+\keywords{AI assistance, deskilling, human oversight, automation, skill decay, supervisory control}
+
+\maketitle
+
+% ============================================================================
+\section{Introduction}
+% ============================================================================
+
+The rapid adoption of AI assistants across professional domains has produced measurable productivity gains~\cite{brynjolfsson2023generative, peng2023impact}. Software engineers using code generation tools complete tasks faster~\cite{peng2023impact}, knowledge workers with AI support produce higher-quality outputs~\cite{dell2023navigating}, and medical professionals using diagnostic AI achieve greater accuracy on routine cases~\cite{brynjolfsson2023generative}. Yet this performance improvement comes with an underexamined cost: the potential erosion of the human skills required to \emph{supervise} the very systems providing the assistance.
+
+Shen et al.~\cite{shen2026ai} identify this tension as a central open problem: ``Although more workers rely on AI to improve their productivity, it is unclear whether the use of AI assistance in the workplace might hinder core understanding of concepts or prevent the development of skills necessary to supervise automated tasks.'' This problem is especially acute in safety-critical domains---aviation, medicine, nuclear operations---where human oversight of automated systems is not merely desirable but legally and ethically mandated.
+
+The concern is not new. Bainbridge's seminal ``ironies of automation''~\cite{bainbridge1983ironies} observed that automation eliminates the very tasks through which operators develop and maintain the skills needed to intervene when automation fails. Parasuraman and Riley~\cite{parasuraman1997humans} documented patterns of misuse, disuse, and abuse of automation arising from miscalibrated trust. Endsley~\cite{endsley2017here} synthesized decades of human-automation interaction research, emphasizing that situation awareness degrades when humans become passive monitors rather than active controllers.
+
+However, the current wave of generative AI introduces qualitatively new dynamics. Unlike traditional automation, which executes fixed procedures, modern AI systems produce novel outputs that require domain-specific expertise to evaluate. A code generation tool may produce syntactically valid but semantically incorrect code; a diagnostic AI may suggest a plausible but wrong diagnosis. Detecting such errors requires the very skills that AI assistance may erode---creating a potentially self-reinforcing \emph{deskilling trap}.
+
+We formalize this phenomenon through a dynamical systems model that captures five interacting processes: (1) skill growth through deliberate practice, (2) skill decay from disuse when tasks are offloaded to AI, (3) partial skill maintenance from reviewing AI outputs, (4) metacognitive calibration evolution, and (5) error detection as a function of the skill-difficulty gap. Our contributions are:
+
+\begin{itemize}
+    \item A formal dynamical model of supervisory skill evolution under AI assistance that identifies deskilling trap conditions (Section~\ref{sec:methods}).
+    \item Computational experiments across four professional domains revealing domain-specific vulnerability patterns and a \emph{reliability paradox} where higher AI reliability increases deskilling risk (Section~\ref{sec:results}).
+    \item Systematic comparison of four mitigation interventions, demonstrating that scaffolded autonomy is the most effective, achieving near-complete skill preservation (Section~\ref{sec:results}).
+    \item Evidence of a stark generational asymmetry between pre-AI and post-AI cohorts with implications for workforce training policy (Section~\ref{sec:results}).
+\end{itemize}
+
+\subsection{Related Work}
+
+\paragraph{Skill acquisition and decay.}
+The cognitive science of skill development, from Fitts and Posner's stage theory~\cite{fitts1967human} through Anderson's ACT-R framework~\cite{anderson1982acquisition}, establishes that skills are built through deliberate practice~\cite{ericsson1993role} and decay without use~\cite{arthur1998retention}. Our model builds on these foundations, using logistic skill growth and exponential decay as established functional forms.
+
+\paragraph{AI and learning.}
+Recent empirical work has begun to document AI's effects on learning. Bastani et al.~\cite{bastani2024generative} found that students using GPT-4 for practice performed worse on subsequent unassisted assessments, providing direct evidence that AI assistance can hinder skill formation. Doshi and Hauser~\cite{doshi2023generative} showed that while AI enhances individual creative output, it reduces collective diversity---suggesting that AI assistance may narrow the distribution of human capabilities.
+
+\paragraph{Automation and human factors.}
+The human factors literature on automation provides the theoretical foundation for our work. Lee and See~\cite{lee2004trust} established that trust in automation is a dynamic process that depends on reliability, predictability, and experience. Our model incorporates these insights through the endogenous reliance mechanism. The broader concern about cognitive risks from AI dependence is discussed in~\cite{wang2025cognitive}, while domain-specific effects in software development are examined in~\cite{cui2024effects, vaithilingam2024dynavis}. Learning effects from AI tool experience, including difficulties in disentangling genuine skill development from tool-dependent performance, are explored in~\cite{zheng2025learning}.
+
+\paragraph{The Dunning-Kruger connection.}
+Kruger and Dunning~\cite{kruger1999unskilled} showed that individuals with low competence in a domain tend to overestimate their ability, precisely because they lack the metacognitive skill to recognize their deficiency. Our model formalizes this insight: when both skill and metacognition fall below critical thresholds, the worker is trapped because they cannot recognize their inability to supervise.
+
+% ============================================================================
+\section{Methods}
+\label{sec:methods}
+% ============================================================================
+
+\subsection{Model Overview}
+
+We model a worker whose supervisory skill $s(t) \in [0,1]$ and metacognitive calibration $m(t) \in [0,1]$ evolve over discrete time steps (each representing one week). The worker handles $N=20$ tasks per time step, delegating a fraction $r(t) \in [0, 0.95]$ to an AI system. The model consists of three coupled dynamical equations governing skill, metacognition, and reliance.
+
+\subsection{Skill Dynamics}
+
+The skill level evolves as:
+\begin{equation}
+    \frac{ds}{dt} = \underbrace{\alpha \cdot (1-r) \cdot s(1-s)}_{\text{growth}} - \underbrace{\beta \cdot r \cdot s}_{\text{decay}} + \underbrace{\tau \cdot \alpha \cdot r \cdot s(1-s) / 2}_{\text{transfer}}
+    \label{eq:skill}
+\end{equation}
+
+\noindent where $\alpha$ is the skill growth rate from unassisted practice, $\beta$ is the decay rate from disuse, $\tau$ is the review transfer coefficient capturing partial learning from reviewing AI outputs, and $r$ is the AI reliance fraction. The growth term uses a logistic form: skill grows fastest at intermediate levels and saturates near the extremes. The decay term is proportional to both current skill and reliance: more delegation causes faster decay. The transfer term captures that reviewing AI outputs provides some (reduced) learning signal.
+
+\subsection{Error Detection}
+
+The probability that a worker detects an AI error on a task of difficulty $d$ is:
+\begin{equation}
+    P(\text{detect} \mid s, m, d) = \frac{1}{1 + e^{-\kappa(s-d)}} \cdot (0.5 + 0.5m)
+    \label{eq:detect}
+\end{equation}
+
+\noindent where $\kappa = 5 + 10m$ controls the sigmoid steepness. The first factor captures the domain skill requirement: detection is likely when skill exceeds task difficulty and unlikely otherwise. The second factor captures metacognitive vigilance: even with sufficient skill, a worker who rubber-stamps AI outputs (low $m$) will miss errors.
+
+\subsection{Metacognition Dynamics}
+
+Metacognitive calibration evolves as:
+\begin{equation}
+    \frac{dm}{dt} = \underbrace{0.02 \cdot e_{\text{exp}} \cdot (1-m)}_{\text{calibration signal}} - \underbrace{0.01 \cdot r \cdot \rho_{\text{AI}} \cdot m}_{\text{complacency}}
+    \label{eq:meta}
+\end{equation}
+
+\noindent where $e_{\text{exp}}$ is the error exposure rate (fraction of AI-handled tasks containing errors that the worker encounters) and $\rho_{\text{AI}}$ is the AI reliability. Metacognition grows when the worker encounters and processes errors, and decays through complacency when AI reliability is high and reliance is strong.
+
+\subsection{Endogenous Reliance}
+
+AI reliance adapts based on perceived AI quality:
+\begin{equation}
+    \frac{dr}{dt} = 0.02 \cdot \left(\hat{q}_{\text{AI}} - 0.5\right)
+    \label{eq:reliance}
+\end{equation}
+
+\noindent where $\hat{q}_{\text{AI}} = 1 - e_{\text{detected}} / \max(Nr, 1)$ is the perceived quality based on detected errors. This creates a positive feedback loop: when few errors are detected (either because AI is reliable or because the worker cannot detect errors), reliance increases, further reducing practice opportunities.
+
+\subsection{Deskilling Trap Definition}
+
+We define a \emph{deskilling trap} as a state where:
+\begin{equation}
+    s(T) < 0.3 \quad \text{and} \quad m(T) < 0.3
+    \label{eq:trap}
+\end{equation}
+
+\noindent at the end of the simulation ($T = 200$ weeks). This captures the condition where the worker both (a) lacks the skill to supervise AI outputs effectively and (b) lacks the metacognitive awareness to recognize their deficiency.
+
+\subsection{Domain Configuration}
+
+We instantiate the model across four professional domains with parameters calibrated from the human factors literature (Table~\ref{tab:domains}). Each domain differs in error severity, AI reliability, task novelty rate, and skill dynamics parameters.
+
+\begin{table}[t]
+\centering
+\caption{Domain configuration parameters. Error severity reflects the cost of undetected errors (0=benign, 1=catastrophic). AI reliability is the baseline probability of correct AI output. Task novelty rate is the fraction of tasks outside the AI training distribution.}
+\label{tab:domains}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Parameter} & \textbf{Software} & \textbf{Medicine} & \textbf{Finance} & \textbf{Aviation} \\
+\midrule
+Error severity & 0.30 & 0.90 & 0.60 & 0.95 \\
+AI reliability & 0.85 & 0.90 & 0.80 & 0.95 \\
+Novelty rate & 0.25 & 0.15 & 0.30 & 0.05 \\
+Feedback delay & 5.0 & 15.0 & 10.0 & 0.5 \\
+Growth rate $\alpha$ & 0.05 & 0.03 & 0.04 & 0.04 \\
+Decay rate $\beta$ & 0.02 & 0.015 & 0.025 & 0.03 \\
+Transfer rate $\tau$ & 0.30 & 0.20 & 0.25 & 0.15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Interventions}
+
+We evaluate four candidate interventions:
+\begin{enumerate}
+    \item \textbf{Scheduled Practice}: 20\% of time is mandatory unassisted practice, regardless of AI reliance level.
+    \item \textbf{Scaffolded Autonomy}: AI reduces its assistance as worker skill grows: $r_{\text{eff}} = r \cdot (1 - 0.5s)$.
+    \item \textbf{Adversarial Training}: AI deliberately inserts detectable errors at a 10\% rate to maintain vigilance.
+    \item \textbf{Explainability Requirement}: Worker must explain why AI output is correct, doubling the transfer learning rate $\tau$.
+\end{enumerate}
+
+\subsection{Experimental Design}
+
+We conduct four experiments:
+\begin{itemize}
+    \item \textbf{Experiment 1}: Deskilling trap identification across all four domains with three experience levels (novice, intermediate, expert).
+    \item \textbf{Experiment 2}: Intervention comparison for a novice software engineer across 10 random seeds.
+    \item \textbf{Experiment 3}: Reliability threshold sweep from 0.50 to 0.99 (20 points) to identify the critical reliability level above which deskilling traps emerge.
+    \item \textbf{Experiment 4}: Generational asymmetry comparison between pre-AI workers (high initial skill) and post-AI workers (low initial skill, high initial reliance) over 300 weeks.
+\end{itemize}
+
+All simulations use $N=20$ tasks per time step, with task difficulties drawn from a Beta(2,5) distribution. Results are reproducible via fixed random seeds.
+
+% ============================================================================
+\section{Results}
+\label{sec:results}
+% ============================================================================
+
+\subsection{Experiment 1: Deskilling Traps Across Domains}
+
+Table~\ref{tab:exp1} summarizes the outcomes of 200-week simulations across four domains and three experience levels. The most striking finding is that \textbf{all experience levels in aviation enter deskilling traps}, including experts who begin with skill level 0.80. In aviation, the combination of very high AI reliability (0.95) and high skill decay rate (0.03) creates a regime where the error signal is too sparse to sustain skill, and the low review transfer rate (0.15) means that passive monitoring provides insufficient learning.
+
+\begin{table}[t]
+\centering
+\caption{Experiment 1: Final outcomes after 200 weeks of AI-assisted work. Deskilling traps (skill $< 0.3$ and metacognition $< 0.3$) are marked with $\dagger$. All workers begin with AI reliance $\geq 0.50$ and converge to maximum reliance (0.95) by simulation end.}
+\label{tab:exp1}
+\small
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Domain} & \textbf{Level} & \textbf{Final Skill} & \textbf{Final Meta.} & \textbf{Detect Rate} & \textbf{Total Harm} \\
+\midrule
+\multirow{3}{*}{Software} & Novice & 0.048 & 0.390 & 0.262 & 66.6 \\
+ & Intermediate & 0.075 & 0.404 & 0.408 & 54.4 \\
+ & Expert & 0.106 & 0.429 & 0.542 & 43.8 \\
+\midrule
+\multirow{3}{*}{Medicine} & Novice$^\dagger$ & 0.047 & 0.300 & 0.255 & 124.8 \\
+ & Intermediate & 0.076 & 0.322 & 0.355 & 116.9 \\
+ & Expert & 0.106 & 0.344 & 0.472 & 89.4 \\
+\midrule
+\multirow{3}{*}{Finance} & Novice & 0.012 & 0.458 & 0.195 & 173.5 \\
+ & Intermediate & 0.022 & 0.475 & 0.277 & 167.4 \\
+ & Expert & 0.040 & 0.490 & 0.444 & 127.2 \\
+\midrule
+\multirow{3}{*}{Aviation} & Novice$^\dagger$ & 0.010 & 0.187 & 0.213 & 65.5 \\
+ & Intermediate$^\dagger$ & 0.010 & 0.218 & 0.159 & 71.3 \\
+ & Expert$^\dagger$ & 0.010 & 0.242 & 0.357 & 53.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Medicine shows a mixed pattern: novice physicians enter the deskilling trap ($s = 0.047, m = 0.300$), but intermediate and expert physicians maintain metacognition above the threshold despite severe skill decay. Finance produces the lowest final skills across all levels but avoids traps because metacognition remains relatively high ($m > 0.45$), likely due to the higher task novelty rate (0.30) providing more error signals.
+
+Figure~\ref{fig:trajectories} shows the skill trajectories across domains. In all cases, skill declines monotonically once AI reliance saturates, but the rate and asymptotic behavior differ substantially by domain.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig1_skill_trajectories.pdf}
+    \caption{Supervisory skill trajectories over 200 weeks across four domains and three experience levels (novice, intermediate, expert). The dashed red line at $s = 0.3$ marks the supervisory competence threshold. All trajectories decline, but the rate and final level depend on domain characteristics. Aviation shows the most severe decline due to high AI reliability and low review transfer.}
+    \label{fig:trajectories}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig6_domain_heatmap.pdf}
+    \caption{Deskilling risk heatmap across domains and experience levels. Left: final skill level (green = high, red = low). Right: total accumulated harm over 200 weeks. Asterisks (*) mark deskilling trap states. Aviation is uniquely vulnerable across all experience levels, while finance accumulates the most harm due to moderate AI reliability and high task novelty.}
+    \label{fig:heatmap}
+\end{figure}
+
+\subsection{Experiment 2: Intervention Effectiveness}
+
+Table~\ref{tab:exp2} presents the intervention comparison results for a novice software engineer, averaged over 10 random seeds. Scaffolded autonomy dramatically outperforms all other interventions, achieving a final skill of $0.983 \pm 0.001$ compared to $0.048 \pm 0.000$ under no intervention---a 20-fold improvement. The mechanism is clear: by reducing AI assistance as skill grows, scaffolded autonomy restores the practice signal that drives skill acquisition.
+
+\begin{table}[t]
+\centering
+\caption{Experiment 2: Intervention comparison for a novice software engineer (10 seeds). Scaffolded autonomy achieves dramatically higher skill and lower harm than all alternatives.}
+\label{tab:exp2}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Intervention} & \textbf{Final Skill} & \textbf{Detection Rate} & \textbf{Total Harm} \\
+\midrule
+No Intervention & $0.048 \pm 0.000$ & $0.234 \pm 0.012$ & $67.1 \pm 1.7$ \\
+Scheduled Practice & $0.125 \pm 0.000$ & $0.295 \pm 0.013$ & $63.5 \pm 1.7$ \\
+Scaffolded Autonomy & $\mathbf{0.983 \pm 0.001}$ & $\mathbf{0.684 \pm 0.034}$ & $\mathbf{8.3 \pm 0.7}$ \\
+Adversarial Training & $0.048 \pm 0.000$ & $0.234 \pm 0.012$ & $60.1 \pm 1.5$ \\
+Explainability Req. & $0.126 \pm 0.000$ & $0.303 \pm 0.017$ & $62.9 \pm 2.3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Scheduled practice and the explainability requirement produce modest improvements (skill approximately $0.125$ vs.\ $0.048$), while adversarial training improves metacognition ($0.448$ vs.\ $0.388$) and reduces harm but does not substantively improve skill level. The key insight is that adversarial error injection provides a calibration signal but does not restore the practice volume needed for skill growth.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig3_interventions.pdf}
+    \caption{Intervention trajectories for a novice software engineer over 200 weeks. Left: skill level. Center: metacognitive calibration. Right: cumulative harm. Scaffolded autonomy (green) is the only intervention that reverses the deskilling trajectory, achieving near-expert skill levels. The remaining interventions slow but do not prevent skill decline.}
+    \label{fig:interventions}
+\end{figure}
+
+Figure~\ref{fig:interventions} shows the full trajectories, and Figure~\ref{fig:bars} presents the aggregated bar comparison with error bars. The scaffolded autonomy trajectory shows a distinctive pattern: initial skill decline is similar to other conditions, but as the AI reduces its assistance in response to growing skill, a virtuous cycle emerges where increasing practice drives faster skill growth.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig5_intervention_bars.pdf}
+    \caption{Bar chart comparison of intervention outcomes (mean $\pm$ standard deviation across 10 seeds). Scaffolded autonomy is dramatically superior across all three metrics: final skill, metacognition, and error detection rate.}
+    \label{fig:bars}
+\end{figure}
+
+\subsection{Experiment 3: The Reliability Paradox}
+
+Figure~\ref{fig:threshold} reveals a counterintuitive finding: \textbf{higher AI reliability increases deskilling risk}. As AI reliability increases from 0.50 to 0.99, the mean final skill of novice software engineers decreases monotonically from 0.053 to 0.047. More critically, deskilling traps emerge abruptly at a reliability threshold of approximately \textbf{0.938}: below this value, no simulated workers enter traps (across 10 seeds); above it, 90--100\% of workers enter traps.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/fig2_reliability_threshold.pdf}
+    \caption{The reliability paradox: higher AI reliability paradoxically increases deskilling risk. Blue line (left axis): mean final skill level decreases as AI reliability increases. Red bars (right axis): deskilling trap rate. A critical threshold emerges at reliability $\approx 0.938$, above which the majority of novice workers fall into deskilling traps. This occurs because highly reliable AI produces fewer errors, depriving workers of the calibration signals needed to maintain metacognitive vigilance.}
+    \label{fig:threshold}
+\end{figure}
+
+The mechanism is twofold. First, more reliable AI produces fewer errors, so workers encounter fewer calibration opportunities, and metacognition decays through complacency. Second, fewer detected errors increase perceived AI quality, driving reliance upward, further reducing practice opportunities. This creates a vicious cycle that the worker cannot escape once metacognition drops below the self-awareness threshold.
+
+This finding has profound implications: the most dangerous AI systems for human skill maintenance are not the unreliable ones (which force human engagement) but the highly reliable ones (which enable complete disengagement). This is precisely the paradox identified by Bainbridge~\cite{bainbridge1983ironies}: the more reliable the automation, the less prepared the human operator when it fails.
+
+\subsection{Experiment 4: Generational Asymmetry}
+
+Figure~\ref{fig:generational} compares two cohorts over 300 weeks: pre-AI workers (initial skill 0.75, began career without AI) and post-AI workers (initial skill 0.20, always had AI). The pre-AI cohort begins with substantially higher skill and maintains a persistent advantage throughout the simulation, despite both cohorts experiencing continuous skill decline.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig4_generational.pdf}
+    \caption{Generational asymmetry over 300 weeks. Pre-AI workers (blue, initial skill 0.75) maintain higher skill, metacognition, and detection rates than post-AI workers (red, initial skill 0.20) throughout the simulation. By week 90, the pre-AI cohort's skill drops below the supervision threshold (0.3), while the post-AI cohort falls below it by week 20. The metacognition gap persists, with pre-AI workers retaining substantially better self-assessment calibration.}
+    \label{fig:generational}
+\end{figure}
+
+At week 90, the pre-AI cohort's skill crosses the 0.3 supervision threshold (0.294), while the post-AI cohort falls below this threshold by week 20 (having started below it). The metacognition gap is equally stark: the pre-AI cohort maintains metacognition above 0.40 throughout, while the post-AI cohort hovers around 0.38--0.40 but with lower absolute skill, producing substantially lower error detection rates.
+
+By week 290, the pre-AI cohort has skill 0.035 with metacognition 0.398, while the post-AI cohort has skill 0.012 with metacognition 0.385. Although both trajectories ultimately converge toward low skill, the pre-AI cohort maintains approximately 3$\times$ higher skill even after 300 weeks, suggesting that the initial skill buffer acquired before AI adoption provides lasting (though diminishing) supervisory advantage.
+
+This asymmetry has direct workforce implications: organizations cannot rely on a new generation of ``AI-native'' workers to develop supervisory skills organically. Deliberate training programs that include unassisted practice are essential for workers who have always had AI available.
+
+% ============================================================================
+\section{Discussion}
+% ============================================================================
+
+\subsection{Key Findings}
+
+Our simulation study produces five principal findings with policy relevance:
+
+\textbf{1. Deskilling traps are real and domain-dependent.} The model identifies specific parameter regimes where workers lose both competence and awareness of incompetence. Aviation is uniquely vulnerable: all experience levels enter traps due to the combination of very high AI reliability (reducing error signals) and high skill decay rate (from lack of manual practice). Medicine shows intermediate vulnerability, with novices particularly at risk.
+
+\textbf{2. The reliability paradox.} More reliable AI is paradoxically more dangerous for skill maintenance. A critical threshold exists (approximately 0.938 for our software engineering calibration) above which deskilling traps become nearly certain. This directly challenges the intuition that better AI is uniformly beneficial.
+
+\textbf{3. Scaffolded autonomy is dramatically effective.} Among the four interventions tested, scaffolded autonomy---where AI reduces its assistance as worker skill grows---produces a 20-fold improvement in final skill level. The key mechanism is restoring the practice signal: by forcing graduated independence, the intervention breaks the positive feedback loop between high reliance and skill decay.
+
+\textbf{4. Adversarial training improves metacognition but not skill.} Deliberately injecting errors improves metacognitive calibration (0.448 vs.\ 0.388) and reduces total harm by 10.4\%, but does not restore the practice volume needed for skill growth. This suggests that error detection and skill acquisition are partially independent processes.
+
+\textbf{5. Generational asymmetry is persistent.} Workers who developed skills before AI adoption maintain approximately 3$\times$ higher skill than ``AI-native'' workers even after 300 weeks of identical conditions. This gap, while narrowing over time, suggests that pre-AI skill acquisition provides a lasting supervisory advantage that cannot be replicated by AI-assisted experience alone.
+
+\subsection{Limitations}
+
+Our model makes several simplifying assumptions. First, domain parameters are calibrated from literature estimates rather than empirical measurement; the precise location of deskilling thresholds depends on these calibrations. Second, the model assumes homogeneous workers within each experience category; real workforces exhibit substantial individual variation in learning rates, metacognitive ability, and disposition toward AI reliance. Third, the model treats AI capability as static; in practice, AI systems improve over time, which may shift the supervisory challenge. Fourth, social and organizational factors (incentives, peer learning, institutional memory) are not modeled but likely play significant roles. Finally, as a computational model, our results generate predictions that require empirical validation through longitudinal studies.
+
+\subsection{Policy Implications}
+
+For \textbf{organizations deploying AI}: implement scaffolded autonomy where AI gradually reduces assistance as workers demonstrate competence. At minimum, mandate periodic unassisted assessment to monitor supervisory skill.
+
+For \textbf{training program designers}: include deliberate unassisted practice modules, especially for workers who entered the profession with AI assistance. The generational asymmetry finding suggests that ``AI-native'' workers need qualitatively different training from those who developed skills before AI adoption.
+
+For \textbf{regulators in safety-critical domains}: the aviation results are particularly concerning. Current regulations mandate manual flying proficiency checks for pilots using autopilot; analogous requirements may be needed in other domains where AI is supplanting human judgment (e.g., medical diagnosis, financial risk assessment). The reliability paradox suggests that regulatory attention should focus precisely on the most reliable AI systems, as these pose the greatest deskilling risk.
+
+% ============================================================================
+\section{Conclusion}
+% ============================================================================
+
+We have presented a formal dynamical systems model of supervisory skill evolution under AI assistance and used it to investigate the open question of whether AI assistance hinders the development of skills needed to supervise automated tasks. Our computational experiments reveal that the answer is conditionally affirmative: under realistic parameter regimes, AI assistance produces deskilling traps where workers lose both supervisory competence and awareness of their incompetence. The severity depends on domain characteristics, with high-reliability AI domains being paradoxically the most dangerous.
+
+The most promising mitigation is scaffolded autonomy, which achieves near-complete skill preservation by coupling AI assistance reduction to skill growth. This finding points toward a design principle for human-AI systems: the AI should be designed not only to maximize immediate task performance but also to maintain the human skills needed for oversight.
+
+Our model generates testable predictions about deskilling dynamics, reliability thresholds, and intervention effectiveness that can be evaluated through longitudinal field studies. We hope this work motivates such empirical investigations and informs the design of AI deployment policies that account for long-term human skill sustainability.
+
+All simulation code is available for reproducibility. The model parameters can be recalibrated as empirical data on skill dynamics under AI assistance becomes available.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

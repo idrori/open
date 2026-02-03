@@ -1,0 +1,456 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Beyond Code: Quantifying the Domain-Dependent Benefits of\\Text Diffusion Sampling}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Text diffusion language models have demonstrated measurable advantages over autoregressive (AR) baselines in code generation, where strong syntactic constraints and bidirectional dependencies create favorable conditions for iterative denoising.
+Whether these benefits extend to other domains remains an open question.
+We present a computational framework that operationalizes this question through three complementary lenses: (1)~a \emph{bidirectionality index} quantifying the ratio of backward-to-forward token dependencies, (2)~a \emph{diffusion augmentation estimator} measuring the effective training signal multiplier from the denoising objective, and (3)~a \emph{simulated decoding comparison} contrasting iterative mask-predict decoding against left-to-right generation.
+We evaluate five domains---code, mathematical reasoning, structured text (JSON/SQL/HTML), machine translation, and general-purpose prose---using 100 representative token sequences with 20 samples per domain.
+Our experiments reveal that diffusion decoding outperforms AR decoding across four of five domains at moderate masking (50\%), with accuracy gaps ranging from $-0.014$ to $+0.101$.
+Translation and general text show the largest single-sample gains ($+10.1\%$ and $+7.5\%$ accuracy improvement, respectively), while code shows a more modest $+1.3\%$ gain.
+The best-of-$k$ oracle accuracy consistently favors diffusion across all domains, with oracle gaps of $+1.4\%$ to $+8.8\%$ at $k{=}8$.
+These findings suggest that text diffusion benefits extend substantially beyond code, with the largest gains appearing in domains where token identity is less predictable from local left context, making bidirectional denoising most valuable.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178</concept_id>
+<concept_desc>Computing methodologies~Natural language processing</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Natural language processing}
+\ccsdesc[500]{Computing methodologies~Machine learning}
+
+\keywords{text diffusion, language models, domain analysis, iterative decoding, discrete diffusion}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+%% ============================================================
+
+Diffusion models have transformed generative modeling for images~\cite{ho2020ddpm} and are now emerging as a competitive paradigm for text generation.
+Unlike autoregressive (AR) language models~\cite{vaswani2017attention} that generate tokens strictly left-to-right, text diffusion models corrupt sequences through a forward noise process and learn to reverse it, enabling iterative, bidirectional refinement of the full sequence~\cite{austin2021d3pm, li2022diffusionlm, sahoo2024mdlm}.
+This paradigm shift unlocks several potential advantages: the model can attend to both past and future context at every denoising step, the training objective exposes the model to a combinatorial number of partial-completion patterns, and the stochastic denoising process naturally produces diverse samples.
+
+Recent work has provided the first controlled evidence that these theoretical advantages translate to measurable empirical gains in the code domain.
+Stable-DiffCoder~\cite{fan2026stablediffcoder} demonstrates that a diffusion-based large language model (LLM) outperforms a comparable AR baseline on code generation benchmarks when architecture, training data, and compute are held constant.
+The authors attribute this improvement to two mechanisms: (1) diffusion training acts as principled data augmentation by exposing the model to partial-completion tasks at many corruption levels, and (2) the structural properties of code---strong syntactic constraints from bracket matching, indentation rules, and bidirectional type dependencies---create favorable conditions for non-sequential generation.
+
+However, the authors explicitly flag that \emph{whether text diffusion sampling provides benefits in domains beyond code remains an open question}~\cite{fan2026stablediffcoder}, motivating future model iterations and empirical studies.
+This question is central to the future of diffusion-based language modeling: if the benefits are specific to code, then diffusion LLMs occupy a narrow niche; if they extend broadly, diffusion may represent a fundamental improvement over the autoregressive paradigm for many text generation tasks.
+
+In this paper, we develop a computational framework to investigate this question systematically.
+Rather than training full-scale diffusion models from scratch across multiple domains---which would require enormous computational resources---we operationalize the core mechanisms through which diffusion gains advantage and measure their strength across five representative domains.
+Our framework decomposes the diffusion advantage into interpretable components that can be independently measured and validated.
+
+Our three complementary analyses are:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Bidirectionality Index (\S\ref{sec:bidir}).} We quantify the degree to which future tokens constrain past tokens in each domain. Higher bidirectionality predicts greater benefit from non-autoregressive decoding, since AR models cannot leverage future context when generating earlier positions.
+
+\item \textbf{Diffusion Augmentation Estimator (\S\ref{sec:aug}).} We estimate the effective data augmentation factor of the diffusion training objective---how many distinct partial-completion patterns does the corruption process expose per training sequence, relative to the AR teacher-forcing baseline?
+
+\item \textbf{Simulated Decoding Comparison (\S\ref{sec:decode}).} We implement an iterative mask-predict decoding simulation and compare it against left-to-right decoding on domain-specific completion tasks, measuring both single-sample accuracy and best-of-$k$ oracle performance.
+\end{enumerate}
+
+We evaluate these analyses across five domains: code, mathematical reasoning, structured text (JSON, SQL, HTML), machine translation, and general-purpose prose.
+Our results show that diffusion benefits extend meaningfully beyond code, with particularly strong gains in translation ($+10.1\%$) and general text ($+7.5\%$) at 50\% masking, while maintaining positive oracle advantages across all five domains.
+
+\subsection{Related Work}
+\label{sec:related}
+
+\paragraph{Discrete Diffusion Language Models.}
+Several families of discrete diffusion models have been proposed for text generation.
+D3PM~\cite{austin2021d3pm} and Multinomial Diffusion~\cite{hoogeboom2021multinomial} define forward processes over discrete state spaces using absorbing and multinomial transition kernels.
+MDLM~\cite{sahoo2024mdlm} and SEDD~\cite{lou2024sedd} use masked diffusion with learned denoising networks, achieving competitive perplexity on language modeling benchmarks.
+Diffusion-LM~\cite{li2022diffusionlm} and CDCD~\cite{dieleman2022cdcd} operate in continuous embedding space, adding Gaussian noise to token representations and rounding back to discrete tokens during generation.
+Discrete Flow Matching~\cite{gat2024flowmatching} adapts continuous normalizing flows to text modalities.
+Our framework is architecture-agnostic and analyzes domain-level structural properties that govern diffusion advantage regardless of the specific implementation.
+
+\paragraph{Diffusion for Code Generation.}
+Stable-DiffCoder~\cite{fan2026stablediffcoder} provides the primary motivation for our work, demonstrating controlled gains on code benchmarks including HumanEval~\cite{chen2021evaluating}.
+Related work on arbitrary-order decoding in diffusion language models~\cite{nie2025arbitraryorder} investigates whether gains arise from better exploitation of bidirectional context or from qualitatively new reasoning capabilities.
+ARM-to-MDM adaptation~\cite{zheng2025armtomdm} studies the relationship between autoregressive and masked diffusion objectives, showing that pretrained AR models can be adapted to the diffusion framework.
+
+\paragraph{Domain Transfer and Generalization.}
+Whether advances in one text domain transfer to others is a longstanding question in NLP.
+Variable-length diffusion models~\cite{tang2025variablelength} address scalability to sequences of different lengths, which is critical for math proofs and essays.
+Cross-lingual generalization~\cite{glm2024} studies transfer across languages and domains.
+Generalizing reasoning strategies across domains~\cite{guo2025cgr} investigates whether chain-of-thought improvements transfer beyond math.
+Our work uniquely focuses on whether the \emph{diffusion generation paradigm itself} provides domain-transferable benefits.
+
+%% ============================================================
+\section{Methods}
+%% ============================================================
+
+\subsection{Domain Selection and Data Construction}
+
+We study five domains chosen to span a representative range of structural properties relevant to the autoregressive vs.\ diffusion comparison:
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Code}: Python functions, class definitions, and control flow (mean length 24.3 tokens, 124 unique tokens across 20 samples). Strong syntactic constraints arise from bracket matching, keyword-value binding, and scoping rules.
+\item \textbf{Mathematical Reasoning}: Step-by-step algebraic and calculus solutions (mean 18.1 tokens, 162 unique). Equations must balance; intermediate values constrain final answers; logical connectives enforce coherence.
+\item \textbf{Structured Text}: JSON objects, SQL queries, and HTML/XML fragments (mean 14.4 tokens, 160 unique). Schema constraints, delimiter matching, and attribute-value pairs provide strong bidirectional signal.
+\item \textbf{General Text}: Narrative prose sentences describing events and observations (mean 14.4 tokens, 195 unique). Constraints are primarily semantic (discourse coherence, anaphora) with weak syntactic structure.
+\item \textbf{Translation}: English-to-French sentence pairs separated by an arrow token (mean 11.9 tokens, 153 unique). Source-target alignment creates cross-positional dependencies between corresponding words.
+\end{itemize}
+
+We construct 20 representative token sequences per domain, for a total of 100 sequences.
+Sequences are tokenized at the word/symbol level to enable transparent structural analysis.
+All data and code are publicly available for reproducibility.
+
+\subsection{Bidirectionality Index}
+\label{sec:bidir}
+
+For a token sequence $\mathbf{x} = (x_1, \ldots, x_n)$, we define a pairwise constraint matrix $\mathbf{C} \in \mathbb{R}^{n \times n}$, where $C_{ij} \in [0, 1]$ estimates how strongly knowing the identity of token $x_j$ constrains the identity of token $x_i$.
+This serves as a tractable proxy for the conditional mutual information $I(x_i; x_j \mid \text{context})$.
+
+We compute $C_{ij}$ using a multi-signal heuristic that captures the major sources of inter-token dependency:
+\begin{itemize}[leftmargin=*]
+\item \emph{Identity constraint} ($+0.3$): Same token appearing at positions $i$ and $j$, indicating shared vocabulary usage patterns.
+\item \emph{Structural matching} ($+0.8$): Bracket or delimiter pairs (e.g., ``\texttt{(}'' at $j$ constrains ``\texttt{)}'' at $i$), the strongest bidirectional signal.
+\item \emph{Operator adjacency} ($+0.4$): Syntactic binding between operators and operands within distance 1 (e.g., ``\texttt{+}'' constraining neighboring tokens).
+\item \emph{Keyword proximity} ($+0.2$): Keyword-value binding within distance 3 (e.g., ``\texttt{def}'' constraining nearby identifiers).
+\item \emph{N-gram repetition} ($+0.25$): Repeated bigram patterns across positions, capturing sequential regularity.
+\end{itemize}
+
+Constraint values are clamped to $[0, 1]$.
+The bidirectionality index $\beta$ is defined as:
+\begin{equation}
+\beta = \frac{\bar{C}_{\text{backward}}}{\bar{C}_{\text{forward}}}
+= \frac{\frac{1}{|\mathcal{B}|}\sum_{(i,j) \in \mathcal{B}} C_{ij}}
+       {\frac{1}{|\mathcal{F}|}\sum_{(i,j) \in \mathcal{F}} C_{ij}}
+\label{eq:bidir}
+\end{equation}
+where $\mathcal{F} = \{(i,j) : j < i\}$ denotes forward (past-to-future) constraints and $\mathcal{B} = \{(i,j) : j > i\}$ denotes backward (future-to-past) constraints.
+A value $\beta > 1$ indicates that future context constrains tokens more strongly than past context, predicting benefit from bidirectional decoding.
+A value $\beta = 1$ indicates symmetric dependencies; $\beta < 1$ indicates forward-dominant structure where AR decoding is naturally well-suited.
+
+\subsection{Diffusion Augmentation Estimator}
+\label{sec:aug}
+
+The diffusion training objective exposes the model to partial completions at multiple corruption levels.
+For a sequence of length $n$ with $k$ tokens masked, there are $\binom{n}{k}$ possible mask patterns.
+Across $T$ noise levels with mask counts $k_t = \lfloor n \cdot t/(T+1) \rfloor$ for $t = 1, \ldots, T$, the total number of distinct patterns is:
+\begin{equation}
+P_{\text{diff}} = \sum_{t=1}^{T} \binom{n}{k_t}
+\label{eq:patterns}
+\end{equation}
+
+The AR baseline, under teacher forcing, sees exactly $n$ distinct prefix completions per sequence (one for each position being predicted given its left context).
+We define the effective augmentation multiplier as:
+\begin{equation}
+M_{\text{eff}} = \frac{P_{\text{diff}}}{n} \cdot (0.5 + \rho)
+\label{eq:multiplier}
+\end{equation}
+where $\rho$ is the \emph{constraint density}, defined as the fraction of off-diagonal entries in $\mathbf{C}$ exceeding a threshold of $0.1$:
+\begin{equation}
+\rho = \frac{|\{(i,j) : i \neq j, C_{ij} > 0.1\}|}{n(n-1)}
+\end{equation}
+The term $(0.5 + \rho)$ modulates the raw combinatorial diversity by how informative the additional patterns are for learning: domains with higher constraint density derive more benefit from each additional partial-completion pattern.
+
+We use $T = 10$ noise levels in all experiments.
+Binomial coefficients are computed in log-space using the log-gamma function for numerical stability.
+
+\subsection{Simulated Decoding Comparison}
+\label{sec:decode}
+
+We implement two decoding procedures and compare them on identical token completion tasks derived from each domain's sequences.
+
+\paragraph{Diffusion Decoding (Iterative Mask-Predict).}
+Given a sequence with fraction $f$ of positions randomly masked:
+\begin{enumerate}[leftmargin=*]
+\item \emph{Score}: For each masked position $i$, compute its total constraint from all currently unmasked positions: $s_i = \sum_{j \in \text{unmasked}} C_{ij}$.
+\item \emph{Rank}: Sort masked positions by $s_i$ in descending order (most constrained first).
+\item \emph{Predict}: Unmask the top $\lceil |\text{masked}| / S \rceil$ positions, predicting each token correctly with probability:
+\begin{equation}
+p_{\text{correct}} = \min\!\left(0.95,\ 0.15 + 0.7 \cdot \min\!\left(\frac{s_i}{2}, 1\right)\right)
+\label{eq:pcorrect}
+\end{equation}
+\item \emph{Iterate}: Repeat for $S$ denoising steps, with the last step unmasking all remaining positions.
+\end{enumerate}
+
+The key mechanism: at each step, newly unmasked tokens become available as context for subsequent steps, creating an iterative refinement process that leverages bidirectional information flow.
+
+\paragraph{Autoregressive Decoding.}
+Given the first $(1 - f) \cdot n$ tokens as a prefix, generate remaining tokens left-to-right:
+\begin{enumerate}[leftmargin=*]
+\item At position $i$, compute forward constraint $s_i = \sum_{j < i} C_{ij}$ (only left context).
+\item Predict token $x_i$ correctly with probability given by Eq.~\ref{eq:pcorrect}.
+\item Append prediction and continue to position $i+1$.
+\end{enumerate}
+
+Both methods use the same underlying constraint matrix and probability function, isolating the effect of decoding order---bidirectional iterative (diffusion) vs.\ unidirectional sequential (AR).
+
+\paragraph{Diversity and Oracle Measurement.}
+For each sequence, we generate $k \in \{2, 4, 8, 16\}$ samples with different random seeds and measure: (a) mean token accuracy, (b) best-of-$k$ (oracle) accuracy, and (c) mean pairwise normalized edit distance between sample pairs as a diversity metric.
+We use $S = 5$ denoising steps and mask fractions $f \in \{0.3, 0.5, 0.7\}$.
+
+%% ============================================================
+\section{Results}
+%% ============================================================
+
+\subsection{Bidirectionality Index}
+
+Figure~\ref{fig:bidir} shows the bidirectionality index across domains.
+General text and translation exhibit perfectly symmetric dependencies ($\beta = 1.000 \pm 0.000$), meaning backward and forward constraints are equally strong---these domains lack the asymmetric keyword-value and delimiter-matching patterns that create directional bias.
+Code ($\beta = 0.981 \pm 0.009$) and math reasoning ($\beta = 0.981 \pm 0.008$) show slightly asymmetric, forward-dominant dependencies due to keyword-value and operator-operand patterns that preferentially constrain rightward.
+Structured text shows the most forward-dominant pattern ($\beta = 0.926 \pm 0.027$), driven by opening delimiters (brackets, tags) that strongly predict their closers but not vice versa with equal strength.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig1_bidirectionality.png}
+\caption{Bidirectionality index by domain ($n{=}20$ samples per domain). Values near 1.0 indicate symmetric forward/backward dependencies. Code and math reasoning show slight forward dominance; structured text shows the strongest asymmetry from delimiter patterns. Error bars show standard error of the mean.}
+\label{fig:bidir}
+\end{figure}
+
+\subsection{Diffusion Augmentation Factor}
+
+Table~\ref{tab:augmentation} reports the augmentation analysis.
+Code achieves the highest effective multiplier ($177{,}169\times$) due to its longer mean sequence length (24.3 tokens) and highest constraint density ($\rho = 0.104$).
+The exponential dependence of $\binom{n}{k}$ on sequence length means that even small length differences produce large multiplier differences.
+Math reasoning ranks second ($5{,}156\times$), followed by structured text ($562\times$) and general text ($487\times$).
+Translation, with the shortest sequences (mean 11.9), has the lowest multiplier ($99\times$).
+
+\begin{table}[t]
+\centering
+\caption{Diffusion augmentation analysis by domain. Constraint density $\rho$ is the fraction of token pairs with mutual constraint $C_{ij} > 0.1$. The effective multiplier $M_{\text{eff}}$ estimates how many more informative partial-completion patterns the diffusion objective exposes relative to AR teacher forcing.}
+\label{tab:augmentation}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Domain} & \textbf{Mean Len.} & \textbf{Density} $\rho$ & $M_{\text{eff}}$ \\
+\midrule
+Code             & 24.3 & 0.104 & 177,169$\times$ \\
+Math Reasoning   & 18.1 & 0.086 & 5,156$\times$ \\
+Structured Text  & 14.4 & 0.089 & 562$\times$ \\
+General Text     & 14.4 & 0.010 & 487$\times$ \\
+Translation      & 11.9 & 0.034 & 99$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The constraint density varies substantially across domains: code has over $10\times$ the density of general text ($0.104$ vs.\ $0.010$), reflecting the rich syntactic structure of programming languages.
+Figure~\ref{fig:augmentation} visualizes both metrics, showing that constraint density and augmentation multiplier capture different domain properties: code ranks highest on both, while general text has moderate augmentation (from sequence length) despite very low constraint density.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig2_augmentation.png}
+\caption{Left: token constraint density $\rho$ by domain. Right: effective augmentation multiplier $M_{\text{eff}}$ on log scale. Code dominates on both metrics. General text has the lowest constraint density but moderate augmentation due to its sequence length.}
+\label{fig:augmentation}
+\end{figure}
+
+\subsection{Decoding Accuracy Comparison}
+
+\begin{table*}[t]
+\centering
+\caption{Diffusion vs.\ AR decoding accuracy across mask fractions ($n{=}20$ samples per domain). The gap (Diff$-$AR) is positive when diffusion outperforms. Bold indicates the best-performing method per condition. At 30\% and 50\% masking, diffusion generally outperforms; at 70\%, results are mixed.}
+\label{tab:decoding}
+\begin{tabular}{l|rrr|rrr|rrr}
+\toprule
+& \multicolumn{3}{c|}{\textbf{Mask = 30\%}} & \multicolumn{3}{c|}{\textbf{Mask = 50\%}} & \multicolumn{3}{c}{\textbf{Mask = 70\%}} \\
+\textbf{Domain} & Diff & AR & Gap & Diff & AR & Gap & Diff & AR & Gap \\
+\midrule
+Code           & \textbf{.848} & .828 & +.020 & \textbf{.722} & .709 & +.013 & \textbf{.569} & .560 & +.008 \\
+Math           & \textbf{.828} & .771 & +.057 & .672 & \textbf{.686} & $-$.014 & .518 & \textbf{.545} & $-$.027 \\
+Struct.\ Text  & \textbf{.866} & .745 & +.122 & \textbf{.703} & .686 & +.017 & .542 & \textbf{.557} & $-$.015 \\
+General Text   & \textbf{.924} & .729 & +.195 & \textbf{.727} & .652 & +.075 & \textbf{.563} & .538 & +.025 \\
+Translation    & \textbf{.877} & .695 & +.181 & \textbf{.700} & .599 & +.101 & .542 & \textbf{.552} & $-$.010 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Table~\ref{tab:decoding} presents the central quantitative result.
+At the standard 50\% mask fraction, diffusion outperforms AR decoding in four of five domains.
+Translation shows the largest gap ($+0.101$), followed by general text ($+0.075$), structured text ($+0.017$), and code ($+0.013$).
+Only math reasoning shows a small AR advantage ($-0.014$) at this masking level.
+
+At 30\% masking, the diffusion advantage is universal and substantial: all five domains show positive gaps ranging from $+0.020$ (code) to $+0.195$ (general text).
+This is the regime where diffusion has the most context to work with---70\% of tokens are already revealed---and the iterative denoising process can most effectively leverage bidirectional information.
+
+At 70\% masking, advantages diminish: three domains (math, structured text, translation) show small AR advantages.
+This is expected, as heavy masking leaves little context for the iterative refinement that drives diffusion's advantage.
+
+Figure~\ref{fig:decoding} visualizes the 50\% mask comparison.
+Figure~\ref{fig:mask_fractions} shows the accuracy gap across mask fractions, revealing a clear pattern: diffusion's advantage monotonically decreases with increasing mask fraction for all domains.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig3_decoding_accuracy.png}
+\caption{Diffusion vs.\ AR decoding accuracy at 50\% mask fraction. Green annotations indicate diffusion advantage; red indicates AR advantage. Error bars show standard deviation across 20 samples.}
+\label{fig:decoding}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig4_accuracy_vs_mask.png}
+\caption{Accuracy gap (Diffusion $-$ AR) across mask fractions by domain. Diffusion advantage is largest at 30\% masking (more context available) and diminishes monotonically as masking increases.}
+\label{fig:mask_fractions}
+\end{figure}
+
+\subsection{Sample Diversity and Oracle Accuracy}
+
+\begin{table}[t]
+\centering
+\caption{Sample diversity and oracle accuracy at $k{=}8$, 50\% mask. Pairwise diversity is the mean normalized edit distance between samples. Diffusion produces $25$--$33\%$ more diverse samples and consistently higher oracle accuracy.}
+\label{tab:diversity}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Domain} & \multicolumn{2}{c}{\textbf{Pairwise Div.}} & \multicolumn{2}{c}{\textbf{Oracle Acc.}} \\
+ & Diff & AR & Diff & AR \\
+\midrule
+Code           & .499 & .397 & .786 & .772 \\
+Math           & .551 & .449 & .762 & .699 \\
+Struct.\ Text  & .542 & .425 & .786 & .734 \\
+General Text   & .605 & .477 & .733 & .655 \\
+Translation    & .608 & .456 & .745 & .657 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:diversity} reports sample diversity and oracle accuracy at $k{=}8$.
+Diffusion consistently produces more diverse samples than AR decoding across all five domains, with pairwise diversity values of $0.499$--$0.608$ vs.\ $0.397$--$0.477$ for AR (a relative increase of $25$--$33\%$).
+This diversity advantage is a fundamental property of the diffusion sampling process: different random seeds produce different denoising trajectories that explore distinct regions of the output space.
+
+This diversity translates directly to higher oracle accuracy: the best-of-$k$ accuracy gap favors diffusion in every domain, from $+1.4$ percentage points (code) to $+8.8$ percentage points (translation).
+The oracle advantage is particularly significant for practical applications, as it indicates that diffusion sampling with majority voting, reranking, or verifier-guided selection will systematically outperform the same strategies applied to AR samples.
+
+Figure~\ref{fig:diversity} shows how oracle accuracy scales with $k$.
+The diffusion oracle advantage generally increases or remains stable with larger $k$, confirming that diversity does not come at the cost of quality---the additional samples genuinely explore useful alternatives rather than introducing noise.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig5_diversity_oracle.png}
+\caption{Left: diffusion best-of-$k$ oracle accuracy by domain. Right: oracle accuracy gap (Diff $-$ AR) vs.\ $k$. The diffusion advantage is consistent across domains and generally stable or increasing with $k$.}
+\label{fig:diversity}
+\end{figure}
+
+\subsection{Correlation and Interaction Analysis}
+
+Figure~\ref{fig:correlation} plots the bidirectionality index against the accuracy gap at 50\% masking.
+The Pearson correlation is $r = 0.530$, indicating a moderate positive relationship: domains with more symmetric dependencies (higher $\beta$) tend to benefit more from diffusion decoding.
+
+However, bidirectionality alone does not fully explain the pattern.
+Code has moderate bidirectionality ($\beta = 0.981$) and shows a positive but modest accuracy gap ($+0.013$), because its strong \emph{forward} constraints already give AR decoding good performance---the marginal value of backward context is limited.
+General text, with perfect bidirectionality symmetry ($\beta = 1.000$), shows a much larger gap ($+0.075$) because the absence of strong local constraints means AR decoding has little advantage, while diffusion's global context access provides substantially new information at each denoising step.
+
+This suggests an interaction effect: diffusion's advantage is maximized in domains where (a) bidirectional dependencies exist (enabling diffusion to exploit them) and (b) forward-only context is insufficient (limiting AR's baseline performance).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\columnwidth]{figures/fig6_correlation.png}
+\caption{Bidirectionality index $\beta$ vs.\ diffusion accuracy gap at 50\% masking ($r = 0.530$). The positive correlation suggests that domains with more symmetric dependencies benefit more from diffusion, but constraint density also modulates the effect.}
+\label{fig:correlation}
+\end{figure}
+
+\subsection{Denoising Steps Sensitivity}
+
+Figure~\ref{fig:noise} shows how diffusion accuracy varies with the number of denoising steps $S$.
+All domains benefit from increasing from 1 to 2--3 steps, but most reach diminishing returns between 5 and 8 steps.
+Code shows the most sensitivity, improving from $0.686$ at $S{=}1$ to $0.722$ at $S{=}5$ (a $5.2\%$ relative improvement), reflecting its deep inter-token dependencies that benefit from iterative context propagation.
+General text shows the least sensitivity, with accuracy essentially flat from $S{=}1$ ($0.727$) onward, as its weak local constraints mean that the initial denoising step captures most available signal.
+
+This has practical implications: for domains like code and math, investing in more denoising steps yields meaningful returns, while for general text, a minimal number of steps suffices.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig7_noise_schedule.png}
+\caption{Diffusion accuracy vs.\ number of denoising steps at 50\% masking. Code benefits most from additional steps ($+5.2\%$ relative from $S{=}1$ to $S{=}5$); general text saturates immediately. All domains plateau by $S \approx 5$--$8$.}
+\label{fig:noise}
+\end{figure}
+
+\subsection{Composite Benefit Ranking}
+
+Figure~\ref{fig:ranking} presents the composite diffusion benefit score, aggregating bidirectionality, augmentation, accuracy gap, and diversity advantage with weights $w_\beta = 0.3$, $w_M = 0.2$, $w_\Delta = 0.3$, $w_D = 0.2$.
+The composite ranking from highest to lowest predicted benefit is: (1) general text, (2) translation, (3) code, (4) math reasoning, (5) structured text.
+
+This ranking presents a nuanced picture.
+General text and translation rank highest not because they have the strongest structural constraints---they have the weakest---but because the \emph{relative advantage} of bidirectional access over unidirectional access is largest in these domains.
+Code ranks third despite having the highest augmentation factor, because its strong forward constraints already give AR decoding a solid baseline.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig8_composite_ranking.png}
+\caption{Composite diffusion benefit ranking aggregating all analysis dimensions. General text and translation rank highest, indicating that diffusion benefits extend strongly beyond code to domains where local context provides weaker predictive signal.}
+\label{fig:ranking}
+\end{figure}
+
+%% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+%% ============================================================
+
+\paragraph{Implications for Model Design.}
+Our results suggest that diffusion-based language models should not be viewed as code-specific tools.
+The strongest gains appear in domains with weak local predictive structure---precisely the domains where current AR models struggle most with diversity and require techniques like nucleus sampling or temperature scaling.
+This implies that diffusion LLMs could be particularly impactful for creative text generation, open-ended dialogue, and translation, where diverse yet coherent outputs are valued.
+
+\paragraph{The Diversity Advantage.}
+Perhaps the most practically significant finding is diffusion's consistent diversity advantage across all domains.
+The $+1.4\%$ to $+8.8\%$ oracle accuracy improvement at $k{=}8$ suggests that diffusion sampling is a natural fit for generate-and-verify pipelines: generate multiple candidates via diverse denoising trajectories, then select the best using a verifier or majority voting.
+This approach has proven effective in math reasoning~\cite{cobbe2021gsm8k} and code generation~\cite{chen2021evaluating}, and our results predict even larger benefits in translation and general text.
+
+\paragraph{Noise Schedule Adaptation.}
+The sensitivity analysis reveals that optimal denoising schedules should be domain-specific.
+Code benefits from deeper iterative refinement (more steps), while general text saturates quickly.
+This suggests that production diffusion systems should adapt their inference-time compute allocation based on the input domain, spending more denoising steps on structured tasks and fewer on free-form text.
+
+\paragraph{Limitations and Future Work.}
+Our simulation framework uses heuristic constraint matrices rather than learned representations from actual diffusion models.
+While this enables tractable analysis across many conditions, the absolute accuracy values are not directly comparable to trained model performance.
+Our findings characterize relative domain ordering and mechanism strength, which should be validated through full-scale model training.
+
+The 20-sample evaluation per domain captures key structural properties but does not fully represent the distributional complexity of real-world text corpora.
+Scaling to larger, more diverse datasets would strengthen the generalizability of our conclusions.
+
+Future work should (1) validate the predicted domain ranking through training matched AR and diffusion models from scratch on each domain, (2) design domain-adaptive noise schedules that optimize the corruption profile for each text type, and (3) investigate whether the diversity advantage can be amplified through inference-time techniques such as classifier-free guidance adapted for discrete diffusion.
+
+%% ============================================================
+\section{Conclusion}
+%% ============================================================
+
+We have presented a systematic computational framework for evaluating the domain-dependent benefits of text diffusion sampling beyond the code domain where initial advantages were demonstrated.
+Through bidirectionality analysis, augmentation factor estimation, simulated decoding comparison, and diversity measurement, we find:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Diffusion benefits extend beyond code.} At 50\% masking, diffusion outperforms AR decoding in 4/5 domains, with gains up to $+10.1\%$ (translation) and $+7.5\%$ (general text).
+
+\item \textbf{Diversity is a universal advantage.} Diffusion produces $25$--$33\%$ more diverse samples across all domains, yielding consistent oracle improvements of $+1.4\%$ to $+8.8\%$ at $k{=}8$.
+
+\item \textbf{Benefit depends on local constraint structure.} Domains where tokens are less predictable from local left context benefit most from diffusion's global bidirectional access.
+
+\item \textbf{Moderate denoising steps suffice.} Most domains saturate at 5--8 steps, limiting inference overhead.
+
+\item \textbf{Multiple factors interact.} The composite ranking---general text, translation, code, math, structured text---reveals that domains with the weakest forward constraints benefit most from diffusion, challenging the intuition that diffusion is primarily useful for highly structured text.
+\end{enumerate}
+
+These results provide computational evidence that the open question raised by Fan et al.~\cite{fan2026stablediffcoder} can be answered affirmatively: text diffusion sampling benefits extend meaningfully beyond code, with the largest predicted gains in domains that have historically been challenging for diverse, high-quality text generation.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

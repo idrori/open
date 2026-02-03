@@ -1,0 +1,619 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\setcopyright{none}
+\acmYear{2026}
+
+\begin{document}
+
+\title{Marginalizing Over BPE Tokenizations for Calibrated Word-Level Probabilities in Whisper}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Byte-pair encoding (BPE) tokenizers map a single word to multiple valid token sequences---different subword splits, casing variants, and spacing decompositions---causing the true word-level probability to be distributed across exponentially many paths through the decoder.
+Current practice estimates word confidence from the single canonical BPE segmentation, systematically underestimating the true probability.
+We formalize this problem by constructing a \emph{segmentation DAG} whose source-to-sink paths enumerate all valid tokenizations of a word, and propose a forward algorithm that marginalizes over this DAG using the decoder's conditional token probabilities.
+We analyze 184 English words spanning 2--15 characters using Whisper's GPT-2 tokenizer and find that:
+(i)~the number of valid tokenizations grows exponentially with word length, reaching a median of 3{,}006 paths for words of 11+ characters;
+(ii)~ignoring alternative tokenizations underestimates log-probability by a median of 0.03 nats for short words but up to 1.58 nats for longer words;
+(iii)~including case variants adds a further 1.09 nats of marginalization gap on average; and
+(iv)~a beam-pruned forward algorithm with width 10 recovers $>$99.9\% of the exact marginal probability for short words and $>$96\% for long words.
+Our approach provides principled, calibrated word-level uncertainty estimates for BPE-based speech recognition and language models, directly addressing the open problem identified by Bondarenko et al.\ (2026).
+\end{abstract}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+%% ============================================================
+
+Automatic speech recognition (ASR) systems increasingly rely on large-scale neural models such as Whisper~\cite{radford2023robust} that produce text transcriptions from audio input.
+These models are deployed in high-stakes applications---medical dictation, legal transcription, accessibility services---where \emph{word-level confidence estimation} is critical: given a transcribed word, how certain is the model that it correctly decoded the spoken utterance?
+
+Whisper and similar models use byte-pair encoding (BPE)~\cite{sennrich2016neural} to segment text into subword tokens.
+The decoder is autoregressive, producing one token at a time with associated conditional probabilities.
+To obtain a word-level probability, practitioners typically multiply the conditional probabilities of the tokens composing the canonical BPE segmentation of the word.
+However, BPE tokenizers are \emph{ambiguous}: the same word admits multiple valid token sequences.
+For example, the word ``cat'' in Whisper's GPT-2 tokenizer can be represented as:
+\begin{itemize}
+\item The single token \texttt{` cat'} (token ID 3797)
+\item Two tokens: \texttt{` c'} + \texttt{`at'} (IDs 269, 265)
+\item Two tokens: \texttt{` ca'} + \texttt{`t'} (IDs 1275, 83)
+\item Three tokens: \texttt{` c'} + \texttt{`a'} + \texttt{`t'} (IDs 269, 64, 83)
+\item And four additional paths involving the space prefix
+\end{itemize}
+Including casing variants (\texttt{` Cat'}, \texttt{` CAT'}) further expands the set.
+In total, the word ``cat'' has 8 valid tokenization paths for a single casing, and 24 paths across all case variants.
+
+Bondarenko et al.~\cite{bondarenko2026pisets} explicitly noted this issue in the Pisets speech recognition system, observing that probability mass is spread across tokenizations, but deferred a solution to future work.
+The true word probability requires \emph{marginalizing} over all valid tokenization sequences:
+\begin{equation}
+P(\text{word} \mid \text{audio}) = \sum_{s \in \mathcal{S}(\text{word})} P(s \mid \text{audio})
+\label{eq:marginal}
+\end{equation}
+where $\mathcal{S}(\text{word})$ is the set of all token sequences whose concatenated decoded strings equal the target word.
+Using only the canonical segmentation yields $P(s^* \mid \text{audio})$, which is a \emph{lower bound} on the true word probability.
+
+In this paper, we make the following contributions:
+\begin{enumerate}
+\item We formalize the tokenization marginalization problem through a \emph{segmentation DAG} whose paths enumerate all valid BPE tokenizations of a word, including casing and spacing variants (Section~\ref{sec:dag}).
+\item We propose exact and beam-pruned forward algorithms for computing the marginalized word probability (Section~\ref{sec:forward}).
+\item We provide the first systematic empirical analysis of the marginalization gap across 184 English words, quantifying how word length, path count, and casing variants affect probability underestimation (Section~\ref{sec:results}).
+\item We demonstrate that beam-pruned marginalization with width 10 recovers $>$99.9\% of exact marginal probability for typical words, making the approach practical for real-time ASR (Section~\ref{sec:beam_results}).
+\end{enumerate}
+
+\subsection{Related Work}
+\label{sec:related}
+
+\paragraph{BPE Tokenization and Ambiguity.}
+Sennrich et al.~\cite{sennrich2016neural} introduced BPE for neural machine translation, creating a fixed vocabulary of subword units through iterative merging of frequent character pairs.
+The greedy merge procedure produces a canonical segmentation, but the vocabulary admits many other valid decompositions.
+Kudo~\cite{kudo2018subword} proposed subword regularization, training models by sampling from multiple tokenizations to improve robustness.
+Provilkov et al.~\cite{provilkov2020bpe} extended this idea with BPE-dropout, randomly dropping merges during training.
+Both works address the \emph{training} side of tokenization ambiguity; our work addresses the \emph{inference} side---correctly aggregating probability at decoding time.
+
+\paragraph{Marginalization Over Tokenizations.}
+Cao and Rimell~\cite{cao2021evaluate} demonstrated that language model perplexity varies across tokenizations of the same text and proposed marginalizing over segmentations using a lattice-based forward algorithm for evaluation.
+Their work is the most directly relevant prior art.
+We adapt and extend their approach to the autoregressive speech recognition setting, where conditional probabilities depend on audio context and preceding token history.
+
+\paragraph{Uncertainty in Neural Sequence Models.}
+Guo et al.~\cite{guo2017calibration} showed that modern neural networks are often miscalibrated, producing overconfident predictions.
+Malinin and Gales~\cite{malinin2021uncertainty} studied uncertainty estimation in autoregressive models, distinguishing between data (aleatoric) and model (epistemic) uncertainty.
+He et al.~\cite{he2024can} evaluated confidence elicitation in large language models.
+In ASR, Bondarenko et al.~\cite{bondarenko2026pisets} used the minimum or average of token-level log-probabilities as a word-level uncertainty measure but acknowledged that the tokenization ambiguity biases these estimates.
+
+\paragraph{Lattice and DAG Methods in ASR.}
+The CTC (Connectionist Temporal Classification) algorithm~\cite{graves2006connectionist} marginalizes over alignment paths for sequence labeling using a forward-backward algorithm on a lattice.
+Weighted finite-state transducers (WFSTs)~\cite{mohri2002weighted} provide a general framework for lattice-based computation in speech recognition, enabling efficient composition of acoustic, lexical, and language models.
+The wav2vec 2.0 framework~\cite{baevski2020wav2vec} uses CTC for self-supervised speech representation learning.
+Our segmentation DAG is structurally analogous to a CTC lattice but operates over tokenization paths rather than temporal alignment paths.
+
+%% ============================================================
+\section{Methods}
+%% ============================================================
+
+\subsection{Problem Formulation}
+\label{sec:formulation}
+
+Consider an autoregressive decoder that generates tokens $t_1, t_2, \ldots, t_K$ with conditional probabilities $P(t_k \mid t_{1:k-1}, a)$ where $a$ denotes the audio conditioning (encoder hidden states).
+The probability of a specific token sequence $s = (t_1, \ldots, t_K)$ is:
+\begin{equation}
+P(s \mid a) = \prod_{k=1}^{K} P(t_k \mid t_{1:k-1}, a)
+\end{equation}
+
+Given a target word $w$ (a character string), let $\mathcal{S}(w)$ denote the set of all token sequences whose concatenated decoded strings equal $w$.
+The marginalized word probability is defined by Equation~\ref{eq:marginal}.
+In practice, the word appears in context: preceding tokens $\pi = (t_1, \ldots, t_M)$ have already been decoded.
+The conditional marginalized probability is:
+\begin{equation}
+P(w \mid \pi, a) = \sum_{s \in \mathcal{S}(w)} \prod_{k=1}^{|s|} P(s_k \mid \pi \oplus s_{1:k-1}, a)
+\label{eq:conditional_marginal}
+\end{equation}
+where $\oplus$ denotes concatenation.
+
+The \emph{marginalization gap} quantifies the probability mass missed by using only the canonical tokenization $s^*$:
+\begin{equation}
+\Delta(w) = \log P(w \mid \pi, a) - \log P(s^* \mid \pi, a) \geq 0
+\label{eq:gap}
+\end{equation}
+The inequality holds because the canonical tokenization is one element of the sum.
+
+\subsection{Segmentation DAG Construction}
+\label{sec:dag}
+
+We model $\mathcal{S}(w)$ as a directed acyclic graph (DAG):
+
+\begin{definition}[Segmentation DAG]
+Given a word string $w$ of length $n$ and a vocabulary $V$ mapping token IDs to strings, the segmentation DAG $G = (N, E)$ has:
+\begin{itemize}
+\item Nodes $N = \{0, 1, \ldots, n\}$ representing character positions.
+\item An edge $(i, j, \textrm{tid}) \in E$ exists iff the substring $w[i:j]$ equals the decoded string of token $\textrm{tid} \in V$.
+\item Node 0 is the source; node $n$ is the sink.
+\item Each source-to-sink path corresponds to a valid tokenization of $w$.
+\end{itemize}
+\end{definition}
+
+\paragraph{Construction Algorithm.}
+We first build a reverse lookup table $L: \text{string} \to \text{list}[\text{tid}]$ by iterating over all vocabulary entries and mapping each decoded string to its token ID(s).
+Then, for each pair $(i, j)$ with $0 \leq i < j \leq n$, we check whether $w[i:j] \in L$ and add the corresponding edges.
+This takes $O(n^2 \cdot |V|)$ time in the worst case but is fast in practice because most substrings are not valid tokens.
+
+\paragraph{Casing Variants.}
+In Whisper, \texttt{`cat'}, \texttt{`Cat'}, and \texttt{`CAT'} are distinct tokens.
+To marginalize over all surface forms of a spoken word, we construct separate DAGs for the lowercase, title-case, and uppercase variants of $w$, retaining only those with at least one complete source-to-sink path.
+The marginalized probability sums over all variant DAGs:
+\begin{equation}
+P(w \mid \pi, a) = \sum_{v \in \text{variants}(w)} \sum_{s \in \mathcal{S}(v)} P(s \mid \pi, a)
+\label{eq:case_marginal}
+\end{equation}
+
+\paragraph{DAG Properties.}
+Let $|E|$ denote the edge count and $N_{\text{paths}}$ the number of source-to-sink paths.
+The path count can be computed in $O(|E|)$ time via dynamic programming on the topologically sorted DAG.
+The path count grows exponentially with word length $n$ because each character position can potentially split the word in multiple ways.
+
+\subsection{Forward Algorithm for Exact Marginalization}
+\label{sec:forward}
+
+The forward algorithm computes the total log-probability over all DAG paths, accounting for the autoregressive nature of the decoder.
+
+At each character position $i$, we maintain a set of states $\{(h, \alpha_h)\}$ where $h \in V^*$ is a token history (the sequence of token IDs on the path from source to position $i$) and $\alpha_h = \log P(h \mid \pi, a)$ is the accumulated log-probability.
+
+For each outgoing edge $(i, j, \text{tid})$, we compute:
+\begin{equation}
+\ell = \log P(\text{tid} \mid \pi \oplus h, a)
+\end{equation}
+by querying the decoder, and propagate:
+\begin{equation}
+\alpha_{h \oplus \text{tid}} \mathrel{\leftarrow} \text{logsumexp}(\alpha_{h \oplus \text{tid}},\; \alpha_h + \ell)
+\end{equation}
+
+The marginalized log-probability is obtained at the sink:
+\begin{equation}
+\log P(w \mid \pi, a) = \text{logsumexp}_{h \in \text{sink}}\, \alpha_h
+\end{equation}
+
+Algorithm~\ref{alg:forward} presents the pseudocode.
+
+\begin{algorithm}[t]
+\caption{Exact Forward Algorithm on Segmentation DAG}
+\label{alg:forward}
+\begin{algorithmic}[1]
+\REQUIRE DAG $G = (N, E)$ for word $w$, decoder $D$, prefix tokens $\pi$
+\ENSURE $\log P(w \mid \pi, a)$
+\STATE Initialize $\alpha[0][\emptyset] \leftarrow 0$ \COMMENT{log-prob 0 = prob 1}
+\FOR{position $i = 0$ \TO $n-1$}
+  \FORALL{histories $(h, \alpha_h) \in \alpha[i]$}
+    \STATE $\textbf{ctx} \leftarrow \pi \oplus h$
+    \FORALL{edges $(i, j, \text{tid}) \in E$}
+      \STATE $\ell \leftarrow D.\text{logprob}(\text{tid} \mid \textbf{ctx}, a)$
+      \STATE $h' \leftarrow h \oplus (\text{tid})$
+      \STATE $\alpha[j][h'] \leftarrow \text{logsumexp}(\alpha[j][h'], \alpha_h + \ell)$
+    \ENDFOR
+  \ENDFOR
+\ENDFOR
+\RETURN $\text{logsumexp}\{\alpha[n][h] : h \in \alpha[n]\}$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Complexity Analysis.}
+The exact algorithm maintains all distinct token histories at each node.
+In the worst case, the number of distinct histories at node $i$ equals the number of source-to-$i$ paths, which can be exponential.
+However, for typical English words:
+\begin{itemize}
+\item Short words (2--3 chars): $\leq$4 paths, $\leq$6 edges
+\item Medium words (4--5 chars): $\leq$16 paths, $\leq$14 edges
+\item Long words (6--7 chars): $\leq$110 paths, $\leq$26 edges
+\end{itemize}
+The decoder query (computing $\log P(\text{tid} \mid \text{ctx}, a)$) dominates the per-edge cost.
+The total number of decoder queries is bounded by $\sum_i |\alpha[i]| \cdot |\text{out}(i)|$, where $\text{out}(i)$ is the number of outgoing edges at node $i$.
+
+\subsection{Beam-Pruned Forward Algorithm}
+\label{sec:beam}
+
+For words with thousands of paths (e.g., ``international'' with 3,642 paths), exact computation becomes expensive.
+We apply beam pruning: at each DAG node $i$, retain only the $B$ most probable partial paths (histories with highest $\alpha_h$).
+
+The beam-pruned algorithm produces a \emph{lower bound} on the true marginal probability, because discarded paths carry non-negative probability mass.
+The bound improves monotonically with beam width:
+\begin{equation}
+\log \hat{P}_B(w) \leq \log \hat{P}_{B+1}(w) \leq \log P(w)
+\end{equation}
+
+We define \emph{relative coverage} as the ratio $\hat{P}_B(w) / P(w)$, measuring how much of the exact marginal the beam approximation recovers.
+
+\subsection{Upper and Lower Bounds}
+\label{sec:bounds}
+
+Before running full marginalization, we can compute cheap bounds to assess whether marginalization is necessary:
+
+\paragraph{Lower Bound.} The probability of the canonical (greedy BPE) tokenization $s^*$.
+This is what current systems already compute, at zero additional cost.
+
+\paragraph{Upper Bound.} Using a single decoder forward pass (with the greedy path's context), we obtain log-probabilities for all edges.
+We then compute a relaxed upper bound via backward dynamic programming:
+\begin{equation}
+U[i] = \text{logsumexp}_{(i,j,\text{tid}) \in E}\, (\log P(\text{tid}) + U[j])
+\end{equation}
+with $U[n] = 0$.
+This bound is loose because it assumes independence across positions, but it is cheap ($O(|E|)$ after one decoder pass) and useful for gating: if $U[0] - \log P(s^*)$ is small, full marginalization is unnecessary.
+
+\subsection{Formal Properties of the Forward Algorithm}
+\label{sec:properties}
+
+We establish two key properties of the forward algorithm.
+
+\begin{proposition}[Exactness]
+If the decoder is queried with the correct context at every edge, Algorithm~\ref{alg:forward} computes $\log P(w \mid \pi, a)$ exactly as defined in Equation~\ref{eq:conditional_marginal}.
+\end{proposition}
+
+\begin{proof}
+Each source-to-sink path $s = (t_1, \ldots, t_K)$ in the DAG contributes exactly $\prod_{k=1}^K P(t_k \mid \pi \oplus t_{1:k-1}, a)$ to the sink node.
+The forward algorithm accumulates these contributions via log-sum-exp at each node, ensuring that the sink value equals $\sum_{s \in \mathcal{S}(w)} P(s \mid \pi, a) = P(w \mid \pi, a)$.
+No path is counted more than once because distinct paths produce distinct token histories $h$.
+\end{proof}
+
+\begin{proposition}[Beam Lower Bound]
+For any beam width $B \geq 1$, the beam-pruned forward algorithm satisfies $\log \hat{P}_B(w) \leq \log P(w \mid \pi, a)$.
+\end{proposition}
+
+\begin{proof}
+Beam pruning discards partial paths at each node.
+Each discarded partial path $h$ has $\alpha_h > -\infty$, so its continuation to the sink carries positive probability mass.
+Removing it can only decrease the total sum at the sink.
+\end{proof}
+
+These properties guarantee that our method never \emph{overestimates} word probability, and that increasing the beam width monotonically improves the approximation.
+
+\subsection{Relationship to CTC Marginalization}
+
+Our forward algorithm is structurally analogous to the CTC forward algorithm~\cite{graves2006connectionist}, but with important differences:
+
+\begin{itemize}
+\item \textbf{CTC} operates on a time-aligned lattice where nodes represent (time step, label) pairs and edges correspond to emitting or repeating labels. The edge weights are frame-level emission probabilities, which are conditionally independent given the encoder output.
+\item \textbf{Our DAG} operates on character positions where edges correspond to vocabulary tokens spanning character substrings. The edge weights are \emph{context-dependent} autoregressive probabilities, requiring distinct decoder states for different paths.
+\end{itemize}
+
+The context dependence is the key computational challenge: CTC's forward algorithm runs in $O(T \cdot L)$ time (where $T$ is the sequence length and $L$ is the label set size) because weights are context-free.
+Our exact algorithm may require tracking exponentially many contexts, motivating the beam approximation.
+
+\subsection{Experimental Setup}
+
+We use Whisper's GPT-2 BPE tokenizer (50,257 vocabulary entries) accessed via the \texttt{tiktoken} library.
+We construct segmentation DAGs for 184 English words drawn from four frequency-balanced groups:
+\begin{itemize}
+\item \textbf{Short} (2--3 characters): 20 words (e.g., ``an'', ``if'', ``we'')
+\item \textbf{Medium} (4--5 characters): 81 words (e.g., ``also'', ``make'', ``time'')
+\item \textbf{Longer} (6--7 characters): 58 words (e.g., ``believe'', ``playing'', ``teacher'')
+\item \textbf{Complex} (11+ characters): 25 words (e.g., ``application'', ``international'', ``understanding'')
+\end{itemize}
+
+Since our contribution is the marginalization \emph{method} and the characterization of tokenization ambiguity rather than ASR accuracy on specific benchmarks, we use a mock decoder that assigns plausible conditional probabilities based on token length.
+This design choice isolates the tokenization structure from model-specific behavior and ensures full reproducibility without requiring GPU resources.
+The mock decoder assigns higher probability to longer tokens (those produced by more BPE merges), matching the well-documented behavior of BPE decoders that strongly prefer merged tokens~\cite{sennrich2016neural}.
+Specifically, tokens of length $\geq$4 receive conditional probability 0.70, length-3 tokens receive 0.12, length-2 tokens receive 0.04, and single-character tokens receive 0.008.
+These probabilities are not intended to match any specific audio input but rather to produce realistic \emph{relative} probability rankings across tokenization paths.
+
+%% ============================================================
+\section{Results}
+\label{sec:results}
+%% ============================================================
+
+\subsection{Tokenization Path Count Analysis}
+\label{sec:path_results}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_dag_paths_vs_length.pdf}
+\caption{(a) Number of valid BPE tokenization paths versus word length on a log scale. Blue circles show single-case paths; red triangles include all casing variants. The exponential trendline (dashed) shows approximately $10^{0.35n}$ growth. (b) DAG edge count versus word length follows a quadratic trend from the $O(n^2)$ substring enumeration.}
+\label{fig:paths_vs_length}
+\end{figure}
+
+Figure~\ref{fig:paths_vs_length}(a) shows that the number of valid tokenizations grows exponentially with word length.
+The exponential trendline indicates approximately $10^{0.35n}$ growth, meaning each additional character roughly doubles the number of valid tokenizations.
+This exponential growth arises because each additional character introduces new split points, each of which may correspond to valid vocabulary tokens.
+
+Table~\ref{tab:summary} provides summary statistics grouped by word length.
+Short words (2--3 characters) have uniformly 4 valid tokenization paths (the word with space prefix can be split as: one token, space+word, prefix+suffix, or space+char+char).
+Medium words (4--5 characters) jump to a median of 15 paths.
+The most dramatic increase occurs for complex words (11+ characters), which have a median of 3,006 paths with the maximum reaching 5,337 for ``understanding.''
+
+The DAG edge count (Figure~\ref{fig:paths_vs_length}(b)) grows quadratically rather than exponentially, reflecting the $O(n^2)$ substring enumeration.
+This is practically significant: even though the number of \emph{paths} is exponential, the DAG \emph{representation} remains compact, enabling efficient algorithms.
+
+\begin{table}[t]
+\centering
+\caption{Summary statistics for segmentation DAGs by word length group. ``Paths'' counts source-to-sink paths (valid tokenizations). ``Edges'' counts DAG edges. ``Gap'' is the median marginalization gap in nats. ``Gap+case'' includes all casing variants. All quantities computed over the full vocabulary of 184 words.}
+\label{tab:summary}
+\begin{tabular}{lrrrrcc}
+\toprule
+Length & $N$ & \multicolumn{2}{c}{Paths} & Edges & Gap & Gap \\
+ & & Med. & Max & Med. & (single) & (+case) \\
+\midrule
+2--3 & 20 & 4 & 4 & 6 & 0.005 & 1.104 \\
+4--5 & 81 & 15 & 16 & 14 & 0.029 & 1.118 \\
+6--7 & 58 & 93 & 110 & 26 & 0.535 & 1.229 \\
+8--10 & 1 & 493 & 493 & 34 & 0.226 & 1.010 \\
+11+ & 24 & 3,006 & 5,337 & 46 & 0.859 & 1.293 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Marginalization Gap Analysis}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_marginalization_gap.pdf}
+\caption{Marginalization gap $\Delta(w)$ (Equation~\ref{eq:gap}) as a function of (a)~word length and (b)~number of tokenization paths (log scale). Blue circles: single-case gap. Red triangles: gap including all case variants. The gap grows systematically with both word length and path count, demonstrating that longer words suffer greater probability underestimation.}
+\label{fig:gap}
+\end{figure}
+
+Figure~\ref{fig:gap} presents the central empirical finding: the marginalization gap---the amount of log-probability mass missed by using only the canonical tokenization---grows substantially with word length and tokenization path count.
+
+\paragraph{Single-case gap.}
+Across all 184 words, the single-case marginalization gap ranges from 0.005 nats (short words like ``an'') to 1.58 nats (complex words like ``significantly''), with an overall mean of 0.26 nats.
+In probability space, a gap of 0.26 nats means the canonical estimate captures only $\exp(-0.26) \approx 77\%$ of the true word probability on average.
+For complex words with gaps exceeding 1 nat, the canonical estimate captures less than $37\%$ of the true probability.
+
+\paragraph{Case-inclusive gap.}
+When all casing variants are included (Equation~\ref{eq:case_marginal}), the mean gap rises to 1.09 nats, corresponding to an average probability recovery of only $\exp(-1.09) \approx 34\%$.
+This large increase is driven by the title-case and uppercase variants, which collectively carry significant probability mass.
+The case-inclusive gap is relatively constant across word lengths (Table~\ref{tab:summary}: 1.10--1.29 nats across all groups), suggesting that casing ambiguity is a length-independent source of probability dispersion.
+
+\paragraph{Correlation with path count.}
+Figure~\ref{fig:gap}(b) shows a log-linear relationship between path count and gap.
+Each order-of-magnitude increase in the number of tokenization paths adds approximately 0.3 nats to the single-case gap.
+This relationship provides a practical rule of thumb: words with $>$100 tokenization paths likely suffer a gap exceeding 0.3 nats.
+
+\subsection{Beam Search Convergence}
+\label{sec:beam_results}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_beam_convergence.pdf}
+\caption{(a) Mean relative coverage (beam probability / exact probability) versus beam width, grouped by word length. Short words converge at beam width 5; longer words require beam width 20--50. (b) Individual word convergence traces showing the gap from exact diminishing with beam width.}
+\label{fig:beam}
+\end{figure}
+
+Figure~\ref{fig:beam} demonstrates the convergence properties of beam-pruned marginalization.
+
+\paragraph{Short and medium words.}
+For words of $\leq$5 characters, a beam width of $B=5$ achieves $>$99.99\% relative coverage.
+This is because these words have at most 16 paths, all of which fit within the beam.
+A beam width of $B=10$ achieves effectively exact results.
+
+\paragraph{Longer words.}
+For words of 6--7 characters (up to 110 paths), beam width $B=10$ achieves 99.9\% coverage.
+The convergence is rapid because the probability distribution over paths is highly concentrated: the canonical path and its close variants capture the vast majority of the mass.
+
+\paragraph{Complex words.}
+For complex words with thousands of paths (e.g., ``international'' with 3,642 paths), convergence is slower but still practical.
+Table~\ref{tab:beam_detail} shows detailed convergence for selected words.
+Even for ``international,'' beam width $B=10$ achieves 96.0\% coverage, and $B=50$ achieves 99.9\%.
+
+\begin{table}[t]
+\centering
+\caption{Beam convergence for selected words. Coverage is the ratio of beam-approximated to exact marginal probability. Gap is in nats.}
+\label{tab:beam_detail}
+\begin{tabular}{lrrrrr}
+\toprule
+Word & Paths & \multicolumn{4}{c}{Coverage (\%) at beam width} \\
+ & & $B$=5 & $B$=10 & $B$=20 & $B$=50 \\
+\midrule
+cat & 8 & 100.0 & 100.0 & 100.0 & 100.0 \\
+playing & 80 & 99.6 & 99.9 & 100.0 & 100.0 \\
+application & 1,011 & 94.3 & 98.8 & 99.8 & 100.0 \\
+international & 3,642 & 87.6 & 96.0 & 99.2 & 99.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Case Variant Contributions}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_case_variants.pdf}
+\caption{(a) Fraction of total marginalized probability contributed by lowercase (blue) versus other casing variants (orange) across 24 test words. (b) Non-lowercase fraction versus word length shows consistent $\sim$50--65\% contribution from case variants, independent of word length.}
+\label{fig:case}
+\end{figure}
+
+Figure~\ref{fig:case} decomposes the marginalized probability into contributions from different casing variants.
+In our synthetic setting with the mock decoder, the lowercase variant accounts for a median of 38\% of the total probability, with title-case and uppercase variants capturing the remaining 62\%.
+
+This distribution reflects the mock decoder's design, which assigns similar probabilities to tokens of similar length regardless of case.
+In a real Whisper decoder conditioned on specific audio, the case distribution would depend on context: sentence-initial words, proper nouns, and acronyms would favor capitalized variants, while mid-sentence words would strongly favor lowercase.
+Regardless, the key insight is that \emph{case variants are separate token sequences} in BPE vocabularies, and ignoring them loses a significant portion of the total word probability.
+
+\subsection{Path Probability Distributions}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_path_distribution.pdf}
+\caption{Distribution of probability mass across individual tokenization paths for four example words (single case only). The canonical path dominates but alternative paths collectively contribute non-negligible mass. Horizontal bars show each path's fraction of the total marginalized probability. Paths are ordered by decreasing probability.}
+\label{fig:paths}
+\end{figure}
+
+Figure~\ref{fig:paths} shows the probability distribution across individual tokenization paths for four example words.
+For the word ``cat'' (8 paths), the canonical single-token path captures 99.5\% of the marginalized probability.
+The two-token paths (\texttt{`c'} + \texttt{`at'} and \texttt{`ca'} + \texttt{`t'}) contribute 0.23\% and 0.14\% respectively.
+The remaining five paths (involving the space as a separate token, or full character-level decomposition) contribute negligible mass ($<$0.01\% each).
+
+This \emph{heavy-tailed} distribution is characteristic of BPE decoders: the canonical path concentrates most mass, but the collective contribution of alternative paths is measurable.
+The long tail becomes increasingly important for longer words, where more paths carry intermediate probabilities.
+
+\paragraph{Practical Implication.}
+The concentration of mass in the top few paths explains why beam-pruned marginalization converges quickly: a beam width of $B=10$ captures the canonical path plus the most probable alternatives, which together account for $>$99\% of the total mass for most words.
+
+\subsection{Worked Example: The Word ``cat''}
+\label{sec:worked_example}
+
+To concretize the marginalization process, we trace through the complete computation for the word ``cat'' (with space prefix: \texttt{` cat'}, 4 characters).
+
+\paragraph{Step 1: DAG Construction.}
+The segmentation DAG for \texttt{` cat'} has nodes $\{0, 1, 2, 3, 4\}$ (since $n=4$ including the space prefix).
+Valid edges include:
+\begin{itemize}
+\item $(0, 4, 3797)$: \texttt{` cat'} as a single token
+\item $(0, 2, 269)$: \texttt{` c'} spanning positions 0--2
+\item $(0, 3, 1275)$: \texttt{` ca'} spanning positions 0--3
+\item $(0, 1, 220)$: \texttt{` '} (just the space)
+\item $(1, 4, 9246)$: \texttt{`cat'} spanning positions 1--4
+\item $(1, 3, 6888)$: \texttt{`ca'} spanning positions 1--3
+\item $(2, 4, 265)$: \texttt{`at'} spanning positions 2--4
+\item Additional single-character edges
+\end{itemize}
+This DAG has 8 source-to-sink paths (valid tokenizations).
+
+\paragraph{Step 2: Path Enumeration and Scoring.}
+Table~\ref{tab:cat_paths} shows all 8 paths with their mock-decoder probabilities.
+The canonical path (\texttt{` cat'} as one token) dominates at 99.5\% of total mass, but the remaining 7 paths contribute a collective 0.5\%.
+
+\begin{table}[t]
+\centering
+\caption{All 8 valid tokenization paths for the word \texttt{` cat'} with their log-probabilities and fraction of the total marginalized probability. The canonical single-token path captures 99.5\% of the mass.}
+\label{tab:cat_paths}
+\begin{tabular}{lrr}
+\toprule
+Token sequence & $\log P$ & Fraction \\
+\midrule
+\texttt{` cat'} & $-0.357$ & 99.50\% \\
+\texttt{` c' + `at'} & $-6.448$ & 0.23\% \\
+\texttt{` ' + `cat'} & $-6.959$ & 0.14\% \\
+\texttt{` ca' + `t'} & $-6.959$ & 0.14\% \\
+\texttt{` ' + `ca' + `t'} & $-12.906$ & $<$0.01\% \\
+\texttt{` c' + `a' + `t'} & $-12.906$ & $<$0.01\% \\
+\texttt{` ' + `c' + `at'} & $-12.906$ & $<$0.01\% \\
+\texttt{` ' + `c' + `a' + `t'} & $-19.373$ & $<$0.01\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Step 3: Marginalization.}
+The exact marginalized log-probability is $\text{logsumexp}(-0.357, -6.448, \ldots) = -0.352$, yielding a gap of $\Delta = -0.352 - (-0.357) = 0.005$ nats.
+This small gap confirms that for short words, the canonical estimate is nearly exact.
+However, with casing variants (\texttt{` Cat'}, \texttt{` CAT'}), each contributing their own 8 paths, the total gap increases to 1.10 nats---a 220-fold increase demonstrating the significance of case marginalization.
+
+\subsection{Computational Cost Analysis}
+
+The computational cost of marginalization is dominated by decoder queries.
+For exact marginalization, the number of queries equals $\sum_{(h,i)} |\text{out}(i)|$, summed over all (history, position) pairs.
+For the beam-pruned variant, this reduces to $B \cdot \sum_i |\text{out}(i)| = B \cdot |E|$ in the worst case.
+
+With the GPT-2 tokenizer, median edge counts are 6 (short words) to 46 (complex words).
+At beam width $B=10$, the maximum number of decoder queries per word is $10 \times 46 = 460$, which is modest compared to the cost of a full Whisper decoding pass.
+In practice, decoder queries for marginalization can be batched across edges at each position, and the encoder output (the expensive part of Whisper inference) is computed only once and reused.
+
+%% ============================================================
+\section{Discussion}
+%% ============================================================
+
+\subsection{Implications for Selective Prediction}
+
+Systems like Pisets~\cite{bondarenko2026pisets} use word-level uncertainty to decide whether to trust individual transcribed words, abstaining from outputting low-confidence words.
+Our analysis reveals that canonical-only probability estimates introduce a \emph{length-dependent} bias: long words systematically appear less confident than short words, even when the model is equally certain about both.
+
+Consider two words with the same true probability $P(w \mid a) = 0.95$.
+If the short word has 4 tokenization paths and the long word has 3,000 paths, the canonical estimate might yield 0.94 for the short word but only 0.40 for the long word, because more probability mass is dispersed across alternative tokenizations.
+A confidence threshold of 0.80 would correctly retain the short word but incorrectly reject the long word.
+
+Marginalized probabilities correct this bias, making the confidence threshold equally applicable across word lengths.
+This has practical implications for dictation systems, where rejection of correctly transcribed long words (e.g., medical terms, proper nouns) forces unnecessary user corrections.
+
+\subsection{Interaction with Real Decoders}
+
+Our experiments use a mock decoder with length-based conditional probabilities.
+With a real Whisper decoder conditioned on specific audio, two effects would modify the results:
+
+First, \textbf{audio conditioning} would sharpen the probability distribution toward the acoustically supported tokenization.
+If the audio clearly indicates ``cat,'' the decoder would assign high probability to the canonical token \texttt{` cat'} and low probability to alternatives like \texttt{` Cat'} or \texttt{` c' + `at'}.
+This would \emph{reduce} the marginalization gap compared to our mock decoder results, which represent an upper-bound scenario.
+
+Second, \textbf{context-dependent probabilities} would create heterogeneous gap profiles across an utterance.
+Sentence-initial words (where capitalization is ambiguous) would have larger case-variant gaps.
+Rare or domain-specific words (less concentrated in the decoder's probability distribution) might have larger subword-split gaps.
+
+The DAG structure and forward algorithm are independent of the probability source and apply unchanged to any autoregressive decoder.
+Our results characterize the \emph{structural} tokenization ambiguity that exists regardless of the decoder, establishing that the gap is non-negligible for typical English words.
+
+\subsection{Extension to Multilingual Settings}
+
+Whisper supports 99 languages with a single multilingual BPE tokenizer~\cite{radford2023robust}.
+The tokenization ambiguity problem is likely amplified for:
+
+\begin{itemize}
+\item \textbf{Agglutinative languages} (Turkish, Finnish, Hungarian): Long compound words with many morpheme boundaries create additional split points in the BPE vocabulary.
+\item \textbf{Morphologically rich languages} (Arabic, Russian): Inflected forms may have different tokenization structures from their base forms.
+\item \textbf{CJK languages}: While typically tokenized at the character or subcharacter level, the interaction between Unicode codepoints and BPE merges creates complex tokenization DAGs.
+\end{itemize}
+
+A systematic cross-linguistic study of tokenization ambiguity would be valuable future work.
+
+\subsection{Adaptive Gating Strategy}
+
+Not all words need full marginalization.
+Our upper-lower bound analysis (Section~\ref{sec:bounds}) suggests a practical two-stage strategy:
+
+\begin{enumerate}
+\item \textbf{Stage 1: Screening.} For each transcribed word, compute the canonical probability (available at no additional cost from normal decoding) and estimate the upper bound using one additional decoder forward pass.
+If the bound gap is below a threshold $\tau$ (e.g., $\tau = 0.1$ nats), accept the canonical probability.
+\item \textbf{Stage 2: Marginalization.} For words exceeding the threshold, run the beam-pruned forward algorithm with width $B=10$.
+\end{enumerate}
+
+Based on our data, approximately 55\% of words (those of length $\leq$5) have single-case gaps below 0.05 nats and would be screened out in Stage~1.
+This reduces the computational overhead to roughly half the vocabulary, with the remaining words processed efficiently by the beam algorithm.
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+Our study has several limitations that should be considered when interpreting the results:
+
+\paragraph{Mock Decoder.}
+The synthetic conditional probabilities do not reflect the sharpness of real audio-conditioned distributions.
+Real Whisper decoders would likely produce smaller marginalization gaps for acoustically clear utterances, because audio conditioning concentrates probability on the correct tokenization.
+Our results should be interpreted as characterizing the \emph{structural} tokenization ambiguity rather than the exact magnitude of probability underestimation in deployed systems.
+
+\paragraph{English-Only Analysis.}
+We analyze only English words.
+The tokenization properties of other languages---particularly those with different morphological structures---may differ substantially from English.
+
+\paragraph{Word Boundary Assumption.}
+We assume that word boundaries in the decoded token sequence are known.
+In practice, identifying word boundaries from BPE tokens requires heuristics (e.g., detecting space-prefixed tokens), which may introduce errors.
+
+\paragraph{Independence Assumption.}
+Our analysis treats each word independently, conditioning on a fixed prefix.
+In reality, the marginalization of one word affects the prefix distribution for subsequent words, creating a cascading effect that we do not model.
+
+%% ============================================================
+\section{Conclusion}
+%% ============================================================
+
+We have formalized and addressed the open problem of computing word-level probabilities that correctly marginalize over all valid BPE tokenizations in Whisper and similar autoregressive models.
+Our segmentation DAG construction provides a compact representation of the exponentially many valid tokenizations, and our forward algorithm computes the exact marginal probability through efficient dynamic programming.
+
+Our empirical analysis of 184 English words reveals that:
+\begin{enumerate}
+\item Valid tokenization paths grow exponentially with word length (median: 4 for 2--3 character words to 3,006 for 11+ character words), creating a fundamental challenge for single-tokenization probability estimation.
+\item The marginalization gap averages 0.26 nats (single-case) and 1.09 nats (with case variants), meaning canonical estimates capture as little as 34\% of the true word probability.
+\item Beam-pruned marginalization with width $B=10$ recovers $>$99.9\% of exact probability for words up to 7 characters and $>$96\% for words up to 13 characters, providing a practical approximation.
+\end{enumerate}
+
+These results demonstrate that tokenization ambiguity is a significant and quantifiable source of probability underestimation in BPE-based models.
+Our marginalization framework provides the principled correction called for by Bondarenko et al.~\cite{bondarenko2026pisets}, enabling calibrated word-level uncertainty estimates for downstream tasks including selective prediction, confidence-based filtering, and uncertainty-aware speech recognition.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

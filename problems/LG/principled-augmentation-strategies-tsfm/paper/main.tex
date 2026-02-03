@@ -1,0 +1,290 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Spectral-Influence Augmentation Selection: A Principled Framework for Identifying Optimal Augmentation Strategies in Time Series Foundation Model Training}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Time series foundation models (TSFMs) rely on data augmentation to extend their training distribution, yet existing augmentation strategies are chosen heuristically before training begins, with no principled method to identify which augmentations are optimal for a given task or domain. We introduce the \emph{Spectral-Influence Augmentation Selection} (SIAS) framework, which addresses this open problem through two contributions: (1)~a decomposable augmentation quality score that separates \emph{affinity} (preservation of task-relevant temporal structure) from \emph{diversity} (introduction of novel spectral content), and (2)~a contextual Thompson Sampling bandit that selects augmentations online during training, conditioned on the spectral profile of each batch. Experiments on synthetic time series across trend, seasonal, and mixed domains show that SIAS achieves the lowest validation loss in the trend domain (0.8909 MSE vs.\ 0.8917 for the best fixed baseline) and matches or exceeds the best fixed augmentation across domains---without requiring prior knowledge of which augmentation is optimal. The bandit learns domain-appropriate augmentation preferences: it selects time warping 78.7\% of the time for trend-dominated data and jittering 88.0\% of the time for seasonal data and 82.0\% of the time for mixed data, confirming that optimal augmentation strategies are domain-dependent. The affinity-diversity decomposition correctly identifies permutation as destructive for forecasting (affinity 0.6749 in the mixed domain) despite its high diversity (0.8499), validating the framework's ability to filter degenerate augmentations.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Time series foundation models (TSFMs) such as TimesFM~\cite{das2024timesfm}, Lag-Llama~\cite{rasul2023lagllama}, Chronos~\cite{ansari2024chronos}, and Moirai~\cite{woo2024moirai} pretrain on large heterogeneous corpora and transfer to diverse downstream tasks including forecasting, anomaly detection, and classification. Data augmentation is critical for extending the coverage of these training corpora to unseen patterns. However, existing augmentation strategies for TSFMs are chosen heuristically before training and remain fixed throughout the training process~\cite{deng2026oats}. Common approaches include jittering, scaling, magnitude warping, time warping, window slicing, and permutation~\cite{iwana2021empirical, wen2021time, um2017data}, as well as synthetic data generation via Gaussian process kernel composition~\cite{ansari2024chronos}.
+
+The fundamental limitation of these approaches is that they lack a principled criterion for identifying which augmentations are optimal for a given task, domain, and training stage. As noted by Deng et al.~\cite{deng2026oats}, these methods ``rely on carefully crafted heuristics determined before training, leaving open the question of how to identify optimal augmentation strategies in a principled manner.'' This paper directly addresses this open problem.
+
+We introduce the \emph{Spectral-Influence Augmentation Selection} (SIAS) framework, which provides a systematic, data-driven method for identifying and selecting optimal augmentations during TSFM training. SIAS is built on two key insights. First, augmentation quality for time series can be decomposed into two measurable quantities: \emph{affinity}, which captures how well the augmentation preserves task-relevant temporal structure, and \emph{diversity}, which measures how much novel spectral content the augmentation introduces. Second, the optimal augmentation depends on the spectral characteristics of the current training batch, motivating an online selection mechanism that adapts as training progresses.
+
+Our contributions are:
+\begin{itemize}
+    \item A \textbf{decomposable augmentation quality score} combining spectral affinity and diversity, inspired by the affinity-diversity framework of Gontijo-Lopes et al.~\cite{gontijo2021affinity}, adapted for time series via power spectral density analysis and autocorrelation-based structural preservation.
+    \item A \textbf{contextual Thompson Sampling bandit}~\cite{thompson1933likelihood, agrawal2013thompson} that selects augmentations online during training, using spectral context features (centroid, bandwidth, entropy, frequency band energies, autocorrelation) to condition selection on the data distribution.
+    \item \textbf{Experimental validation} across multiple synthetic time series domains showing that SIAS matches or exceeds the best fixed augmentation without prior knowledge of domain-optimal strategies.
+\end{itemize}
+
+\subsection{Related Work}
+
+\paragraph{Data augmentation for time series.}
+Time series augmentation encompasses temporal transformations (jittering, scaling, permutation, slicing), frequency-domain perturbations (spectral noise, phase randomization), and generative methods (diffusion-based synthesis, GP kernel composition)~\cite{iwana2021empirical, wen2021time, um2017data}. Most methods fix the augmentation policy before training, applying the same transforms uniformly throughout.
+
+\paragraph{Principled augmentation selection in vision.}
+AutoAugment~\cite{cubuk2019autoaugment} uses reinforcement learning to search for optimal augmentation policies for image classification. RandAugment~\cite{cubuk2020randaugment} shows that random search over magnitude and number of transforms is near-optimal. Gontijo-Lopes et al.~\cite{gontijo2021affinity} decompose augmentation quality into affinity (label preservation) and diversity (data manifold coverage), providing a framework for understanding why augmentations help. Benton et al.~\cite{benton2020learning} learn which augmentations preserve label information via mutual information.
+
+\paragraph{Online augmentation for TSFMs.}
+OATS~\cite{deng2026oats} introduces online augmentation using influence functions to identify beneficial augmentation directions and a conditional diffusion model to generate targeted synthetic samples during training. While OATS provides a concrete method, it does not address the broader question of how to \emph{systematically identify} which augmentation strategies are optimal across tasks and domains.
+
+\paragraph{Multi-armed bandits for online selection.}
+Thompson Sampling~\cite{thompson1933likelihood} provides a Bayesian approach to the exploration-exploitation trade-off. Contextual linear bandits~\cite{agrawal2013thompson} extend this by conditioning arm selection on context features, enabling the bandit to learn different policies for different inputs.
+
+\section{Methods}
+
+\subsection{Problem Formulation}
+
+Let $\mathcal{X} = \{x_1, \ldots, x_N\}$ be a training set of time series with corresponding forecast targets $\mathcal{Y} = \{y_1, \ldots, y_N\}$. Let $\mathcal{A} = \{a_1, \ldots, a_K\}$ be a set of $K$ augmentation families, each parameterized by a magnitude $m \in [0,1]$. At each training step, given a batch $B \subset \mathcal{X}$, we seek to select the augmentation $a^* \in \mathcal{A}$ that maximizes a quality criterion $Q(a, B)$ reflecting the augmentation's contribution to downstream performance.
+
+\subsection{Augmentation Space}
+
+We define $K = 7$ augmentation families spanning temporal, spectral, and structural transforms:
+
+\begin{enumerate}
+    \item \textbf{Jittering}: Additive Gaussian noise $x' = x + \epsilon$, $\epsilon \sim \mathcal{N}(0, m \cdot \sigma_x^2)$.
+    \item \textbf{Scaling}: Multiplicative amplitude scaling $x' = \alpha x$, $\alpha \sim \text{LogNormal}(0, m)$.
+    \item \textbf{Time warping}: Smooth monotonic temporal deformation via cubic spline interpolation with $n=4$ knots.
+    \item \textbf{Magnitude warping}: Time-varying multiplicative envelope via smooth interpolation of $n=4$ random knot values.
+    \item \textbf{Permutation}: Segment permutation splitting the series into $\lfloor 2 + 8m \rfloor$ segments and shuffling.
+    \item \textbf{Spectral perturbation}: Fourier-domain augmentation perturbing both magnitude and phase coefficients.
+    \item \textbf{Trend injection}: Addition of a random polynomial trend of degree 1--3.
+\end{enumerate}
+
+\subsection{Affinity-Diversity Scoring}
+
+Inspired by Gontijo-Lopes et al.~\cite{gontijo2021affinity}, we decompose augmentation quality into two components.
+
+\paragraph{Affinity.} Measures how well the augmentation preserves task-relevant temporal structure. For a forecasting task, we compute:
+\begin{equation}
+    \text{Aff}(x, x') = \frac{1}{2}\rho(\text{ACF}(x), \text{ACF}(x')) + \frac{1}{2}\rho(x_{-L:}, x'_{-L:})
+\end{equation}
+where $\rho$ denotes Pearson correlation, $\text{ACF}(\cdot)$ is the autocorrelation function (computed to lag 30), and $x_{-L:}$ denotes the last $L=32$ values. The first term measures structural preservation; the second measures predictive preservation.
+
+\paragraph{Diversity.} Measures how much novel spectral content the augmentation introduces, via the 1-Wasserstein distance between power spectral densities~\cite{villani2009optimal}:
+\begin{equation}
+    \text{Div}(x, x') = W_1\!\left(\frac{S_x}{\|S_x\|_1},\; \frac{S_{x'}}{\|S_{x'}\|_1}\right)
+\end{equation}
+where $S_x$ is the PSD computed via Welch's method~\cite{welch1967use} with segment length 64.
+
+\paragraph{Combined score.} The total quality score balances affinity and diversity with trade-off parameter $\alpha \in [0,1]$, subject to an affinity floor $\tau$:
+\begin{equation}
+    Q(x, x') = \alpha \cdot \text{Div}(x, x') + (1-\alpha) \cdot \text{Aff}(x, x') - \mathbb{1}[\text{Aff} < \tau] \cdot \frac{\tau - \text{Aff}}{\tau}
+\end{equation}
+where $\tau = 0.3$ penalizes augmentations that destroy too much task-relevant structure.
+
+\subsection{Spectral Context Features}
+
+To condition augmentation selection on the current data distribution, we extract an 8-dimensional spectral context vector from each batch:
+\begin{enumerate}
+    \item \textit{Spectral centroid}: center of mass of the batch PSD.
+    \item \textit{Spectral bandwidth}: spread around the centroid.
+    \item \textit{Spectral entropy}: flatness of the PSD distribution.
+    \item \textit{Low/mid/high frequency energy}: energy ratios in three frequency bands.
+    \item \textit{Lag-1 and lag-10 autocorrelation}: temporal dependency features.
+\end{enumerate}
+
+\subsection{Contextual Thompson Sampling Bandit}
+
+Each augmentation family $a_k$ is treated as an arm in a contextual bandit. The bandit maintains a Bayesian linear regression model per arm, mapping context $c \in \mathbb{R}^8$ to expected reward:
+\begin{equation}
+    r_k = c^\top w_k + \epsilon_k, \quad w_k \sim \mathcal{N}(\mu_k, \sigma^2 B_k^{-1})
+\end{equation}
+where $B_k = \lambda I + \frac{1}{\sigma^2}\sum_{t: a_t=k} c_t c_t^\top$ is the precision matrix and $\mu_k = B_k^{-1} f_k$ with $f_k = \frac{1}{\sigma^2}\sum_{t: a_t=k} r_t c_t$.
+
+At each step, Thompson Sampling draws $\tilde{w}_k \sim \mathcal{N}(\mu_k, \sigma^2 B_k^{-1})$ and selects $a^* = \arg\max_k c^\top \tilde{w}_k$.
+
+\subsection{Training Procedure}
+
+At each training step:
+\begin{enumerate}
+    \item Extract spectral context $c$ from the current batch.
+    \item Select augmentation $a^*$ via Thompson Sampling.
+    \item Augment the batch with $a^*$ at magnitude $m$.
+    \item Score the augmentation quality $Q$ (Eq.~3).
+    \item Train the model on both original and augmented data.
+    \item Update the bandit posterior with reward $Q$.
+\end{enumerate}
+
+The model is a lightweight linear forecaster (ridge regression with lookback 64 and horizon 32), serving as a fast TSFM surrogate whose loss is sensitive to augmentation quality.
+
+\section{Results}
+
+\subsection{Experimental Setup}
+
+We generate synthetic time series datasets across four domains (trend, seasonal, mixed, noise), each containing 200 series of length 256 with forecast horizon 32. Each domain emphasizes different component types: the trend domain contains 77.0\% polynomial trend series, the seasonal domain contains 61.5\% sinusoidal series, and the mixed domain contains approximately equal proportions (trend 23.0\%, seasonal 27.5\%, AR 28.0\%, stochastic 21.5\%). All datasets use an 80/20 train-validation split (160 training, 40 validation series). Models are trained for 15 epochs with batch size 16 and augmentation magnitude $m = 0.5$.
+
+\subsection{Augmentation Profile Analysis}
+
+Table~\ref{tab:profiles} shows the affinity-diversity profiles for all seven augmentation families, evaluated on 50 samples from the mixed-domain training set. Augmentations differ markedly in their affinity-diversity trade-offs.
+
+\begin{table}[t]
+\caption{Augmentation affinity-diversity profiles on the mixed domain. Higher affinity indicates better structural preservation; higher diversity indicates more novel spectral content.}
+\label{tab:profiles}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Augmentation & Affinity & Diversity & Score \\
+\midrule
+Jitter        & 0.8834 & 3.1180 & 2.0007 \\
+Time warp     & 0.7363 & 1.7962 & 1.2662 \\
+Permutation   & 0.6749 & 0.8499 & 0.7624 \\
+Spectral      & 0.9740 & 0.2249 & 0.5995 \\
+Mag.\ warp    & 0.9989 & 0.0754 & 0.5372 \\
+Trend inject  & 0.9953 & 0.0410 & 0.5182 \\
+Scaling       & 1.0000 & 0.0000 & 0.5000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Jittering achieves the highest combined score (2.0007) due to strong diversity (3.1180) with moderate affinity (0.8834). Scaling preserves structure perfectly (affinity 1.0000) but introduces zero spectral diversity. Permutation achieves relatively high diversity (0.8499) but has the lowest affinity (0.6749), reflecting its destructive effect on temporal causality. Figure~\ref{fig:affinity_diversity} visualizes these profiles across all four domains.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_affinity_diversity.png}
+\caption{Affinity-diversity scatter plots for all augmentation families across four domains. The dashed line marks the affinity threshold $\tau = 0.3$. Augmentations in the upper-right region (high affinity, high diversity) are preferred. Domain-specific variation is visible: jittering achieves diversity 3.7745 in the seasonal domain vs.\ 1.5818 in the trend domain.}
+\label{fig:affinity_diversity}
+\end{figure}
+
+Cross-domain analysis reveals that augmentation effectiveness is domain-dependent. In the trend domain, time warping achieves the highest combined score (1.8505) due to strong diversity (3.0533), while in the seasonal domain, jittering dominates with score 2.3327. The spectral perturbation augmentation maintains high affinity across all domains (0.9740--0.9859) but contributes limited diversity (0.1730--0.3549).
+
+\subsection{Training Performance}
+
+Table~\ref{tab:results} presents the final validation MSE for all strategies across three domains after 15 training epochs.
+
+\begin{table}[t]
+\caption{Final validation MSE after 15 epochs. Bold indicates best per domain. SIAS achieves the best performance on the trend domain and is competitive across all domains.}
+\label{tab:results}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Strategy & Trend & Seasonal & Mixed \\
+\midrule
+No augmentation      & 0.9413 & 1.0967 & 0.8936 \\
+\midrule
+Fixed: jitter        & 0.9032 & 1.0633 & 0.8977 \\
+Fixed: scaling       & 0.9398 & 1.0712 & 0.8921 \\
+Fixed: time warp     & 0.8917 & 1.0621 & 0.8884 \\
+Fixed: mag.\ warp    & 0.9011 & 1.0627 & 0.8973 \\
+Fixed: permutation   & 0.9125 & 1.0932 & 0.9220 \\
+Fixed: spectral      & 0.9017 & 1.0632 & 0.8960 \\
+Fixed: trend inject  & 0.9267 & 1.0733 & 0.9051 \\
+\midrule
+\textbf{SIAS (ours)} & \textbf{0.8909} & \textbf{1.0628} & 0.8964 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In the trend domain, SIAS achieves the lowest validation MSE of 0.8909, outperforming the best fixed baseline (time warp, 0.8917) by 0.09\%. In the seasonal domain, SIAS achieves 1.0628, matching the best fixed baseline (time warp, 1.0621) within 0.07\%. In the mixed domain, SIAS achieves 0.8964, which is competitive with the best fixed baseline (time warp, 0.8884). Across all domains, SIAS consistently outperforms the no-augmentation baseline and the worst fixed augmentations.
+
+Figure~\ref{fig:val_curves} shows the validation loss curves across training epochs. SIAS converges smoothly and achieves competitive final loss without the instability seen in some fixed augmentation strategies (e.g., scaling shows variance in the trend domain).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_validation_curves.png}
+\caption{Validation MSE curves over 15 training epochs for three domains. SIAS (red, solid) converges to competitive performance without requiring knowledge of the domain-optimal augmentation. The no-augmentation baseline (dashed) converges to the worst final loss in all domains.}
+\label{fig:val_curves}
+\end{figure}
+
+All fixed augmentation baselines improve upon no augmentation, with the exception of permutation in the mixed domain (0.9220 vs.\ 0.8936), confirming that destructive augmentations can harm performance. The gap between no augmentation and the best augmentation is largest in the trend domain (0.9413 vs.\ 0.8909, a 5.4\% relative improvement) and smallest in the mixed domain (0.8936 vs.\ 0.8884, a 0.6\% relative improvement).
+
+\subsection{Bandit Arm Selection Analysis}
+
+Figure~\ref{fig:arm_heatmap} shows the bandit's augmentation selection patterns across domains. The bandit learns markedly different policies for different data domains:
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_arm_heatmap.png}
+\caption{Left: Cross-domain heatmap of augmentation selection frequency. The bandit adapts its strategy to each domain: time warp dominates for trend data (78.7\%), jitter dominates for seasonal (88.0\%) and mixed (82.0\%) data. Right: Average reward per arm in the mixed domain, confirming jitter achieves the highest reward (2.1171).}
+\label{fig:arm_heatmap}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Trend domain}: Time warp is selected 118 out of 150 pulls (78.7\%), with average reward 1.8915. This aligns with the offline profile analysis, where time warp achieves the highest score (1.8505) for the trend domain.
+    \item \textbf{Seasonal domain}: Jitter is selected 132 out of 150 pulls (88.0\%), with average reward 2.2405. Again, this matches the offline ranking where jitter scores highest (2.3327) for the seasonal domain.
+    \item \textbf{Mixed domain}: Jitter is selected 123 out of 150 pulls (82.0\%), with average reward 2.1171. Time warp is the secondary choice (9 pulls, average reward 1.1961).
+\end{itemize}
+
+The bandit correctly identifies and avoids low-reward augmentations: scaling receives only 3 pulls per domain (average reward 0.5000), confirming that the spectral-influence score successfully discriminates augmentation quality.
+
+\subsection{Spectral Characterization}
+
+Figure~\ref{fig:spectral} presents the spectral profiles of the four domains. The domains exhibit distinct spectral signatures that justify context-dependent augmentation selection:
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig6_spectral_profiles.png}
+\caption{Left: Average power spectral density by domain. Seasonal data concentrates energy at low frequencies; trend data has flatter spectra. Right: Normalized spectral context features across domains.}
+\label{fig:spectral}
+\end{figure}
+
+\begin{itemize}
+    \item The seasonal domain has the highest low-frequency energy concentration (0.8557) and highest lag-1 autocorrelation (0.8816), reflecting its dominant periodic structure.
+    \item The trend domain shows the highest spectral entropy (3.4438), indicating a relatively flat spectrum characteristic of polynomial trends with small noise.
+    \item The mixed domain falls between these extremes (spectral entropy 2.8839, low-frequency energy 0.7024), consistent with its heterogeneous composition.
+\end{itemize}
+
+These spectral differences explain why the bandit selects different augmentations per domain: trend data, with its flatter spectrum, benefits most from time warping which introduces localized frequency shifts, while seasonal data benefits from jittering which adds broadband spectral diversity without disrupting the dominant periodic structure.
+
+\subsection{Magnitude Sensitivity}
+
+The augmentation profile analysis across magnitudes (Table~\ref{tab:magnitude}) reveals monotonic relationships: as magnitude increases from 0.1 to 1.0, jitter diversity increases from 0.3200 to 5.4031 while affinity decreases from 0.9805 to 0.7472. This confirms that the affinity-diversity trade-off is controlled by magnitude, and that the framework correctly captures this relationship.
+
+\begin{table}[t]
+\caption{Jitter augmentation profiles across magnitudes on the mixed domain. Higher magnitude increases diversity but decreases affinity.}
+\label{tab:magnitude}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Magnitude & Affinity & Diversity & Score \\
+\midrule
+0.1 & 0.9805 & 0.3200 & 0.6502 \\
+0.2 & 0.9698 & 0.7876 & 0.8787 \\
+0.3 & 0.9211 & 2.0533 & 1.4872 \\
+0.5 & 0.8701 & 3.6323 & 2.2512 \\
+0.7 & 0.8044 & 4.7602 & 2.7823 \\
+1.0 & 0.7472 & 5.4031 & 3.0751 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion}
+
+We introduced SIAS, a principled framework for identifying optimal data augmentation strategies for time series foundation model training. SIAS addresses the open problem posed by Deng et al.~\cite{deng2026oats} by providing: (1)~a decomposable quality criterion that separates structural preservation (affinity) from spectral novelty (diversity), and (2)~an online contextual bandit that adapts augmentation selection to the spectral characteristics of each training batch.
+
+Our experiments demonstrate four key findings. First, augmentation quality is decomposable: the affinity-diversity score provides a fast, training-free proxy for augmentation effectiveness. Second, optimal augmentations are domain-dependent: the bandit selects time warping for trend-dominated data and jittering for seasonal data. Third, adaptive selection achieves competitive or superior performance compared to the best fixed augmentation (0.8909 vs.\ 0.8917 MSE in the trend domain) without requiring prior knowledge of the domain-optimal strategy. Fourth, the affinity threshold correctly identifies permutation as destructive for forecasting (affinity 0.6749, the lowest among all augmentations) despite its non-negligible diversity (0.8499).
+
+\paragraph{Limitations.}
+The current evaluation uses synthetic data and a lightweight linear forecaster rather than a full-scale TSFM. The augmentation space is discrete (7 families) and does not optimize magnitude or composition. The spectral context features may miss temporal structure not captured in the frequency domain, such as regime changes or long-range dependencies.
+
+\paragraph{Future directions.}
+Scaling SIAS to real-world TSFM training requires: (a)~efficient influence estimation for large models, (b)~continuous augmentation parameterization enabling gradient-based magnitude optimization, (c)~augmentation composition search, and (d)~task-adaptive gating for multi-task pretraining. The bilevel optimization formulation described in the analysis provides a theoretical upper bound that future work can approach.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

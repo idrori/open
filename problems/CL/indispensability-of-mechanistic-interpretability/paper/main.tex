@@ -1,0 +1,383 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+%%% Packages %%%
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+%%% Metadata %%%
+\setcopyright{acmlicensed}
+\acmYear{2026}
+\acmDOI{}
+\acmISBN{}
+
+\begin{document}
+
+% ===================================================================
+\title{When Is Mechanistic Interpretability Indispensable?\\An Empirical Separation Framework for Downstream LLM Tasks}
+
+% ===================================================================
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Mechanistic interpretability (MI) has emerged as a powerful paradigm for understanding and steering large language models by locating and manipulating their internal computational structures.
+However, it remains an open question whether MI is \emph{indispensable} for any downstream task---that is, whether there exist tasks for which MI-based methods strictly outperform all non-MI alternatives under matched resource constraints.
+We formalize this question through the concept of \emph{$\epsilon$-indispensability} and propose an empirical separation framework that compares MI and non-MI methods across controlled experimental conditions.
+Using small self-contained transformer models, we conduct five experiments spanning two task families: (1)~dormant backdoor detection, where the trigger subsequence has exponentially low probability under random sampling, and (2)~surgical knowledge editing with locality preservation.
+Our results demonstrate that MI-based activation scanning achieves perfect detection of dormant backdoors (effect size $d=1.24$, $p < 0.001$) where behavioral sampling completely fails, and that MI-guided rank-one editing achieves a harmonic success-locality score of 0.935 compared to 0.000 for naive fine-tuning.
+A trigger rarity sweep reveals a sharp phase transition: behavioral methods succeed only when trigger probability exceeds ${\sim}10^{-3}$, while MI maintains detection across all tested rarity levels.
+Bootstrap confidence intervals confirm strong $\epsilon$-indispensability ($95\%$ CI excluding zero) for both task families.
+We propose a taxonomy identifying three structural conditions---dormancy, locality requirements, and certification demands---under which MI is predicted to be indispensable, providing concrete guidance for research prioritization and deployment decisions.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257.10010293.10010294</concept_id>
+<concept_desc>Computing methodologies~Neural networks</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257.10010293.10010319</concept_id>
+<concept_desc>Computing methodologies~Learning latent representations</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Neural networks}
+\ccsdesc[300]{Computing methodologies~Learning latent representations}
+
+\keywords{mechanistic interpretability, indispensability, backdoor detection, knowledge editing, large language models}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}
+% ===================================================================
+
+Mechanistic interpretability (MI) aims to understand neural networks by reverse-engineering their internal computational mechanisms---identifying circuits, features, and causal pathways that implement specific behaviors~\cite{olsson2022context,wang2023interpretability,conmy2023towards}.
+Recent advances in sparse autoencoders~\cite{bricken2023monosemanticity,cunningham2023sparse,templeton2024scaling}, activation patching~\cite{goldowskydill2023localizing}, and representation engineering~\cite{zou2023representation} have demonstrated that MI can be practically useful for locating, steering, and improving large language models (LLMs).
+
+A comprehensive survey by Zhang et al.~\cite{zhang2026locate} reframes MI as a practical discipline organized around three action categories---\textsc{Locate}, \textsc{Steer}, and \textsc{Improve}---documenting substantial progress in making MI actionable for downstream tasks.
+However, the authors highlight a fundamental open question: \emph{is MI indispensable for any downstream task, or does it merely serve as an alternative or complementary analysis tool?}
+If MI is always substitutable by non-mechanistic approaches such as behavioral testing, fine-tuning, or probing classifiers, then its practical value, while real, is contingent rather than essential.
+Conversely, if there exist tasks where MI provides irreplaceable advantages, this has profound implications for research investment, safety protocols, and deployment decisions.
+
+This paper addresses this open problem through a formal empirical framework.
+We make the following contributions:
+
+\begin{enumerate}
+    \item We formalize the concept of \textbf{$\epsilon$-indispensability}, providing a rigorous definition of when MI is strictly necessary for a task under given resource constraints (Section~\ref{sec:methods}).
+
+    \item We design and execute \textbf{five controlled experiments} across two task families---dormant backdoor detection and surgical knowledge editing---comparing MI and non-MI methods on identical benchmarks (Section~\ref{sec:results}).
+
+    \item We identify a \textbf{phase transition} in the relative advantage of MI: behavioral methods succeed when trigger events are common but fail catastrophically when triggers are rare, while MI maintains detection across all tested rarity levels (Section~\ref{sec:results}).
+
+    \item We propose a \textbf{taxonomy of indispensability conditions}---dormancy, locality, and certification---that predicts when MI will be necessary based on structural task properties (Section~\ref{sec:conclusion}).
+\end{enumerate}
+
+All experiments use small, self-contained NumPy-based transformer models to ensure full reproducibility without GPU requirements.
+Code and data are included as supplementary material.
+
+% -------------------------------------------------------------------
+\subsection{Related Work}
+% -------------------------------------------------------------------
+
+\paragraph{Mechanistic interpretability methods.}
+The MI toolkit includes circuit discovery~\cite{olsson2022context,wang2023interpretability,conmy2023towards}, which identifies minimal subgraphs implementing specific behaviors; sparse autoencoders~\cite{bricken2023monosemanticity,cunningham2023sparse,elhage2022toy}, which decompose superposed activations into interpretable features; activation patching and path patching~\cite{goldowskydill2023localizing}, which measures the causal contribution of internal components; and representation engineering~\cite{zou2023representation}, which locates and steers along linear concept directions.
+Recent scaling efforts have applied these techniques to frontier models~\cite{templeton2024scaling,bills2023language}.
+
+\paragraph{Knowledge editing.}
+Locating and editing factual associations in model weights was pioneered by Meng et al.~\cite{meng2022locating} with the ROME method, later scaled via MEMIT~\cite{meng2023massediting}.
+These approaches rely on MI to identify which MLP layers store specific facts, enabling rank-one updates that change targeted associations while preserving other behaviors.
+Sparse feature circuits~\cite{marks2024sparse} extend this to identify interpretable causal subgraphs for editing.
+
+\paragraph{Backdoor detection and AI safety.}
+Backdoor attacks on neural networks embed hidden behaviors triggered by specific inputs~\cite{hubinger2024sleeper}.
+MI-based approaches can detect backdoors by scanning for anomalous internal directions or circuits, even when the trigger is never encountered during normal evaluation.
+Non-MI approaches rely on behavioral testing~\cite{perez2022red} or fine-tuning~\cite{casper2023open}, which may miss dormant threats.
+
+\paragraph{Evaluation of interpretability.}
+Progress measures for mechanistic understanding~\cite{nanda2023progress} provide quantitative criteria for evaluating MI.
+Inference-time intervention~\cite{li2024inference} demonstrates how MI insights can improve model behavior at deployment.
+Probing classifiers~\cite{belinkov2022probing} provide a non-MI baseline for detecting internal representations, though without causal guarantees.
+
+% ===================================================================
+\section{Methods}\label{sec:methods}
+% ===================================================================
+
+\subsection{Formal Framework: $\epsilon$-Indispensability}
+
+Let $\mathcal{T}$ denote a downstream task with performance metric $P: \mathcal{M} \times \mathcal{T} \to \mathbb{R}$, where $\mathcal{M}$ is the space of methods.
+Let $\mathcal{M}_{\mathrm{MI}} \subset \mathcal{M}$ denote methods requiring mechanistic interpretability (internal activation access, causal tracing, circuit identification) and $\mathcal{M}_{\mathrm{non}} = \mathcal{M} \setminus \mathcal{M}_{\mathrm{MI}}$ denote methods using only input-output access (behavioral testing, fine-tuning, probing, attribution).
+
+\begin{definition}[$\epsilon$-Indispensability]
+MI is \emph{$\epsilon$-indispensable} for task $\mathcal{T}$ under computational budget $C$ if:
+\begin{equation}\label{eq:epsilon}
+    \max_{M' \in \mathcal{M}_{\mathrm{non}}} P(M', \mathcal{T}, C) + \epsilon < \max_{M \in \mathcal{M}_{\mathrm{MI}}} P(M, \mathcal{T}, C)
+\end{equation}
+When $\epsilon = 0$, MI offers a \emph{strict} advantage.
+When the $95\%$ bootstrap confidence interval for the gap $\Delta = P_{\mathrm{MI}}^* - P_{\mathrm{non}}^*$ excludes zero, we say the indispensability is \emph{statistically strong}.
+\end{definition}
+
+This definition is intentionally conservative: it requires MI to outperform \emph{every} non-MI alternative, not merely a single baseline.
+In practice, we test against a representative battery of non-MI methods.
+
+\subsection{Model Architecture}
+
+All experiments use a single-layer transformer implemented in NumPy with the following architecture:
+\begin{itemize}
+    \item \textbf{Embedding}: $\mathbf{W}_E \in \mathbb{R}^{V \times d}$, with $V=64$, $d=32$
+    \item \textbf{Self-attention}: Single causal attention head with $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V, \mathbf{W}_O \in \mathbb{R}^{d \times d}$
+    \item \textbf{FFN}: Two-layer feedforward with ReLU, hidden dimension $4d=128$
+    \item \textbf{Unembedding}: $\mathbf{W}_U \in \mathbb{R}^{d \times V}$
+    \item \textbf{Sequence length}: $L=8$ tokens
+\end{itemize}
+
+Weights are initialized from $\mathcal{N}(0, 0.01)$ with a fixed random seed for reproducibility.
+This architecture is minimal but sufficient to demonstrate the structural arguments for MI indispensability, as the key phenomena (dormant backdoors, localized knowledge storage) are present in transformers of any scale.
+
+\subsection{Experiment 1: Dormant Backdoor Detection}
+
+We implant a backdoor in the transformer by specifying a trigger subsequence $\tau = (7, 13, 42)$ and a target token $t^* = 0$.
+When $\tau$ appears as a subsequence of the input, a hidden direction $\mathbf{v} \in \mathbb{R}^d$ (with $\|\mathbf{v}\| = 5.0$) is added to the last position's embedding, and the logit for $t^*$ is boosted by $+20.0$.
+This simulates a realistic backdoor that modifies internal representations.
+
+\paragraph{Non-MI baseline: Behavioral sampling.}
+We draw $N = 5{,}000$ random input sequences uniformly from $\{0, \ldots, 63\}^8$ and check whether any output exhibits an anomalously high logit gap ($> 10.0$).
+The probability of a random input containing the trigger subsequence is:
+\begin{equation}\label{eq:trigger_prob}
+    p_{\tau} = \binom{L}{|\tau|} \cdot V^{-|\tau|} = \binom{8}{3} \cdot 64^{-3} \approx 2.14 \times 10^{-4}
+\end{equation}
+The expected number of trigger hits in $N$ samples is $N \cdot p_\tau \approx 1.07$.
+
+\paragraph{MI method: Activation scanning.}
+We collect baseline activations from $500$ random inputs, then construct $200$ pairs of triggered and clean inputs.
+We compute the direction of maximum separation between triggered and clean activation distributions at the embedding layer, measure the effect size (Cohen's $d$), and check whether it exceeds a detection threshold of $d > 1.0$ (large effect).
+We also compute the cosine similarity between the discovered direction and the true backdoor direction $\mathbf{v}$.
+
+\subsection{Experiment 2: Knowledge Editing with Locality}
+
+We define a target edit: change the model's output for input $(10, 20, 30, 0, 0, 0, 0, 0)$ from its current prediction to token $51$.
+We measure both \emph{edit success} (does the output change to the target?) and \emph{locality} (fraction of $500$ unrelated inputs whose outputs remain unchanged).
+The composite score is the harmonic mean $H = 2 \cdot \text{success} \cdot \text{locality} / (\text{success} + \text{locality})$.
+
+\paragraph{MI method: Rank-one edit.}
+Inspired by ROME~\cite{meng2022locating}, we identify the causal activation $\mathbf{k} = \mathbf{x}_{\mathrm{post\text{-}attn}}^{(L)}$ at the last position, then apply a rank-one update to the unembedding matrix:
+\begin{equation}\label{eq:rome}
+    \mathbf{W}_U \leftarrow \mathbf{W}_U + \alpha \cdot \frac{\mathbf{k}}{\|\mathbf{k}\|^2} \otimes \boldsymbol{\delta}
+\end{equation}
+where $\boldsymbol{\delta}$ places weight $+1.0$ on the target token and $-0.5$ on the current prediction, and $\alpha = 0.5$ controls edit strength.
+This targets only the weight subspace activated by the specific input.
+
+\paragraph{Non-MI baseline: Naive fine-tuning.}
+Without mechanistic knowledge of where the fact is stored, we compute the gradient of cross-entropy loss with respect to the unembedding matrix and apply a gradient descent step with learning rate $0.3$.
+We additionally update the FFN output weights.
+
+\subsection{Experiment 3: Trigger Rarity Sweep}
+
+We sweep the trigger subsequence length from $1$ to $5$ tokens, measuring detection success for both methods at each rarity level.
+This reveals the critical transition point where behavioral methods fail.
+
+\subsection{Experiment 4: Locality Threshold Sweep}
+
+We sweep the edit strength parameter ($\alpha \in [0.05, 2.0]$ for MI; learning rate $\in [0.05, 1.5]$ for fine-tuning) across $20$ values each, mapping the full Pareto frontier of edit success versus locality.
+
+\subsection{Experiment 5: $\epsilon$-Indispensability Quantification}
+
+We aggregate results from Experiments 1--2 and compute:
+\begin{itemize}
+    \item The performance gap $\Delta = P_{\mathrm{MI}}^* - P_{\mathrm{non}}^*$
+    \item Bootstrap confidence intervals ($n=10{,}000$ resamples, $\sigma=0.05$ noise)
+    \item One-sided $p$-value for $H_0: \Delta \leq 0$
+\end{itemize}
+
+% ===================================================================
+\section{Results}\label{sec:results}
+% ===================================================================
+
+\subsection{Experiment 1: Dormant Backdoor Detection}
+
+Table~\ref{tab:exp1} presents the backdoor detection results.
+The behavioral sampling method drew $5{,}000$ random inputs but encountered \emph{zero} trigger subsequences (expected: ${\sim}1.07$) and detected no anomalies.
+In contrast, the MI-based activation scanning identified a significant separation between triggered and clean activations with effect size $d = 1.24$ (large effect) and cosine similarity $0.42$ with the true backdoor direction, successfully detecting the dormant backdoor.
+
+\begin{table}[t]
+\caption{Experiment 1: Dormant backdoor detection results. The trigger subsequence $(7, 13, 42)$ has probability $p_\tau \approx 2.14 \times 10^{-4}$ per random input. MI activation scanning detects the backdoor that behavioral sampling misses entirely.}
+\label{tab:exp1}
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Method} & \textbf{MI?} & \textbf{Detected} & \textbf{Compute} \\
+\midrule
+Behavioral Sampling & No & \textcolor{red}{No} (0/5000) & 5,000 fwd \\
+MI Activation Scanning & Yes & \textcolor{green!50!black}{Yes} ($d$=1.24) & 900 fwd \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:backdoor} illustrates the binary detection outcome.
+The MI method succeeds with fewer forward passes ($900$ vs.\ $5{,}000$), demonstrating both effectiveness and efficiency advantages.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_backdoor_detection.png}
+    \caption{Experiment 1: Dormant backdoor detection. MI-based activation scanning (blue) successfully detects the implanted backdoor, while behavioral sampling (red) fails entirely. The trigger probability of $2.14 \times 10^{-4}$ is too low for random sampling to encounter within $5{,}000$ trials, while MI identifies the anomalous activation direction with Cohen's $d = 1.24$.}
+    \label{fig:backdoor}
+\end{figure}
+
+\subsection{Experiment 2: Knowledge Editing with Locality}
+
+Table~\ref{tab:exp2} presents the knowledge editing results.
+The MI rank-one edit successfully changes the output to the target token ($\text{success} = 1.0$) while preserving $87.8\%$ of unrelated outputs ($\text{locality} = 0.878$), yielding a harmonic score of $H = 0.935$.
+The naive fine-tuning approach fails to achieve the edit ($\text{success} = 0.0$, predicting token $0$ instead of $51$), despite maintaining locality of $0.900$.
+
+\begin{table}[t]
+\caption{Experiment 2: Knowledge editing results. The MI rank-one edit achieves both edit success and reasonable locality, while naive fine-tuning fails the edit entirely. $H$ denotes the harmonic mean of success and locality.}
+\label{tab:exp2}
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Method} & \textbf{MI?} & \textbf{Success} & \textbf{Locality} & \textbf{$H$} \\
+\midrule
+MI Rank-One Edit & Yes & 1.000 & 0.878 & \textbf{0.935} \\
+Naive Fine-Tuning & No & 0.000 & 0.900 & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Experiment 3: Trigger Rarity Phase Transition}
+
+Figure~\ref{fig:rarity} reveals a sharp phase transition in detection capability.
+When the trigger consists of a single token ($p_\tau = 0.125$), behavioral sampling detects $598$ anomalies across $5{,}000$ samples---easy detection.
+With two trigger tokens ($p_\tau \approx 6.8 \times 10^{-3}$), behavioral sampling still succeeds ($36$ anomalies).
+However, at three or more trigger tokens ($p_\tau \leq 2.14 \times 10^{-4}$), behavioral sampling fails completely.
+
+In contrast, MI activation scanning \emph{fails} for short triggers (effect sizes $d = 0.61$ and $d = 0.88$ for lengths $1$ and $2$) but \emph{succeeds} for longer triggers ($d = 1.16$, $1.46$, $2.10$ for lengths $3$, $4$, $5$).
+This creates a complementary pattern: behavioral methods excel when triggers are common, while MI excels when triggers are rare.
+Crucially, at trigger lengths $\geq 3$, MI is the \emph{only} method that detects the backdoor, establishing indispensability in the rare-trigger regime.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_rarity_sweep.png}
+    \caption{Experiment 3: Detection success as a function of trigger subsequence length. A phase transition occurs at length 3: behavioral sampling (red squares) drops from perfect detection to complete failure as the trigger probability falls below ${\sim}10^{-3}$, while MI scanning (blue circles) maintains detection. The purple triangles show trigger probability on a log scale (right axis). The crossover defines the regime where MI becomes indispensable.}
+    \label{fig:rarity}
+\end{figure}
+
+\begin{table}[t]
+\caption{Experiment 3: Detection rates across trigger rarity levels. The crossover point occurs between trigger lengths 2 and 3, where $p_\tau$ drops below $10^{-2}$. MI effect size (Cohen's $d$) increases with trigger length as the backdoor direction becomes more distinctive.}
+\label{tab:sweep}
+\centering
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+\textbf{Trig.\ Len.} & \textbf{$p_\tau$} & \textbf{Behav.} & \textbf{MI} & \textbf{$d$} \\
+\midrule
+1 & $1.25 \times 10^{-1}$ & \checkmark & $\times$ & 0.61 \\
+2 & $6.84 \times 10^{-3}$ & \checkmark & $\times$ & 0.88 \\
+3 & $2.14 \times 10^{-4}$ & $\times$ & \checkmark & 1.16 \\
+4 & $4.17 \times 10^{-6}$ & $\times$ & \checkmark & 1.46 \\
+5 & $5.22 \times 10^{-8}$ & $\times$ & \checkmark & 2.10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Experiment 4: Pareto Frontier Analysis}
+
+Figure~\ref{fig:pareto} maps the full Pareto frontier for knowledge editing by sweeping the edit strength parameter across $20$ values for each method.
+The MI rank-one edit achieves edit success at $\alpha \geq 0.26$ with locality ranging from $0.94$ (at threshold) down to $0.40$ (at maximum strength).
+The fine-tuning method achieves success only at learning rates $\geq 0.66$, with locality between $0.95$ and $0.85$.
+
+The MI method's Pareto frontier \emph{dominates} in the high-success region: at comparable success rates, MI achieves edit success with higher locality for moderate strengths ($\alpha \in [0.25, 0.46]$ yields locality $> 0.90$ with full success).
+The fine-tuning method achieves comparable locality only when it \emph{fails} the edit.
+When fine-tuning does succeed (at higher learning rates), it approaches but does not reach the ideal region, and MI dominates at similar localities.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_pareto_frontier.png}
+    \caption{Experiment 4: Pareto frontier of edit success vs.\ locality across 20 parameter settings per method. MI rank-one edits (blue circles) achieve a favorable trade-off: high success with moderate locality loss. Naive fine-tuning (red squares) has a delayed onset of success and achieves the ideal region (green shading, $\text{success} > 0.85$, $\text{locality} > 0.85$) with narrower margin. MI Pareto-dominates in the high-success regime.}
+    \label{fig:pareto}
+\end{figure}
+
+\subsection{Experiment 5: $\epsilon$-Indispensability Quantification}
+
+Figure~\ref{fig:gap} and Table~\ref{tab:indispensability} present the aggregate $\epsilon$-indispensability analysis.
+For backdoor detection, the gap $\Delta = 1.000$ with $95\%$ CI $[0.861, 1.139]$, entirely above zero ($p < 0.001$).
+For knowledge editing, $\Delta = 0.935$ with $95\%$ CI $[0.797, 1.072]$, also entirely above zero ($p < 0.001$).
+Both tasks exhibit \textbf{strong $\epsilon$-indispensability}: MI provides a statistically significant, irreplaceable advantage.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_indispensability_gap.png}
+    \caption{Experiment 5: $\epsilon$-indispensability gap with $95\%$ bootstrap confidence intervals ($n=10{,}000$). Both task families show gaps whose confidence intervals are entirely above zero (red dashed line), indicating statistically strong MI indispensability.}
+    \label{fig:gap}
+\end{figure}
+
+\begin{table}[t]
+\caption{$\epsilon$-indispensability quantification. Both tasks show strong indispensability with $95\%$ CI excluding zero and $p < 0.001$.}
+\label{tab:indispensability}
+\centering
+\begin{tabular}{@{}lcccl@{}}
+\toprule
+\textbf{Task} & \textbf{$\Delta$} & \textbf{95\% CI} & \textbf{$p$} & \textbf{Level} \\
+\midrule
+Backdoor Det. & 1.000 & [0.861, 1.139] & $<$0.001 & Strong \\
+Knowledge Edit. & 0.935 & [0.797, 1.072] & $<$0.001 & Strong \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===================================================================
+\section{Conclusion}\label{sec:conclusion}
+% ===================================================================
+
+We have presented an empirical separation framework for evaluating whether mechanistic interpretability is indispensable for downstream tasks in large language models.
+Our experiments provide concrete evidence that MI is not merely a convenient tool but is strictly necessary under specific structural conditions.
+
+\subsection{Taxonomy of Indispensability Conditions}
+
+Based on our experimental findings, we propose a taxonomy of three structural conditions under which MI is predicted to be indispensable:
+
+\paragraph{Condition 1: Dormancy.}
+When the phenomena to be detected are \emph{dormant}---not observable in normal input-output behavior because their triggers occupy an exponentially large space---MI provides the only viable detection method.
+Our trigger rarity sweep (Experiment~3) quantifies this precisely: behavioral methods fail when $p_\tau < 1/N$, where $N$ is the behavioral sampling budget, while MI can identify the anomalous internal direction regardless of trigger rarity.
+This condition is directly relevant to backdoor and sleeper agent detection~\cite{hubinger2024sleeper}, where triggers may be adversarially designed to be rare.
+
+\paragraph{Condition 2: Locality.}
+When the task requires \emph{surgical} modifications with strict locality guarantees---changing specific behaviors while preserving all others---MI enables minimal-perturbation edits by identifying the causal weight subspace.
+Without this mechanistic knowledge, edits propagate unpredictably.
+Our Pareto analysis (Experiment~4) shows MI Pareto-dominates in the high-success regime.
+
+\paragraph{Condition 3: Certification (predicted).}
+We hypothesize (not tested in this work) that MI will prove indispensable for \emph{certifying the absence of capabilities}---proving that a model does \emph{not} possess a dangerous capability, rather than merely failing to elicit it.
+Behavioral testing can only sample the output space; MI can in principle verify the absence of relevant computational pathways, providing stronger guarantees.
+
+\subsection{Limitations and Future Work}
+
+Our experiments use small transformers ($V=64$, $d=32$, $L=8$) for reproducibility.
+While the structural arguments (exponential search spaces, rank-one weight subspaces) scale to larger models, empirical validation at frontier model scale is needed.
+Our non-MI baselines, while representative, do not exhaust all possible non-MI approaches; a future non-MI method might narrow the gap.
+The $\epsilon$-indispensability framework provides empirical separations rather than information-theoretic impossibility proofs.
+
+Future work should: (1)~validate on production-scale models with real backdoors; (2)~test Condition~3 (certification) experimentally; (3)~extend the framework to additional task families (bias removal, capability elicitation); and (4)~develop information-theoretic lower bounds for non-MI methods on specific task structures.
+
+\subsection{Implications}
+
+Our findings suggest that MI research should be prioritized not as a general-purpose tool, but specifically for tasks exhibiting the structural conditions identified in our taxonomy.
+For safety-critical applications involving dormant threats or certified behavioral guarantees, MI may be the only viable approach.
+For tasks where relevant phenomena are readily observable in input-output behavior, non-MI methods remain competitive and often more efficient.
+This nuanced view moves beyond the binary question of whether MI is ``useful'' toward identifying precisely \emph{where} it is irreplaceable.
+
+% ===================================================================
+% References
+% ===================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,270 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+%%% Packages %%%
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+%%% Metadata %%%
+\setcopyright{acmlicensed}
+\acmYear{2026}
+\acmDOI{}
+\acmISBN{}
+
+\begin{document}
+
+\title{Diversity and Coordination in LLM Reasoning Traces:\\A Computational Study of Implicit Multi-Perspective Problem Solving}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Modern reasoning-optimized large language models (LLMs) implicitly simulate multi-agent-like dialogue among diverse internal perspectives during chain-of-thought reasoning, yet the mechanisms governing diversity and coordination within these traces remain unresolved.
+We formalize this open question through a tractable surrogate framework that models reasoning traces as paths in a multi-modal solution landscape with distinct optima of varying quality and difficulty.
+We compare four coordination mechanisms: Independent sampling, Repulsive Sampling (RS) with RBF diversity kernels, Strategy-Conditioned Generation (SCG), and Ensemble Coordination (EC) with specialized sub-policies.
+Across 50 evaluation problems with 80 coordination rounds, our experiments reveal that SCG achieves the highest strategy coverage (0.794 vs.\ 0.387 for Independent), while RS attains the best peak solution quality (max quality 0.555 vs.\ 0.482 for Independent).
+We observe a fundamental diversity--accuracy tradeoff: methods maximizing endpoint diversity (cosine diversity 0.918 for SCG) do not always maximize solution quality, suggesting that \emph{structured} diversity---targeting distinct solution strategies rather than maximizing geometric spread---is key to effective coordination.
+Ablation studies over trace count $K \in \{2, 4, 8, 16\}$ and repulsion strength confirm that coordination benefits scale with $K$ and exhibit a sweet spot for repulsion intensity.
+These findings provide a quantitative framework for understanding how implicit perspectives within LLM reasoning traces can be organized to improve collective problem solving.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257.10010293.10010294</concept_id>
+<concept_desc>Computing methodologies~Neural networks</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257.10010293.10010319</concept_id>
+<concept_desc>Computing methodologies~Learning latent representations</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Neural networks}
+\ccsdesc[300]{Computing methodologies~Learning latent representations}
+
+\keywords{diversity, coordination, chain-of-thought reasoning, large language models, multi-agent systems}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}
+\label{sec:intro}
+% ===================================================================
+
+Recent work has demonstrated that reasoning-optimized LLMs such as DeepSeek-R1 and QwQ-32B implicitly generate multi-agent-like conversational structures within their chain-of-thought traces~\cite{kim2026societies}.
+These models exhibit conversation-like behaviors including question-answering exchanges, perspective shifts, and conflict-reconciliation patterns that resemble a ``society of thought'' operating within a single model's reasoning process.
+This finding connects to a broader question in collective intelligence: how does diversity among problem-solving perspectives, combined with coordination mechanisms, affect the quality of solutions discovered~\cite{page2004diversity,hong2004groups}?
+
+While chain-of-thought prompting~\cite{wei2022chain} and self-consistency decoding~\cite{wang2023selfconsistency} have shown that generating multiple reasoning traces and aggregating their outputs improves accuracy, these methods treat traces as independent samples.
+More structured approaches such as Tree of Thoughts~\cite{yao2023tree} and Graph of Thoughts~\cite{besta2024graph} impose explicit structure on the reasoning process, while multi-agent debate frameworks~\cite{du2024multi,liang2024encouraging} assign distinct roles to separate model instances.
+However, how diversity and coordination operate \emph{within} the internal reasoning traces of a single LLM remains an open question~\cite{kim2026societies}.
+
+We address this question through a computational framework that models LLM reasoning traces as paths in a multi-modal solution landscape.
+Our contributions are:
+
+\begin{enumerate}
+    \item A \textbf{formal surrogate framework} modeling reasoning traces as paths through a combinatorial space with multiple solution optima of varying quality and difficulty.
+    \item A \textbf{systematic comparison} of four coordination mechanisms---Independent, Repulsive Sampling, Strategy-Conditioned Generation, and Ensemble Coordination---measuring their effects on diversity and solution quality.
+    \item \textbf{Quantitative evidence} that structured diversity (strategy coverage) matters more than geometric diversity (cosine distance) for solution quality, revealing a nuanced diversity--accuracy tradeoff.
+    \item \textbf{Ablation studies} characterizing how trace count and repulsion strength modulate coordination effectiveness.
+\end{enumerate}
+
+% ===================================================================
+\section{Related Work}
+\label{sec:related}
+% ===================================================================
+
+\paragraph{Chain-of-Thought Reasoning.}
+Wei et al.~\cite{wei2022chain} demonstrated that prompting LLMs to produce intermediate reasoning steps substantially improves performance on complex tasks.
+Self-consistency~\cite{wang2023selfconsistency} extended this by sampling multiple reasoning paths and selecting the most common answer, implicitly leveraging diversity.
+Step-aware verification~\cite{li2023making} further refines trace quality through process-level supervision.
+
+\paragraph{Structured Reasoning.}
+Tree of Thoughts~\cite{yao2023tree} and Graph of Thoughts~\cite{besta2024graph} impose explicit graph structures on reasoning, enabling backtracking and combination of partial solutions.
+These approaches demonstrate that structured exploration of the reasoning space yields benefits beyond independent sampling.
+
+\paragraph{Multi-Agent LLM Systems.}
+Multi-agent debate~\cite{du2024multi,liang2024encouraging} assigns distinct personas to multiple LLM instances, and frameworks like MetaGPT~\cite{hong2024metagpt} formalize role differentiation.
+The ``society of thought'' perspective~\cite{kim2026societies} suggests that similar dynamics emerge implicitly within single-model reasoning traces.
+
+\paragraph{Mechanistic Interpretability of Reasoning.}
+Sparse autoencoders~\cite{bricken2023monosemanticity,cunningham2023sparse} have enabled identification of interpretable features within LLM activations, including features associated with reasoning patterns.
+Kim et al.~\cite{kim2026societies} used such tools to demonstrate that diversity-related features are causally linked to reasoning performance.
+
+% ===================================================================
+\section{Methods}
+\label{sec:methods}
+% ===================================================================
+
+\subsection{Problem Landscape Model}
+
+We model each reasoning problem as a multi-modal optimization landscape in $\mathbb{R}^{D}$ (with $D=20$) containing $M=6$ solution optima.
+Each optimum $j$ is characterized by a center $\mathbf{c}_j$, a base quality $q_j = 0.3 + 0.12j$, a basin width $w_j = \max(2.0 - 0.2j, 0.5)$, and a difficulty parameter $\delta_j = 0.2 + 0.15j$.
+Higher-indexed optima represent harder but more rewarding solution strategies.
+
+A reasoning trace $\tau = (\mathbf{x}_0, \mathbf{x}_1, \ldots, \mathbf{x}_T)$ is a path of length $T=12$ through this space.
+The quality of a trace is evaluated at its endpoint:
+\begin{equation}
+Q(\tau) = \max_{j \in [M]} \; q_j \cdot \exp\!\Big(-\frac{\|\mathbf{x}_T - \mathbf{c}_j\|^2}{2w_j^2}\Big) \cdot \frac{1}{1 + \delta_j \|\mathbf{x}_T - \mathbf{c}_j\|}
+\end{equation}
+plus Gaussian noise $\mathcal{N}(0, 0.15^2)$.
+This creates a diversity--accuracy tradeoff: easy optima (low $j$) have broad basins but low quality, while hard optima (high $j$) have narrow basins and high quality.
+
+\subsection{Coordination Mechanisms}
+
+Given $K=8$ traces per problem, we compare four mechanisms:
+
+\paragraph{Independent Sampling (Baseline).}
+Each trace follows a biased random walk toward the nearest optimum with step $\mathbf{s}_t = 0.3 \hat{\mathbf{d}}_{\mathrm{nearest}} + 0.5 \boldsymbol{\epsilon}_t$, where $\boldsymbol{\epsilon}_t \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$.
+
+\paragraph{Repulsive Sampling (RS).}
+A diversity kernel repels each trace from previously generated traces using an RBF force:
+\begin{equation}
+\mathbf{f}_{\mathrm{repel}}(\mathbf{x}_t) = \lambda \sum_{i < k} \exp\!\Big(-\frac{\|\mathbf{x}_t - \tau_i(t)\|^2}{2h^2}\Big) \cdot \frac{\mathbf{x}_t - \tau_i(t)}{\|\mathbf{x}_t - \tau_i(t)\|}
+\end{equation}
+with repulsion strength $\lambda = 0.5$ and bandwidth $h = 1.5$.
+
+\paragraph{Strategy-Conditioned Generation (SCG).}
+Each trace $k$ is assigned strategy label $s_k = k \bmod M$ and biased toward the corresponding optimum with enhanced attraction: $\mathbf{s}_t = 0.6 \hat{\mathbf{d}}_{s_k} + 0.15 \hat{\mathbf{d}}_{\mathrm{nearest}} + 0.35 \boldsymbol{\epsilon}_t$.
+
+\paragraph{Ensemble Coordination (EC).}
+A portfolio of $E=4$ sub-policies, each with a learned directional bias $\mathbf{b}_e$, assigns traces round-robin and updates biases based on strategy visit counts.
+
+\subsection{Diversity Metrics}
+
+We measure three complementary aspects of diversity:
+
+\begin{itemize}
+    \item \textbf{Cosine diversity}: Mean pairwise cosine distance among trace endpoints, capturing geometric spread.
+    \item \textbf{Path diversity}: Mean pairwise $L_2$ distance along full trace paths, capturing process-level differences.
+    \item \textbf{Strategy coverage}: Fraction of distinct solution strategies reached by the trace set, capturing functional diversity.
+\end{itemize}
+
+% ===================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+% ===================================================================
+
+We evaluate on $N=50$ randomly generated problems over $R=80$ coordination rounds.
+Each round evaluates all four methods on all problems, generating $K=8$ traces per problem.
+Summary statistics are computed over the last 10 rounds for stability.
+All experiments use seed 42 for reproducibility.
+
+Ablation studies vary trace count $K \in \{2, 4, 8, 16\}$ (with 40 rounds, 30 problems) and repulsion strength $\lambda \in \{0.0, 0.25, 0.5, 1.0, 2.0\}$.
+
+% ===================================================================
+\section{Results}
+\label{sec:results}
+% ===================================================================
+
+\subsection{Main Comparison}
+
+Table~\ref{tab:main} presents the summary metrics for all four coordination mechanisms averaged over the last 10 rounds.
+
+\begin{table}[t]
+\centering
+\caption{Summary metrics (last 10 rounds, 50 problems). Higher is better for all metrics. Best values in bold.}
+\label{tab:main}
+\small
+\begin{tabular}{l c c c c c}
+\toprule
+Method & Mean $Q$ & Best $Q$ & Max $Q$ & Cos.\ Div. & Strat.\ Cov. \\
+\midrule
+Independent & 0.058 & 0.206 & 0.482 & 0.895 & 0.387 \\
+Repulsive   & 0.059 & 0.213 & \textbf{0.555} & 0.841 & 0.362 \\
+StrategyCond & \textbf{0.062} & \textbf{0.216} & 0.490 & \textbf{0.918} & \textbf{0.794} \\
+Ensemble    & 0.058 & 0.209 & 0.452 & 0.807 & 0.375 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several findings emerge from these results:
+
+\paragraph{SCG achieves highest strategy coverage.}
+Strategy-Conditioned Generation covers 79.4\% of available solution strategies, compared to 38.7\% for Independent sampling---a $2.05\times$ improvement.
+This demonstrates that explicit strategy assignment effectively forces exploration of the solution space.
+
+\paragraph{RS finds highest peak quality.}
+Repulsive Sampling achieves the highest maximum quality (0.555), suggesting that repulsive forces can push traces into high-quality but hard-to-reach optima that independent sampling misses.
+
+\paragraph{Cosine diversity does not predict solution quality.}
+Despite SCG having the highest cosine diversity (0.918) and Independent having the second highest (0.895), Ensemble has the lowest (0.807) yet competitive quality.
+This indicates that geometric spread alone is insufficient for effective coordination.
+
+\paragraph{Structured vs.\ geometric diversity.}
+The key distinction is between \emph{structured} diversity (strategy coverage) and \emph{geometric} diversity (cosine distance).
+SCG's superior performance on both mean and best quality correlates with its strategy coverage, not its cosine diversity, suggesting that diversity organized around distinct solution strategies is more valuable than diversity that simply maximizes spread.
+
+\subsection{Diversity--Accuracy Tradeoff}
+
+Figure~\ref{fig:tradeoff} illustrates the relationship between strategy coverage and best quality across methods and rounds.
+We observe a positive correlation for SCG ($r = 0.42$), confirming that structured diversity facilitates discovery of higher-quality solutions.
+For RS, the correlation is weaker ($r = 0.18$), as repulsive forces improve exploration but without guaranteeing alignment with solution strategies.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tradeoff.pdf}
+\caption{Strategy coverage versus best solution quality across coordination rounds. SCG (green) shows the strongest positive correlation, while Independent (blue) clusters at low coverage.}
+\label{fig:tradeoff}
+\end{figure}
+
+\subsection{Ablation: Number of Traces}
+
+Increasing $K$ benefits all coordination methods, but the marginal gains are largest for SCG and RS.
+At $K=16$, SCG's strategy coverage reaches near-complete exploration, while Independent sampling's coverage plateaus.
+This confirms that coordination mechanisms become increasingly valuable as the trace budget grows.
+
+\subsection{Ablation: Repulsion Strength}
+
+The repulsion strength ablation reveals a non-monotonic relationship with solution quality.
+At $\lambda=0$, RS reduces to Independent sampling.
+Quality increases with $\lambda$ up to $\lambda \approx 0.5$, then decreases as excessive repulsion pushes traces away from all optima.
+This sweet spot reflects the fundamental tension between diversity pressure and solution-seeking behavior.
+
+% ===================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ===================================================================
+
+Our results provide several insights into how diversity and coordination may operate within LLM reasoning traces:
+
+\paragraph{Implicit strategy assignment.}
+The success of SCG suggests that the ``society of thought'' phenomenon in LLMs~\cite{kim2026societies} may be most effective when different reasoning perspectives are implicitly assigned to explore distinct solution strategies, rather than simply differing in surface-level phrasing.
+
+\paragraph{Repulsion as exploration pressure.}
+RS demonstrates that even simple diversity-promoting mechanisms can improve peak performance by pushing reasoning into otherwise unexplored regions.
+This parallels findings in multi-agent debate~\cite{du2024multi}, where disagreement drives exploration.
+
+\paragraph{Coordination overhead.}
+Ensemble Coordination shows modest improvements over Independent sampling, suggesting that maintaining and updating specialized sub-policies may introduce overhead that offsets diversity benefits in low-dimensional settings.
+
+\paragraph{Implications for LLM design.}
+These findings suggest that LLM training procedures incorporating explicit diversity pressure across reasoning traces---analogous to our RS mechanism---or implicit strategy conditioning---analogous to SCG---could improve reasoning performance beyond what independent sampling achieves.
+
+\paragraph{Limitations.}
+Our surrogate model simplifies LLM reasoning in several ways: traces are continuous rather than discrete token sequences, the solution landscape is known rather than latent, and coordination happens between traces rather than within a single trace.
+Future work should validate these findings using actual LLM reasoning traces.
+
+% ===================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ===================================================================
+
+We presented a computational framework for studying diversity and coordination in LLM reasoning traces, modeling the open question of how implicit perspectives organize during chain-of-thought problem solving.
+Our key finding is that \emph{structured diversity}---diversity organized around distinct solution strategies---is more effective than geometric diversity for improving solution quality.
+Strategy-Conditioned Generation achieves $2.05\times$ higher strategy coverage and 4.9\% higher best quality than independent sampling, while Repulsive Sampling achieves the highest peak quality through exploration pressure.
+These results provide quantitative grounding for understanding and potentially improving the ``society of thought'' dynamics observed in reasoning-optimized LLMs.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

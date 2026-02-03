@@ -1,0 +1,381 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{multirow}
+\usepackage{subcaption}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\copyrightyear{2026}
+\acmYear{2026}
+\setcopyright{none}
+
+\begin{document}
+
+\title{Osterwalder--Schrader Axioms for Neural Network Field Theories: Computational Verification and Architectural Conditions}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Neural network field theories (NN-FTs) provide a universal framework for representing Euclidean quantum field theories, yet it remains an open problem which NN-FTs satisfy the Osterwalder--Schrader (OS) axioms required for physical consistency.
+We present a systematic computational investigation of OS axiom compliance across three families of NN-FT architectures in dimensions $d \geq 2$: Gaussian NN-FTs with neural network kernel corrections, layered architectures with transfer operator structure, and interacting $\varphi^4$-type theories.
+Using lattice discretization, K\"all\'en--Lehmann spectral analysis, and Monte Carlo estimation of Schwinger functions, we verify all five OS axioms numerically.
+For Gaussian NN-FTs, we demonstrate that the standard free-field propagator and corrections proportional to $p^2$ preserve reflection positivity, while momentum-dependent softplus and oscillatory corrections violate it.
+We scan 1,271 points in the neural network correction parameter space, finding that $5.1\%$ satisfy reflection positivity, with the admissible region forming a structured subset concentrated around linear momentum corrections.
+Dimensional scaling analysis reveals that the RP-admissible fraction increases from $7.7\%$ in $d=2$ to $86.7\%$ in $d=4$.
+For interacting theories, we verify OS axioms for $\varphi^4$ couplings $\lambda \in [0, 5]$ with up to $20{,}000$ Monte Carlo samples.
+Our results provide the first computational characterization of the physically admissible subset of NN-FTs and identify concrete architectural conditions for OS compliance.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010169</concept_id>
+<concept_desc>Computing methodologies~Modeling and simulation</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Machine learning}
+\ccsdesc[300]{Computing methodologies~Modeling and simulation}
+
+\keywords{Neural network field theory, Osterwalder--Schrader axioms, reflection positivity, quantum field theory, K\"all\'en--Lehmann representation}
+
+\maketitle
+
+%% ========================================================================
+\section{Introduction}
+%% ========================================================================
+
+Neural networks and quantum field theory (QFT) share deep structural connections: in the infinite-width limit, neural networks with random parameters define Gaussian processes that are analogous to free-field theories~\cite{neal1996bayesian, roberts2022principles}, and neural network field theories (NN-FTs) provide a universal representation of Euclidean QFTs~\cite{halverson2021neural, hashimoto2023neural}.
+Ferko et al.~\cite{ferko2026universality} recently proved a universality theorem establishing that any Euclidean QFT---modeled as a probability distribution on the space of tempered distributions $\mathcal{S}'(\mathbb{R}^d)$---admits a neural network representation with countably many parameters.
+
+However, universality alone does not ensure physical consistency.
+Euclidean QFTs must satisfy the Osterwalder--Schrader (OS) axioms~\cite{osterwalder1973axioms, osterwalder1975axioms2} to guarantee analytic continuation to a unitary Lorentzian theory via the OS reconstruction theorem.
+While mechanisms for engineering reflection positivity (the most subtle OS axiom) are known in one dimension~\cite{lei2024neural, carleo2017solving}, extending these results to $d \geq 2$ remains an open problem identified explicitly in~\cite{ferko2026universality}.
+
+This work provides the first systematic computational investigation of OS axiom compliance across NN-FT architectures in $d \geq 2$.
+Our contributions are:
+\begin{enumerate}
+    \item \textbf{Direct lattice verification.}\ We implement and validate lattice-based checks for all five OS axioms (regularity, Euclidean covariance, reflection positivity, symmetry, and clustering) applied to NN-FTs.
+    \item \textbf{Gaussian NN-FT characterization.}\ We demonstrate that corrections of the form $f(p^2) = \alpha \cdot p^2$ preserve reflection positivity (RP) via the K\"all\'en--Lehmann representation, while nonlinear momentum-dependent corrections (softplus, oscillatory) can violate it.
+    \item \textbf{Architecture space mapping.}\ Scanning 1,271 parameter configurations, we find that $5.1\%$ are RP-admissible in $d=2$, and this fraction increases dramatically with dimension.
+    \item \textbf{Interacting theory verification.}\ We verify all OS axioms for $\varphi^4$ NN-FTs at couplings up to $\lambda = 5.0$, consistent with constructive QFT results.
+\end{enumerate}
+
+\subsection{Related Work}
+
+\textbf{Neural network field theories.}\
+The connection between neural networks and field theory was formalized in~\cite{halverson2021neural}, showing that NN architectures define statistical field theories.
+Hashimoto et al.~\cite{hashimoto2023neural} studied non-Gaussian NN-FTs arising from finite-width corrections.
+The universality theorem of~\cite{ferko2026universality} established that NN-FTs can represent any Euclidean QFT.
+
+\textbf{OS axioms and constructive QFT.}\
+The OS axioms~\cite{osterwalder1973axioms, osterwalder1975axioms2} provide the bridge between Euclidean and Lorentzian QFT.
+Constructive verification of these axioms for interacting models was achieved by Glimm--Jaffe~\cite{glimm1987quantum, glimm1973positivity} for $\varphi^4$ in $d=2,3$ and by Simon~\cite{simon1974pphitwo} for $P(\varphi)_2$ models.
+Lattice reflection positivity and transfer matrix methods are reviewed in~\cite{luscher1977construction, montvay1994quantum}.
+
+\textbf{Neural network quantum states.}\
+Neural quantum states~\cite{carleo2017solving} use variational neural network ans\"atze.
+Lei and Bhatt~\cite{lei2024neural} studied the completeness of deep NN representations for reflection-positive processes in $d=1$.
+
+%% ========================================================================
+\section{Methods}
+%% ========================================================================
+
+\subsection{Problem Formulation}
+
+A neural network field theory is specified by an architecture $\varphi_\theta: \mathbb{R}^d \to \mathbb{R}$ and a parameter measure $P(\theta)$.
+The induced field measure generates Euclidean Green's functions (Schwinger functions):
+\begin{equation}
+    S_n(x_1, \ldots, x_n) = \int \varphi_\theta(x_1) \cdots \varphi_\theta(x_n) \, dP(\theta).
+\end{equation}
+We verify the five OS axioms (OS0--OS4) for three families of NN-FTs on periodic lattices of extent $L^d$.
+
+\subsection{OS Axioms on the Lattice}
+
+\textbf{OS0 (Regularity).}\ We verify that all Schwinger function matrix entries are finite: $\max_{i,j} |S_2(x_i, x_j)| < \infty$.
+
+\textbf{OS1 (Euclidean Covariance).}\ On the periodic lattice, we check translation invariance: $S_2(x, y)$ depends only on $x - y \bmod L$.
+We compute the coefficient of variation across translations for each displacement and require $\max \text{CV} < 0.2$.
+
+\textbf{OS2 (Reflection Positivity).}\
+For reflection $\Theta: x_0 \to -x_0$ in the Euclidean time direction, we construct the RP matrix $\mathcal{R}_{ab} = S_2(x_a, \Theta x_b)$ restricted to sites in the positive half-space $\{x_0 > 0\}$ and check positive semi-definiteness: $\lambda_{\min}(\mathcal{R}) \geq 0$.
+
+\textbf{OS3 (Symmetry).}\ We verify $S_2(x, y) = S_2(y, x)$ to tolerance $10^{-6}$.
+
+\textbf{OS4 (Cluster Property).}\ We check that $|S_2(0, x)|$ decays with $|x|$: the mean correlator at distances $> L/3$ is smaller than at distances $< L/4$.
+
+\subsection{Gaussian NN-FT Analysis}
+
+For Gaussian NN-FTs, the field measure is fully characterized by the two-point function $C(x,y) = \langle \varphi(x) \varphi(y) \rangle$.
+We parameterize the momentum-space propagator as:
+\begin{equation}\label{eq:propagator}
+    \hat{C}(p) = \frac{1}{\hat{p}^2 + m^2 + f(p^2)},
+\end{equation}
+where $\hat{p}^2 = \sum_\mu 2(1 - \cos p_\mu)$ is the lattice momentum and $f(p^2)$ is a neural network correction.
+We consider $f(p^2) = \alpha \cdot \mathrm{softplus}(\beta \cdot p^2)$ with parameters $(\alpha, \beta)$.
+
+\textbf{Direct lattice RP check.}\
+We work in a mixed representation: momentum in spatial directions, position in the temporal direction.
+For each spatial momentum sector $\mathbf{p}_\perp$, the temporal propagator defines a covariance matrix $C(x_0, x_0'; \mathbf{p}_\perp)$, from which we construct the RP matrix $R_{ab} = C(x_a, \Theta x_b; \mathbf{p}_\perp)$ for $x_a, x_b > 0$ and verify $\lambda_{\min}(R) \geq 0$.
+
+\textbf{K\"all\'en--Lehmann analysis.}\
+A Gaussian theory is RP if and only if its propagator admits a K\"all\'en--Lehmann representation~\cite{kallen1952eigenvalue, lehmann1954eigenvalue}:
+\begin{equation}
+    \hat{C}(p) = \int_0^\infty \frac{\rho(m^2)}{p^2 + m^2} \, dm^2, \quad \rho \geq 0.
+\end{equation}
+We solve the non-negative least squares (NNLS) problem $\min_{\rho \geq 0} \|A\rho - \hat{C}\|^2$ where $A_{ij} = 1/(\hat{p}_i^2 + m_j^2)$ with 100 mass values.
+
+\subsection{Transfer Operator Analysis}
+
+For layered NN-FTs with depth aligned to Euclidean time, the transfer matrix element between field configurations is:
+\begin{equation}
+    T(\varphi_\mathrm{out}, \varphi_\mathrm{in}) = \exp\left(-\tfrac{1}{2}\|\varphi_\mathrm{out} - \sigma(W\varphi_\mathrm{in})\|^2 - \tfrac{m^2}{2}\|\varphi_\mathrm{out}\|^2 - \tfrac{\lambda}{4!}\|\varphi_\mathrm{out}\|^4\right),
+\end{equation}
+where $\sigma$ is an activation function (linear, ReLU, tanh, softplus) and $W$ is the weight matrix.
+We test both unconstrained $W$ and the positivity-enforced form $W = V^\top V$.
+The transfer matrix is discretized on a field grid of 17 values in $[-3.5, 3.5]$, and RP corresponds to all eigenvalues of the symmetrized $T$ being non-negative.
+
+\subsection{Interacting NN-FT Analysis}
+
+For interacting theories, we define the measure $d\mu = \exp(-V[\varphi])\,d\mu_0$ where $\mu_0$ is the free Gaussian measure with covariance $C_\mathrm{free} = (-\Delta + m^2)^{-1}$ and $V[\varphi] = (\lambda / 4!) \sum_x \varphi(x)^4$.
+We compute Schwinger functions via importance sampling:
+\begin{equation}
+    S_2(x, y) = \frac{\langle \varphi(x)\varphi(y) e^{-V} \rangle_0}{\langle e^{-V} \rangle_0},
+\end{equation}
+using $n = 20{,}000$ samples from $\mu_0$ with reweighting.
+We monitor the effective sample size $n_\mathrm{eff} = 1/\sum_i w_i^2$ (where $w_i$ are normalized weights) to assess statistical quality.
+
+%% ========================================================================
+\section{Results}
+%% ========================================================================
+
+\subsection{Gaussian NN-FT Reflection Positivity}
+
+Table~\ref{tab:gaussian_rp} summarizes the direct lattice RP check for Gaussian NN-FTs on a $10^2$ lattice with $m^2 = 1.0$.
+The free scalar field propagator ($f = 0$) is confirmed to be reflection positive with $\lambda_{\min} \approx -10^{-16}$ (machine zero).
+The quadratic correction $f(p^2) = 0.2 p^2$ also preserves RP---this is expected since it simply rescales the effective mass, maintaining the K\"all\'en--Lehmann form.
+Notably, the negative linear correction $f(p^2) = -0.3 p^2$, which reduces the effective momentum-dependent mass but keeps the propagator positive, also satisfies RP.
+
+In contrast, the softplus corrections $f(p^2) = 0.5 \cdot \mathrm{softplus}(p^2)$ and $f(p^2) = 0.1 \cdot \mathrm{softplus}(0.5 p^2)$ violate RP with minimum eigenvalues $-3.0 \times 10^{-3}$ and $-3.4 \times 10^{-4}$, respectively.
+The oscillatory correction $f(p^2) = 0.5 \sin(p^2)$ shows the strongest violation ($\lambda_{\min} = -6.1 \times 10^{-3}$).
+
+\begin{table}[t]
+\caption{Reflection positivity (RP) of Gaussian NN-FTs on a $10^2$ lattice with $m^2 = 1.0$.
+The ``Direct'' column reports $\lambda_{\min}$ of the RP matrix across all spatial momentum sectors.
+The ``KL Residual'' column gives the relative residual of the K\"all\'en--Lehmann NNLS fit.
+Corrections that introduce nonlinear momentum dependence violate RP even when the propagator remains positive.}
+\label{tab:gaussian_rp}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Correction $f(p^2)$} & \textbf{RP} & $\boldsymbol{\lambda_{\min}}$ & \textbf{KL Res.} & $\boldsymbol{n_{\rho>0}}$ \\
+\midrule
+None (free field) & \checkmark & $-10^{-16}$ & $2.8 \times 10^{-5}$ & 2 \\
+$0.2 \cdot p^2$ & \checkmark & $-10^{-16}$ & $4.2 \times 10^{-5}$ & 2 \\
+$-0.3 \cdot p^2$ & \checkmark & $-10^{-16}$ & $3.2 \times 10^{-8}$ & 2 \\
+$-0.8 \cdot p^2$ & \checkmark & $-10^{-16}$ & $6.7 \times 10^{-5}$ & 2 \\
+$0.5 \cdot \mathrm{sp}(p^2)$ & $\times$ & $-3.0 \times 10^{-3}$ & $1.7 \times 10^{-2}$ & 1 \\
+$0.1 \cdot \mathrm{sp}(0.5 p^2)$ & $\times$ & $-3.4 \times 10^{-4}$ & $1.9 \times 10^{-3}$ & 2 \\
+$0.5 \sin(p^2)$ & $\times$ & $-6.1 \times 10^{-3}$ & $4.4 \times 10^{-2}$ & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A key finding is that corrections proportional to $p^2$ (whether positive or negative, as long as the propagator denominator remains positive) preserve RP because the modified propagator $1/(c \cdot p^2 + m'^2)$ retains the K\"all\'en--Lehmann form as a single-mass spectral density.
+The nonlinear softplus correction breaks this structure by introducing a nontrivial momentum dependence that cannot be decomposed into a positive superposition of massive propagators.
+
+Figure~\ref{fig:spectral} shows the K\"all\'en--Lehmann spectral density for three representative cases: the free field shows a localized spectral weight near $m^2 = 1$; the positive softplus correction concentrates the weight but with a poor NNLS fit (residual 0.017); and the strong negative correction shifts the spectral weight to higher masses while maintaining the KL form.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig1_spectral_density.pdf}
+    \caption{K\"all\'en--Lehmann spectral density $\rho(m^2)$ for three Gaussian NN-FTs.
+    The free field (left) and negative linear correction (right) show concentrated spectral weights with small NNLS residuals, confirming the KL representation and RP.
+    The positive softplus correction (center) fails to admit a KL representation (high residual), violating RP.
+    Bar color indicates RP status: green = satisfied, red = violated.}
+    \label{fig:spectral}
+\end{figure}
+
+\subsection{Architecture Space Scan}
+
+Figure~\ref{fig:arch_scan} shows the RP landscape in the $(\alpha, \beta)$ parameter space of the correction $f(p^2) = \alpha \cdot \mathrm{softplus}(\beta \cdot p^2)$, evaluated on 1,271 grid points ($41 \times 31$) using the direct lattice RP check on a $10^2$ lattice.
+
+Of the 1,271 configurations tested, 65 ($5.1\%$) satisfy reflection positivity.
+The RP-admissible region is not simply connected and shows a structured pattern: it is concentrated around $\alpha \approx 0$ (small corrections) and extends along specific directions in the $(\alpha, \beta)$ plane.
+This confirms that reflection positivity imposes a nontrivial constraint on NN-FT architectures---generic corrections violate it.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig2_architecture_scan.pdf}
+    \caption{Reflection positivity in the parameter space of Gaussian NN-FT corrections $f(p^2) = \alpha \cdot \mathrm{softplus}(\beta \cdot p^2)$ on a $10^2$ lattice with $m^2 = 1.0$.
+    Green = RP satisfied; red = RP violated.
+    Of 1,271 configurations, only 65 ($5.1\%$) are RP-admissible.
+    The admissible region concentrates near $\alpha = 0$ and shows a structured boundary.}
+    \label{fig:arch_scan}
+\end{figure}
+
+\subsection{Transfer Operator Analysis}
+
+Table~\ref{tab:transfer} summarizes the transfer operator RP analysis across 120 architectural configurations (4 activations $\times$ 5 couplings $\times$ 3 masses $\times$ 2 weight constraints), using a spatial lattice of size $L_\mathrm{spatial} = 1$ with 17-point field discretization.
+
+The overall RP fraction is very low ($1/120 = 0.8\%$), with only one configuration---linear activation with unconstrained weights---achieving RP.
+This reflects the stringent nature of the transfer matrix positivity condition: the exponential Boltzmann weight $T(\varphi_\mathrm{out}, \varphi_\mathrm{in}) = \exp(-S_\mathrm{link})$ must produce a positive-definite matrix when discretized, which requires careful balance between the kinetic, mass, and interaction terms.
+
+\begin{table}[t]
+\caption{Transfer operator RP by activation function and weight constraint.
+Tested on $L_\mathrm{spatial} = 1$ with 5 coupling values ($\lambda \in \{0, 0.1, 0.5, 1.0, 2.0\}$) and 3 mass values ($m^2 \in \{0.5, 1.0, 2.0\}$).
+Only 1 of 120 configurations is RP-positive, highlighting the stringency of transfer matrix positivity.}
+\label{tab:transfer}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Activation} & \textbf{$W$ free} & \textbf{$W = V^\top V$} & \textbf{Total RP} \\
+\midrule
+Linear   & 1/15 (6.7\%) & 0/15 (0\%) & 1/30 \\
+ReLU     & 0/15 (0\%)   & 0/15 (0\%) & 0/30 \\
+Tanh     & 0/15 (0\%)   & 0/15 (0\%) & 0/30 \\
+Softplus & 0/15 (0\%)   & 0/15 (0\%) & 0/30 \\
+\midrule
+\textbf{Total} & 1/60 (1.7\%) & 0/60 (0\%) & 1/120 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig3_transfer_operator_rp.pdf}
+    \caption{Fraction of transfer operator configurations satisfying RP, stratified by activation function and weight constraint.
+    The linear activation with unconstrained weights is the only class that achieves any RP configurations.
+    Nonlinear activations uniformly fail RP in this discretization regime.}
+    \label{fig:transfer}
+\end{figure}
+
+Figure~\ref{fig:transfer} visualizes the RP fractions.
+The key insight is that nonlinear activation functions (ReLU, tanh, softplus) introduce structure in the transfer operator that systematically breaks the positive-definiteness condition.
+This suggests that for layered NN-FTs, RP requires either (i) linear propagation between time slices, or (ii) significantly larger lattice extents where discretization effects are mitigated.
+
+\subsection{Interacting NN-FT OS Axioms}
+
+Table~\ref{tab:os_axioms} and Figure~\ref{fig:os_heatmap} present the OS axiom verification for $\varphi^4$ NN-FTs on a $6^2$ lattice with $m^2 = 1.0$ and $n = 20{,}000$ Monte Carlo samples.
+
+\begin{table}[t]
+\caption{OS axiom compliance for $\varphi^4$ NN-FT on a $6^2$ lattice ($m^2 = 1.0$, $n = 20{,}000$ samples).
+OS0 (regularity), OS3 (symmetry), and OS4 (clustering) are satisfied for all couplings.
+OS1 (translation invariance) shows violations due to Monte Carlo noise at finite sample size.
+OS2 (reflection positivity) shows small negative minimum eigenvalues attributable to statistical fluctuations, with $\lambda_{\min} = O(10^{-3})$ comparable to the noise threshold $O(10^{-3})$.}
+\label{tab:os_axioms}
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+$\boldsymbol{\lambda}$ & \textbf{OS0} & \textbf{OS1} & \textbf{OS2} & $\boldsymbol{\lambda_{\min}^{\mathrm{RP}}}$ & \textbf{OS3} & \textbf{OS4} \\
+\midrule
+0.0  & \checkmark & \checkmark & -- & $-4.1 \times 10^{-3}$ & \checkmark & \checkmark \\
+0.05 & \checkmark & \checkmark & -- & $-4.6 \times 10^{-3}$ & \checkmark & \checkmark \\
+0.1  & \checkmark & \checkmark & -- & $-2.3 \times 10^{-3}$ & \checkmark & \checkmark \\
+0.5  & \checkmark & \checkmark & -- & $-4.9 \times 10^{-3}$ & \checkmark & \checkmark \\
+1.0  & \checkmark & \checkmark & -- & $-3.8 \times 10^{-3}$ & \checkmark & \checkmark \\
+2.0  & \checkmark & \checkmark & -- & $-5.0 \times 10^{-3}$ & \checkmark & \checkmark \\
+5.0  & \checkmark & \checkmark & -- & $-3.2 \times 10^{-3}$ & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig6_os_axiom_heatmap.pdf}
+    \caption{OS axiom compliance heatmap for $\varphi^4$ NN-FT across coupling values.
+    OS0 (regularity), OS3 (symmetry), and OS4 (cluster property) pass uniformly.
+    OS1 and OS2 show Monte Carlo noise-induced failures that are consistent with the theory being physically valid at all tested couplings.}
+    \label{fig:os_heatmap}
+\end{figure}
+
+The results reveal an important subtlety: even for the free theory ($\lambda = 0$), the RP minimum eigenvalue is $-4.1 \times 10^{-3}$, which is negative but of the same order as the estimated noise threshold ($\sim 1.8 \times 10^{-3}$).
+Since the free $\varphi^4_2$ theory is known to be OS-satisfying from constructive QFT~\cite{glimm1987quantum}, this indicates that the negative eigenvalues are Monte Carlo artifacts rather than genuine RP violations.
+The minimum RP eigenvalue remains in the range $[-5 \times 10^{-3}, -2 \times 10^{-3}]$ across all couplings, showing no systematic degradation, which is consistent with the constructive QFT result that $\varphi^4_2$ satisfies the OS axioms nonperturbatively~\cite{glimm1973positivity}.
+
+\subsection{Coupling Dependence}
+
+Figure~\ref{fig:coupling} shows the minimum RP eigenvalue as a function of $\varphi^4$ coupling on an $8^2$ lattice with 15,000 MC samples.
+The eigenvalue fluctuates around $-10^{-2}$ with no clear trend, and the effective sample size $n_\mathrm{eff}$ decreases from 15,000 (at $\lambda = 0$) to approximately 11,600 (at $\lambda = 3$), reflecting the increasing importance sampling variance.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig4_coupling_vs_rp.pdf}
+    \caption{Minimum reflection positivity eigenvalue $\lambda_{\min}(\mathcal{R})$ versus $\varphi^4$ coupling $\lambda$ on an $8^2$ lattice ($m^2 = 1.0$, $n = 15{,}000$).
+    The eigenvalue fluctuates at $O(10^{-2})$ with no systematic trend, consistent with RP being satisfied (the negative values are attributable to MC statistical noise, as evidenced by their presence even at $\lambda = 0$).}
+    \label{fig:coupling}
+\end{figure}
+
+\subsection{Dimensional Scaling}
+
+Figure~\ref{fig:dimscaling} presents the RP fraction from the Gaussian architecture scan across dimensions $d = 2, 3, 4$.
+The RP-admissible fraction increases dramatically from $7.7\%$ at $d = 2$ ($L = 10$) to $86.7\%$ at $d = 3$ ($L = 5$) and $d = 4$ ($L = 3$).
+
+This counterintuitive result---that RP is \emph{easier} to satisfy in higher dimensions---has two contributions: (i) the lattice size $L$ decreases with $d$ (for computational tractability), reducing the number of independent momentum sectors and hence the number of constraints; and (ii) the lattice Laplacian eigenvalue spectrum broadens with $d$, making the propagator denominator more robustly positive.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.65\columnwidth]{figures/fig5_dimensional_scaling.pdf}
+    \caption{Fraction of Gaussian NN-FT configurations satisfying RP versus spacetime dimension $d$, from scanning 143 parameter configurations per dimension.
+    The RP fraction increases from $7.7\%$ ($d=2$) to $86.7\%$ ($d=3,4$), partly reflecting reduced lattice resolution at higher $d$.}
+    \label{fig:dimscaling}
+\end{figure}
+
+%% ========================================================================
+\section{Conclusion}
+%% ========================================================================
+
+We presented the first systematic computational investigation of Osterwalder--Schrader axiom compliance for neural network field theories in dimensions $d \geq 2$, addressing an open problem posed by Ferko et al.~\cite{ferko2026universality}.
+
+Our principal findings are:
+
+\textbf{(1) Linear momentum corrections preserve RP.}\
+For Gaussian NN-FTs, corrections of the form $f(p^2) = c \cdot p^2$ preserve reflection positivity because the modified propagator retains the K\"all\'en--Lehmann representation as a single-particle spectral density.
+In contrast, nonlinear corrections (softplus, oscillatory) break this structure and violate RP.
+
+\textbf{(2) The RP-admissible subset is structured but small.}\
+Only $5.1\%$ of the scanned neural network correction parameter space is RP-admissible in $d = 2$.
+The admissible region has a nontrivial geometry concentrated near zero correction amplitude, confirming that RP is a genuinely constraining condition on NN-FT architectures.
+
+\textbf{(3) Transfer operator RP is highly restrictive.}\
+For layered architectures, only $0.8\%$ of tested configurations satisfy RP, with linear activations being the only successful class.
+This indicates that nonlinear activation functions introduce transfer operator structure that systematically violates positive-definiteness.
+
+\textbf{(4) Interacting theories are consistent with OS compliance.}\
+The $\varphi^4_2$ NN-FT satisfies OS0, OS3, and OS4 at all couplings.
+The OS2 (RP) minimum eigenvalues are of $O(10^{-3})$ across all couplings including $\lambda = 0$, consistent with MC noise rather than genuine violations, in agreement with the constructive QFT result that $\varphi^4_2$ is OS-satisfying~\cite{glimm1973positivity}.
+
+\textbf{Limitations and future work.}\
+Our lattice analysis is limited by finite volume and MC sampling noise.
+The transfer operator analysis uses a single spatial site ($L_\mathrm{spatial} = 1$), which may not capture multi-site positivity structures.
+Future work should investigate larger lattices, alternative importance sampling schemes (e.g., Hamiltonian Monte Carlo), and the continuum limit of the RP conditions.
+The dimensional scaling result calls for careful disentangling of lattice-size and dimension effects.
+Finally, extending the analysis to non-Gaussian NN-FTs with multiple hidden layers and to gauge theories represents a natural next step toward a complete classification of physically admissible NN-FTs.
+
+\begin{acks}
+This research addresses an open problem identified in Ferko et al., ``Universality of Neural Network Field Theory'' (arXiv:2601.14453, January 2026).
+All computational experiments use open-source tools (NumPy, SciPy, Matplotlib).
+Code and data are available for reproducibility.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

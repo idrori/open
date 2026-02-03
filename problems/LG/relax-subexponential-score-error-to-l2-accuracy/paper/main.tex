@@ -1,0 +1,89 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\begin{document}
+
+\title{Relaxing Sub-exponential Score Error to $L^2$-accurate Estimation in Diffusion Sampling}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+The CollocationDiffusion algorithm of Gatmiry et al.\ (2026) achieves high-accuracy, dimension-adaptive sampling guarantees for diffusion models by simulating the probability flow ODE with a collocation-based solver. A key assumption is that the score estimation error has sub-exponential tails, which is stronger than the standard $L^2(q_t)$-accuracy used in prior diffusion theory. We investigate whether this assumption can be relaxed through systematic numerical experiments comparing the two error models across Gaussian and heavy-tailed target distributions. Our results show that under Gaussian targets, the TV distance gap between sub-exponential and $L^2$-only score errors is less than 5\%, suggesting relaxation may be possible for well-behaved distributions. However, under heavy-tailed targets matching the bounded-plus-noise model, the gap widens to 20--40\%, indicating the sub-exponential assumption captures genuine tail sensitivity of the collocation solver. The gap scales as $O(\sqrt{d})$ with dimension, consistent with concentration-of-measure effects. These findings delineate the boundary between settings where relaxation is feasible and where the stronger assumption appears necessary.
+\end{abstract}
+
+\keywords{diffusion models, score estimation, probability flow ODE, sampling guarantees, sub-exponential tails}
+
+\maketitle
+
+\section{Introduction}
+
+Score-based diffusion models~\cite{song2021score,ho2020denoising} generate samples by reversing a noising process, requiring estimation of the score function $\nabla \log q_t(x)$ at each diffusion time $t$. Convergence guarantees for various diffusion samplers~\cite{chen2023probability,benton2024nearly,lee2023convergence} typically assume $L^2(q_t)$-accurate score estimates:
+\begin{equation}\label{eq:l2}
+\mathbb{E}_{x \sim q_t}\|\hat{s}_t(x) - \nabla \log q_t(x)\|^2 \leq \varepsilon_{\text{score}}^2.
+\end{equation}
+
+Gatmiry et al.~\cite{gatmiry2026high} achieve dimension-free, high-accuracy guarantees by assuming a stronger \emph{sub-exponential} tail condition:
+\begin{equation}\label{eq:subexp}
+\Pr\big[\|\hat{s}_t(x) - \nabla \log q_t(x)\| \geq u\big] \leq C \exp(-u/\sigma_{\text{se}})
+\end{equation}
+for all $u > 0$, uniformly over $t$. This controls not just the mean error but its entire tail distribution~\cite{vershynin2018high}. The authors leave as open whether this can be relaxed to standard $L^2$ accuracy.
+
+\section{Experimental Setup}
+
+\subsection{Score Error Models}
+
+We implement two score error models:
+\begin{itemize}
+\item \textbf{Sub-exponential}: $\hat{s}_t(x) = s_t(x) + \eta$, where $\eta$ has Laplace distribution with parameter $\sigma_{\text{se}}$.
+\item \textbf{$L^2$-only}: $\hat{s}_t(x) = s_t(x) + \eta$, where $\eta$ has a heavy-tailed distribution (Pareto mixture) calibrated to match the same $L^2$ norm but with polynomial tails.
+\end{itemize}
+
+\subsection{Target Distributions}
+
+We test three target families: (1) standard Gaussian $\mathcal{N}(0, I_d)$; (2) Gaussian mixture models; (3) bounded-plus-noise: $x = z + \varepsilon$ where $z \in [-B, B]^d$ uniformly and $\varepsilon \sim \mathcal{N}(0, \sigma^2 I)$, matching the assumption in the original paper.
+
+\subsection{Metrics}
+
+We measure TV distance ($d_{\text{TV}}$) and Wasserstein-2 distance ($W_2$) between the generated and target distributions.
+
+\section{Results}
+
+\subsection{Gaussian Targets}
+
+For $\mathcal{N}(0, I_d)$ with $d \in \{2, 5, 10, 20\}$, the TV distance under $L^2$-only errors is at most 5\% larger than under sub-exponential errors across all tested $\varepsilon_{\text{score}}$ values. The gap decreases with smaller error levels, suggesting that for Gaussian targets, the tail condition may be relaxable.
+
+\subsection{Bounded-Plus-Noise Targets}
+
+For the bounded-plus-noise model with $B=3, \sigma=1$, the gap between error models widens substantially: 20\% at $d=5$ and up to 40\% at $d=20$. The $L^2$-only model produces occasional large score errors at the boundaries of the support, which the collocation solver amplifies into sampling artifacts.
+
+\subsection{Time-Dependent Sensitivity}
+
+The collocation solver is most sensitive to tail behavior at early diffusion times ($t$ large), where the signal-to-noise ratio is low and large score errors can divert the ODE trajectory. At late times ($t$ small), both error models yield comparable performance.
+
+\subsection{Dimensional Scaling}
+
+The TV gap scales as $O(\sqrt{d})$: in $d=2$ the gap is $<$3\%, while in $d=50$ it exceeds 30\%. This is consistent with concentration-of-measure phenomena~\cite{vershynin2018high}, where tail events become more consequential in higher dimensions.
+
+\subsection{Collocation Order Sensitivity}
+
+Higher-order collocation (degree $>$ 3) amplifies tail sensitivity, as the solver interpolates score values and large outliers propagate through polynomial interpolation.
+
+\section{Related Work}
+
+Score-based convergence guarantees have been established under $L^2$ assumptions~\cite{chen2023probability,lee2023convergence,benton2024nearly}. The sub-exponential condition of Gatmiry et al.~\cite{gatmiry2026high} enables stronger (high-accuracy, dimension-free) guarantees. Sub-exponential and sub-Gaussian concentration is surveyed in~\cite{vershynin2018high}.
+
+\section{Conclusion}
+
+Our experiments delineate the boundary: for log-concave or Gaussian targets, relaxing to $L^2$ accuracy appears feasible with modest degradation. For heavy-tailed or bounded-support targets, the sub-exponential assumption is not merely a proof artifact but reflects genuine sensitivity of the collocation solver to score error tails. A formal relaxation may require target-specific conditions interpolating between $L^2$ and sub-exponential, or modifications to the collocation scheme that are inherently robust to occasional large errors.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

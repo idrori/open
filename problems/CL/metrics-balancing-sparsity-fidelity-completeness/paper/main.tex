@@ -1,0 +1,350 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+\setcopyright{none}
+\copyrightyear{2026}
+\acmYear{2026}
+
+\begin{document}
+
+\title{SFC-Score: A Unified Metric Framework Balancing Sparsity, Fidelity, and Mechanistic Completeness for Interpretability Evaluation}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Mechanistic interpretability (MI) methods decompose neural network activations into interpretable features, yet no existing metric jointly evaluates the three critical desiderata: sparsity, fidelity, and mechanistic completeness. We present SFC-Score, a unified evaluation framework based on the weighted harmonic mean of these three axes. The harmonic mean formulation ensures that catastrophic failure on any single axis dominates the joint score, reflecting the practical requirement that useful decompositions must be adequate on all dimensions simultaneously. We formalize individual axis metrics---sparsity as the fraction of inactive features, fidelity as reconstruction agreement, and completeness as behavioral variance preserved under ablation---and define a Pareto dominance relation with hypervolume indicator for comparing method families. On synthetic benchmarks with planted ground-truth circuits across four model configurations (circuit sizes 4--24, hidden dimensions 64--128), we demonstrate that the SFC-Score at equal weights peaks at sparsity level 0.85 with a score of 0.905 on the standard model, meaningfully separating decomposition quality. Weight sensitivity analysis across seven preference profiles shows that the optimal decomposition shifts predictably: sparsity-heavy (5:1:1) preferences select 95\% sparsity (score 0.917), while fidelity-heavy (1:5:1) preferences select 70\% sparsity (score 0.911). We further provide an information-theoretic formulation connecting sparsity to rate, fidelity to distortion, and completeness to relevance in the rate-distortion-relevance framework. Hypervolume analysis reveals that the standard model achieves a Pareto front hypervolume of 0.874, with all eight tested sparsity configurations lying on the Pareto front. Dictionary size analysis shows that increasing $K$ from 8 to 63 improves ground-truth completeness from 0.140 to 0.954 while maintaining stable SFC-Scores near 0.74. Our framework provides the first unified, configurable metric for MI method evaluation and establishes a reusable synthetic benchmark suite for the community.
+\end{abstract}
+
+\maketitle
+
+% ===========================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Mechanistic interpretability (MI) seeks to reverse-engineer neural network computations into human-understandable components~\cite{olah2020zoom}. Sparse Autoencoders (SAEs) and dictionary learning methods have emerged as powerful tools for extracting monosemantic features from transformer activations~\cite{bricken2023monosemanticity,cunningham2023sparse}, with recent work scaling these techniques to production-grade models~\cite{templeton2024scaling}. However, the field faces a fundamental three-way trade-off identified by Zhang et al.~\cite{zhang2026locate} as an explicit open challenge: developing metrics that jointly balance \emph{sparsity}, \emph{fidelity}, and \emph{mechanistic completeness}.
+
+Sparsity ensures that only a small number of features activate on any given input, yielding interpretable decompositions. Fidelity requires that the reconstruction faithfully preserves the model's computations. Completeness demands that the extracted features account for \emph{all} causally relevant mechanisms, including distributed or polysemantic structure. These three desiderata are fundamentally in tension: increasing sparsity typically reduces fidelity, while achieving high completeness may require retaining dense, less interpretable components.
+
+Current evaluation practice reports reconstruction loss (fidelity) and $\ell_0/\ell_1$ norms (sparsity) separately, with no principled way to compare methods occupying different points on the trade-off surface and with completeness rarely measured at all. This paper addresses this gap by introducing the \textbf{SFC-Score} framework, which provides: (1) formalized individual axis metrics, (2) a joint score via weighted harmonic mean, (3) Pareto dominance relations with hypervolume indicators, and (4) a synthetic benchmark suite with planted ground-truth circuits for rigorous validation.
+
+Our contributions are:
+\begin{itemize}
+    \item We define operationalized metrics for sparsity, fidelity, and mechanistic completeness that are computable for any feature decomposition method.
+    \item We propose the SFC-Score as a weighted harmonic mean that penalizes catastrophic failure on any axis while supporting configurable preference profiles.
+    \item We provide a Pareto front analysis with hypervolume indicator for comparing method families across the full trade-off surface.
+    \item We connect the framework to information theory through a rate-distortion-relevance formulation.
+    \item We validate on synthetic benchmarks with known ground-truth circuits across four model configurations, demonstrating that SFC-Score meaningfully separates decomposition quality.
+\end{itemize}
+
+% ===========================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Sparse Autoencoders for Interpretability.}
+Bricken et al.~\cite{bricken2023monosemanticity} introduced training SAEs on transformer activations to extract monosemantic features, with standard evaluation reporting reconstruction MSE and $\ell_0$ sparsity. Cunningham et al.~\cite{cunningham2023sparse} demonstrated that SAE-discovered directions correspond to interpretable concepts. Templeton et al.~\cite{templeton2024scaling} scaled SAE training to Claude~3 Sonnet, revealing millions of interpretable features. The superposition hypothesis~\cite{elhage2022superposition} provides theoretical grounding for why sparse decomposition is necessary.
+
+\paragraph{Fidelity and Faithfulness.}
+Fidelity is typically measured as mean squared error between original and reconstructed activations. Marks et al.~\cite{marks2024sparse} argue for downstream fidelity: whether substituting the SAE reconstruction preserves the model's output distribution, measured via KL divergence or cross-entropy loss recovery.
+
+\paragraph{Completeness and Causal Metrics.}
+Causal scrubbing~\cite{chan2022causal} tests whether hypothesized computational graphs account for model behavior under resampling ablations. ACDC~\cite{conmy2023automated} measures the fraction of model performance explained by extracted circuits. Distributed Alignment Search~\cite{geiger2024finding} finds linear subspaces aligning with causal variables, where completeness equals the fraction of behavioral variance captured.
+
+\paragraph{Multi-Objective Evaluation.}
+The hypervolume indicator from evolutionary optimization~\cite{zitzler2003hypervolume} provides a scalar summary of Pareto front quality. Information-theoretic multi-objective metrics from rate-distortion theory~\cite{cover2006elements,shannon1948mathematical} characterize optimal compression trade-offs and can be adapted to our setting.
+
+% ===========================================================================
+\section{SFC-Score Framework}
+\label{sec:method}
+
+\subsection{Problem Formulation}
+
+Consider a neural network with activation space $\mathbb{R}^D$ at a layer of interest. A \emph{feature decomposition} $\mathcal{D}$ consists of a dictionary $\mathbf{W} \in \mathbb{R}^{K \times D}$ and, for each input, coefficient vectors $\mathbf{c}_i \in \mathbb{R}^K$ such that the reconstruction is $\hat{\mathbf{a}}_i = \mathbf{c}_i \mathbf{W}$. We seek to evaluate $\mathcal{D}$ along three axes simultaneously.
+
+\subsection{Individual Axis Metrics}
+
+\paragraph{Sparsity $S(\mathcal{D})$.}
+We define sparsity as the complement of the average fraction of active features:
+\begin{equation}
+    S(\mathcal{D}) = 1 - \frac{1}{N} \sum_{i=1}^{N} \frac{\|\mathbf{c}_i\|_0}{K}
+\end{equation}
+where $\|\cdot\|_0$ counts coefficients exceeding a threshold $\tau = 10^{-6}$. $S = 1$ indicates maximal sparsity (no active features); $S = 0$ indicates all features active on every input.
+
+\paragraph{Fidelity $F(\mathcal{D})$.}
+We measure fidelity via mean cosine similarity between original and reconstructed activation vectors:
+\begin{equation}
+    F(\mathcal{D}) = \frac{1}{N} \sum_{i=1}^{N} \frac{\mathbf{a}_i \cdot \hat{\mathbf{a}}_i}{\|\mathbf{a}_i\| \, \|\hat{\mathbf{a}}_i\|}
+\end{equation}
+Alternative formulations using $R^2$ or relative MSE are supported but cosine similarity is our default due to its invariance to activation scale.
+
+\paragraph{Completeness $C(\mathcal{D})$.}
+Completeness measures whether the decomposition captures all causally relevant structure. Given a downstream computation $f$, we project activations onto the subspace spanned by the dictionary and measure behavioral preservation:
+\begin{equation}
+    C(\mathcal{D}) = 1 - \frac{\frac{1}{M}\sum_{j=1}^{M} \|f(\mathbf{a}_j) - f(\pi_\mathcal{D}(\mathbf{a}_j))\|^2}{\mathrm{Var}[f(\mathbf{a})]}
+\end{equation}
+where $\pi_\mathcal{D}$ projects onto the row space of $\mathbf{W}$ via SVD. $C = 1$ indicates perfect completeness; $C = 0$ indicates the decomposition captures none of the relevant computation.
+
+\subsection{Joint SFC-Score}
+
+We define the SFC-Score as a weighted harmonic mean:
+\begin{equation}
+    \mathrm{SFC}(\mathcal{D}; \alpha, \beta, \gamma) = \frac{\alpha + \beta + \gamma}{\frac{\alpha}{S(\mathcal{D})} + \frac{\beta}{F(\mathcal{D})} + \frac{\gamma}{C(\mathcal{D})}}
+    \label{eq:sfc}
+\end{equation}
+where $\alpha, \beta, \gamma > 0$ are preference weights. The harmonic mean has two key properties: (1) it is dominated by the smallest input, ensuring that catastrophic failure on any axis drags the entire score toward zero, and (2) it equals the arithmetic mean when all inputs are equal, providing an intuitive baseline. Setting $\alpha = \beta = \gamma = 1$ gives equal weighting; practitioners can adjust weights to prioritize safety-critical fidelity ($\beta \gg 1$) or human-review sparsity ($\alpha \gg 1$).
+
+\subsection{Pareto Front and Hypervolume}
+
+For comparing method families rather than individual hyperparameter settings, we compute the Pareto front in $(S, F, C)$ space. A point $\mathbf{p}$ is \emph{dominated} by $\mathbf{q}$ if $q_i \geq p_i$ for all $i$ and $q_j > p_j$ for at least one $j$. The Pareto front consists of all non-dominated points.
+
+We summarize the front quality using the hypervolume indicator~\cite{zitzler2003hypervolume} relative to the reference point $(0, 0, 0)$:
+\begin{equation}
+    \mathrm{HV}(\mathcal{P}) = \mathrm{Vol}\left(\bigcup_{\mathbf{p} \in \mathcal{P}} [\mathbf{0}, \mathbf{p}]\right)
+\end{equation}
+Higher hypervolume indicates a better overall trade-off surface.
+
+\subsection{Information-Theoretic Formulation}
+
+We connect SFC to information theory by mapping: sparsity to \emph{rate} (entropy of coefficient distribution, normalized), fidelity to \emph{distortion} ($1 - F$), and completeness to \emph{relevance} (mutual information proxy between encoding and model output). This establishes a rate-distortion-relevance framework~\cite{cover2006elements} where optimal decompositions lie on the boundary of the achievable region.
+
+% ===========================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Synthetic Benchmark}
+
+We construct synthetic neural networks with known ground-truth circuits, enabling rigorous metric validation impossible on real models. Each model computes $\mathbf{y} = \mathbf{W}_2 \cdot \mathrm{ReLU}(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2$, where only a subset of hidden units (the \emph{circuit}) connects to the output via $\mathbf{W}_2$; remaining units are noise.
+
+We test four configurations (Table~\ref{tab:configs}):
+
+\begin{table}[t]
+\caption{Synthetic model configurations. Circuit size / hidden dimension determines circuit density.}
+\label{tab:configs}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Config} & \textbf{Input} & \textbf{Hidden} & \textbf{Output} & \textbf{Circuit} \\
+\midrule
+Standard     & 16 & 64  & 4 & 8/64 \\
+Large        & 32 & 128 & 8 & 16/128 \\
+Dense        & 16 & 64  & 4 & 24/64 \\
+Sparse       & 16 & 64  & 4 & 4/64 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each configuration generates $N = 2{,}000$ samples of hidden activations. We create SAE-like decompositions at sparsity levels $\lambda \in \{0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.85, 0.95\}$ using dictionary size $K = 48$ (or $K = \min(48, D-1)$ for the large model). Dictionaries are learned via truncated SVD, and sparsity is applied through hard coefficient thresholding.
+
+\subsection{Evaluation Protocol}
+
+For each decomposition, we compute $S$, $F$ (cosine mode), and $C$ (ablation-based with the model's downstream layer as $f$). We also compute ground-truth completeness $C_{GT}$, measuring the fraction of true circuit directions captured by the dictionary subspace. SFC-Scores are evaluated under seven weight profiles (Table~\ref{tab:weights}).
+
+\begin{table}[t]
+\caption{Weight profiles for SFC-Score evaluation.}
+\label{tab:weights}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Profile} & $\alpha$ & $\beta$ & $\gamma$ \\
+\midrule
+Equal          & 1 & 1 & 1 \\
+Sparsity-heavy & 5 & 1 & 1 \\
+Fidelity-heavy & 1 & 5 & 1 \\
+Completeness-heavy & 1 & 1 & 5 \\
+S+F            & 2 & 2 & 1 \\
+F+C            & 1 & 2 & 2 \\
+S+C            & 2 & 1 & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===========================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Core SFC Trade-off}
+
+Figure~\ref{fig:tradeoff} shows the fundamental three-way trade-off on the standard model. As sparsity level $\lambda$ increases from 0.0 to 0.95, measured sparsity $S$ increases linearly from 0.000 to 0.938, fidelity $F$ decreases from 0.991 to 0.777, and completeness $C$ remains nearly constant at 0.988. The SFC-Score under equal weights $(1\!:\!1\!:\!1)$ increases monotonically from near zero (dominated by $S \approx 0$) to a peak of 0.905 at $\lambda = 0.85$, then slightly decreases to 0.891 at $\lambda = 0.95$ as fidelity degrades.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_tradeoff.pdf}
+    \caption{Core SFC trade-off on the standard model. (a) Individual metrics vs.\ sparsity level. (b) Joint SFC-Score peaks at $\lambda = 0.85$.}
+    \label{fig:tradeoff}
+\end{figure}
+
+Key observations from the standard model (Table~\ref{tab:core}):
+\begin{itemize}
+    \item At $\lambda = 0$ (dense), $S = 0.000$ drives SFC to near zero despite $F = 0.991$ and $C = 0.988$, demonstrating the harmonic mean's sensitivity to any axis near zero.
+    \item The peak SFC of 0.905 at $\lambda = 0.85$ represents $S = 0.833$, $F = 0.907$, $C = 0.988$---a balanced operating point.
+    \item At $\lambda = 0.95$, $F$ drops to 0.777, causing SFC to decrease to 0.891 despite $S = 0.938$.
+\end{itemize}
+
+\begin{table}[t]
+\caption{Core SFC evaluation on the standard model ($K = 48$, hidden dim 64, circuit size 8). $C_{GT}$ is ground-truth completeness.}
+\label{tab:core}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+$\lambda$ & $S$ & $F$ & $C$ & SFC & $C_{GT}$ \\
+\midrule
+0.00 & 0.000 & 0.991 & 0.988 & 0.000 & 0.790 \\
+0.10 & 0.083 & 0.991 & 0.988 & 0.214 & 0.790 \\
+0.20 & 0.188 & 0.991 & 0.988 & 0.408 & 0.790 \\
+0.30 & 0.292 & 0.989 & 0.988 & 0.550 & 0.790 \\
+0.50 & 0.500 & 0.980 & 0.988 & 0.744 & 0.790 \\
+0.70 & 0.688 & 0.958 & 0.988 & 0.854 & 0.790 \\
+0.85 & 0.833 & 0.907 & 0.988 & 0.905 & 0.790 \\
+0.95 & 0.938 & 0.777 & 0.988 & 0.891 & 0.790 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Weight Sensitivity Analysis}
+
+Figure~\ref{fig:sfc_scores} and Table~\ref{tab:sensitivity} show how different weight profiles change the optimal decomposition selection. Under equal weights, SAE-sp85 achieves the highest SFC of 0.905. With sparsity-heavy weights $(5\!:\!1\!:\!1)$, the optimum shifts to SAE-sp95 with a score of 0.917, since the high $S = 0.938$ is upweighted. With fidelity-heavy weights $(1\!:\!5\!:\!1)$, SAE-sp70 becomes optimal at 0.911, as its $F = 0.958$ is prioritized over SAE-sp85's lower fidelity.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_sfc_scores.pdf}
+    \caption{SFC-Score rankings under three weight profiles. The optimal method shifts from sp95 (sparsity preference) through sp85 (equal) to sp70 (fidelity preference).}
+    \label{fig:sfc_scores}
+\end{figure}
+
+\begin{table}[t]
+\caption{Best decomposition under each weight profile.}
+\label{tab:sensitivity}
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Profile} & \textbf{Best Method} & \textbf{Score} \\
+\midrule
+Equal (1:1:1) & SAE-sp85 & 0.905 \\
+Sparsity (5:1:1) & SAE-sp95 & 0.917 \\
+Fidelity (1:5:1) & SAE-sp70 & 0.911 \\
+Completeness (1:1:5) & SAE-sp85 & 0.951 \\
+S+F (2:2:1) & SAE-sp85 & 0.890 \\
+F+C (1:2:2) & SAE-sp85 & 0.921 \\
+S+C (2:1:2) & SAE-sp95 & 0.918 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Cross-Architecture Generalization}
+
+Figure~\ref{fig:cross_arch} demonstrates that SFC-Score behavior generalizes across model configurations. All four architectures exhibit the same qualitative pattern: SFC increases with sparsity level, peaks near $\lambda = 0.85$--$0.90$, and decreases at extreme sparsity. The sparse-circuit model (4/64) achieves the highest peak SFC of 0.908, while the large model (16/128) achieves the lowest at 0.854, reflecting the latter's lower baseline fidelity and completeness due to its more complex hidden structure.
+
+Hypervolume indicators confirm consistent trade-off quality: the standard model achieves 0.874, the large model 0.748, the dense-circuit model 0.874, and the sparse-circuit model 0.883.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_cross_arch.pdf}
+    \caption{(a) SFC-Score curves across four architectures show consistent trade-off shape. (b) Pareto hypervolumes with the count $|P|$ of Pareto-optimal points.}
+    \label{fig:cross_arch}
+\end{figure}
+
+\subsection{Pareto Front Analysis}
+
+Across all four model configurations, all eight tested sparsity configurations lie on the Pareto front (Table~\ref{tab:pareto}). This occurs because increasing sparsity monotonically trades fidelity for sparsity while completeness remains approximately constant, creating a strictly monotone trade-off curve where no point dominates another.
+
+\begin{table}[t]
+\caption{Pareto front analysis across architectures.}
+\label{tab:pareto}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Config} & \textbf{$|$Pareto$|$/$N$} & \textbf{HV(front)} & \textbf{HV(all)} \\
+\midrule
+Standard  & 8/8 & 0.874 & 0.874 \\
+Large     & 8/8 & 0.748 & 0.748 \\
+Dense     & 8/8 & 0.874 & 0.874 \\
+Sparse    & 8/8 & 0.883 & 0.883 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Information-Theoretic Analysis}
+
+Figure~\ref{fig:info_theory} shows the information-theoretic analogs. As sparsity level increases, rate (encoding entropy) decreases from 0.821 to 0.086, distortion increases from 0.023 to 0.559, and relevance remains approximately constant near 0.335. The information-theoretic sparsity analog tracks the standard metric closely ($r > 0.99$), while the fidelity analog shows a steeper degradation curve since it captures MSE-based distortion rather than cosine similarity.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_info_theory.pdf}
+    \caption{(a) Rate-distortion-relevance curves. (b) Standard metrics vs.\ information-theoretic analogs; the identity line shows calibration.}
+    \label{fig:info_theory}
+\end{figure}
+
+\subsection{Dictionary Size Sensitivity}
+
+Table~\ref{tab:dictsize} shows the effect of dictionary size $K$ at fixed sparsity $\lambda = 0.5$. Ground-truth completeness $C_{GT}$ increases monotonically from 0.140 ($K = 8$) to 0.954 ($K = 63$), confirming that larger dictionaries capture more of the true circuit. The metric completeness $C$ increases from 0.734 to 0.998. The SFC-Score remains relatively stable between 0.647 and 0.744, as the fidelity gains from larger dictionaries roughly compensate for the fixed sparsity level.
+
+\begin{table}[t]
+\caption{Dictionary size sensitivity at $\lambda = 0.5$.}
+\label{tab:dictsize}
+\centering
+\small
+\begin{tabular}{cccccl}
+\toprule
+$K$ & $S$ & $F$ & $C$ & SFC & $C_{GT}$ \\
+\midrule
+8  & 0.500 & 0.785 & 0.734 & 0.647 & 0.140 \\
+16 & 0.500 & 0.901 & 0.861 & 0.702 & 0.264 \\
+24 & 0.500 & 0.938 & 0.934 & 0.725 & 0.442 \\
+32 & 0.500 & 0.958 & 0.969 & 0.736 & 0.581 \\
+48 & 0.500 & 0.980 & 0.988 & 0.744 & 0.790 \\
+63 & 0.492 & 0.992 & 0.998 & 0.742 & 0.954 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Weight Sensitivity Heatmap}
+
+Figure~\ref{fig:sensitivity} presents a heatmap of SFC-Scores across all seven weight profiles and six decompositions. The heatmap reveals that SAE-sp85 achieves the most consistently high scores across profiles, while SAE-sp00 (dense) is uniformly near zero. The completeness-heavy profile (1:1:5) yields the highest absolute scores since completeness is uniformly high ($C \approx 0.988$).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_sensitivity.pdf}
+    \caption{Weight sensitivity heatmap. Rows are weight profiles; columns are decompositions ordered by equal-weight SFC. SAE-sp85 is the most robust choice across profiles.}
+    \label{fig:sensitivity}
+\end{figure}
+
+% ===========================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{The Value of the Harmonic Mean.}
+Our results demonstrate that the harmonic mean formulation in Equation~\ref{eq:sfc} correctly captures the intuition that a decomposition must be adequate on \emph{all} axes. The dense decomposition ($\lambda = 0$) achieves near-perfect fidelity and completeness but receives SFC $\approx 0$ due to zero sparsity. This is the desired behavior: a completely dense decomposition, while accurate, is not interpretable.
+
+\paragraph{Completeness Plateau.}
+A notable finding is that completeness $C$ remains nearly constant across sparsity levels (0.988 for the standard model). This occurs because our dictionary learning captures the principal activation directions regardless of coefficient sparsity. The ground-truth completeness $C_{GT} = 0.790$ is lower and invariant to sparsity level, confirming that subspace coverage depends on dictionary composition rather than activation patterns.
+
+\paragraph{Limitations.}
+Our synthetic benchmarks, while providing ground-truth validation, use linear ground-truth circuits. Real neural networks exhibit nonlinear feature interactions that linear SAEs cannot capture, and completeness metrics should detect this gap. Additionally, the computational cost of ablation-based completeness scales with model size, requiring efficient approximations for large-scale deployment. The current evaluation uses dictionary learning via SVD, which may not reflect the full complexity of trained SAE decompositions.
+
+% ===========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented SFC-Score, a unified metric framework that jointly evaluates sparsity, fidelity, and mechanistic completeness for interpretability decompositions. Through experiments on synthetic benchmarks with planted circuits, we demonstrate that the framework meaningfully separates decomposition quality, responds predictably to preference weights, and generalizes across model architectures. The information-theoretic connection to rate-distortion-relevance provides principled grounding, and the Pareto hypervolume analysis offers a scalar summary for comparing method families. We release our synthetic benchmark suite and evaluation code to support standardized MI method evaluation.
+
+\begin{acks}
+This work addresses the open problem of metrics balancing sparsity, fidelity, and mechanistic completeness, as identified by Zhang et al.~\cite{zhang2026locate}.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

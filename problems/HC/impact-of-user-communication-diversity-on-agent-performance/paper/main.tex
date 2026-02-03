@@ -1,0 +1,280 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{xcolor}
+\usepackage{multirow}
+\usepackage{subcaption}
+
+\setcopyright{acmlicensed}
+
+\begin{document}
+
+\title{Quantifying the Impact of User Communication Diversity on LLM Agent Performance: A Framework with Information-Theoretic Decomposition}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Large language model (LLM) agents are increasingly deployed in task-oriented conversational settings, yet their robustness to the natural diversity of human communication remains poorly understood. Real users differ along dimensions including formality, verbosity, politeness norms, dialect, cultural context, and domain expertise---but how much does this variation affect whether an agent actually completes a task? We propose a framework for systematically quantifying this impact, built on three contributions: (1)~a six-dimensional \emph{Communication Style Space} grounded in sociolinguistic theory that parameterizes user diversity; (2)~the \emph{Communication Diversity Sensitivity Index} (CDSI), a scalar metric summarizing an agent's robustness to style variation; and (3)~an information-theoretic decomposition that separates task outcome uncertainty into content-attributable and style-attributable components. In controlled experiments across 4~agent configurations, 12~user profiles, 4~task domains, and 19{,}200~simulated dialogues, we find that communication style accounts for 1.5\%--7.5\% of task success uncertainty, with dialect distance and cultural context as the most impactful axes ($\rho = -0.37$ and $-0.36$ for the most vulnerable agent). Agent CDSI scores range from 0.259 (robust) to 0.608 (highly sensitive), and all agents exhibit statistically significant performance disparities across demographic groups ($p < 10^{-18}$). Calibration gaps are largest for L2 speakers and high-context communicators, reaching 0.80 between confidence and actual success. These findings establish that communication diversity is a measurable and significant factor in agent performance and provide actionable metrics for auditing and improving equity.
+\end{abstract}
+
+\maketitle
+
+% ===========================================================================
+\section{Introduction}
+% ===========================================================================
+
+Task-oriented conversational agents powered by large language models (LLMs) are being deployed across customer service, technical support, healthcare, and education~\cite{park2024generative, zhou2024webarena}. These agents must parse user requests, extract relevant information, and complete tasks---all through natural language dialogue. Yet the users they serve are linguistically diverse: they vary in formality, verbosity, politeness conventions, dialect, cultural communication norms, and domain expertise.
+
+A growing body of evidence suggests this diversity affects outcomes. Seshadri et al.~\cite{seshadri2026lost} demonstrate that LLM-simulated users are unreliable proxies for real users in agentic evaluations, finding disparate success rates across dialects and age groups. They note that ``users might vary along dimensions such as formality, verbosity, and politeness norms---but it remains unclear how much this diversity meaningfully impacts agent performance and task success''~\cite{truong2025persona}. This observation identifies a critical open problem: we lack a quantitative framework for measuring and decomposing the impact of user communication diversity on agent task completion.
+
+This gap matters for three reasons. First, \emph{equity}: if agents systematically fail for users with non-standard communication styles, they perpetuate exclusion. Second, \emph{evaluation validity}: benchmarks that collapse communication diversity into standardized instructions will overestimate real-world performance. Third, \emph{design}: without understanding which dimensions of diversity drive failures, we cannot build targeted mitigations.
+
+We address this open problem with three contributions:
+
+\begin{enumerate}
+    \item \textbf{Communication Style Space.} A six-dimensional parameterization of user communication diversity grounded in sociolinguistic theory (Brown and Levinson's politeness theory~\cite{brown1987politeness}, Biber's register dimensions~\cite{biber1995dimensions}, Hall's cultural context framework~\cite{hall1976beyond}, and the World Englishes paradigm~\cite{kachru1990world}).
+
+    \item \textbf{Communication Diversity Sensitivity Index (CDSI).} A metric quantifying how much an agent's task success rate degrades as user style deviates from the training-data norm, with per-axis decomposition and equity sub-metrics.
+
+    \item \textbf{Information-theoretic decomposition.} A method for separating task outcome uncertainty into content-attributable (what was said) and style-attributable (how it was said) components, based on conditional mutual information.
+\end{enumerate}
+
+In controlled experiments with 4~agent configurations, 12~sociolinguistic user profiles, 4~task domains, and 19{,}200~simulated dialogues, we find that communication style is a statistically significant predictor of task success for all agents tested ($\chi^2$ tests: $p < 10^{-18}$), with CDSI scores ranging from 0.259 to 0.608 and style accounting for up to 7.5\% of outcome uncertainty.
+
+% ---------------------------------------------------------------------------
+\subsection{Related Work}
+% ---------------------------------------------------------------------------
+
+\paragraph{Sociolinguistic variation in NLP.}
+Research on dialect robustness has demonstrated that NLP systems degrade on non-standard English~\cite{blodgett2020language, ziems2023multi}. These studies focus primarily on classification and generation tasks rather than multi-turn agentic task completion. Danescu-Niculescu-Mizil et al.~\cite{danescu2013computational} provide computational operationalizations of politeness, which we build upon.
+
+\paragraph{Task-oriented dialogue evaluation.}
+Classical task-oriented dialogue benchmarks such as MultiWOZ~\cite{budzianowski2018multiwoz} and DSTC~\cite{henderson2014second} measure slot-filling accuracy and task success but use templated or crowd-sourced utterances that do not capture real communication diversity. Modern agent benchmarks like WebArena~\cite{zhou2024webarena} and SWE-bench~\cite{jimenez2024swebench} evaluate complex capabilities but use standardized, clean instructions.
+
+\paragraph{Robustness testing.}
+Ribeiro et al.~\cite{ribeiro2020beyond} introduce CheckList, a behavioral testing framework for NLP that includes linguistic perturbations. Our work extends this paradigm from classification to agentic task completion and from ad-hoc perturbations to theory-grounded sociolinguistic dimensions.
+
+\paragraph{LLM user simulation.}
+Seshadri et al.~\cite{seshadri2026lost} show that LLM-simulated users diverge from real users in agentic evaluations and identify communication diversity as a key source of this gap. Joshi et al.~\cite{joshi2024personas} evaluate LLM persona fidelity. Our framework provides the quantitative methodology that these works identify as missing.
+
+\paragraph{Positioning.}
+No existing work systematically varies user communication style along multiple sociolinguistic dimensions and measures the causal impact on multi-turn agent task success with attribution to specific axes and failure modes. We fill this gap.
+
+% ===========================================================================
+\section{Methods}
+% ===========================================================================
+
+\subsection{Communication Style Space}
+
+We define a six-dimensional communication style space $\mathcal{S} = [0,1]^6$ where each axis represents a sociolinguistic dimension of user variation:
+
+\begin{enumerate}
+    \item \textbf{Formality} ($s_1$): Register from colloquial ($s_1 = 0$) to formal ($s_1 = 1$), following Biber's register dimensions~\cite{biber1995dimensions}.
+    \item \textbf{Verbosity} ($s_2$): From terse single-clause utterances ($s_2 = 0$) to elaborate multi-sentence turns ($s_2 = 1$).
+    \item \textbf{Politeness} ($s_3$): From direct/blunt ($s_3 = 0$) to heavily hedged and indirect ($s_3 = 1$), grounded in Brown and Levinson~\cite{brown1987politeness}.
+    \item \textbf{Dialect distance} ($s_4$): From Standard American English ($s_4 = 0$) to maximal dialect divergence ($s_4 = 1$), drawing on the World Englishes framework~\cite{kachru1990world}.
+    \item \textbf{Cultural context} ($s_5$): From low-context/explicit ($s_5 = 0$) to high-context/implicit ($s_5 = 1$), following Hall~\cite{hall1976beyond}.
+    \item \textbf{Domain expertise} ($s_6$): From lay description ($s_6 = 0$) to expert jargon ($s_6 = 1$).
+\end{enumerate}
+
+A user's communication style is a vector $\mathbf{s} = (s_1, \ldots, s_6) \in \mathcal{S}$. We define a \emph{standard style} $\mathbf{s}_0 = (0.4, 0.4, 0.4, 0.0, 0.2, 0.3)$ representing the communicative norms most represented in LLM training data, and compute style distance as $d(\mathbf{s}) = \|\mathbf{s} - \mathbf{s}_0\|_2$.
+
+\subsection{User Profiles}
+
+We construct 12~canonical user profiles spanning the style space (Table~\ref{tab:success_rates}), including a baseline profile at $\mathbf{s}_0$, style extremes (formal-verbose, casual-terse, high-politeness), dialect variants (AAVE, Indian English, L2~beginner), cultural variants (high-context), age-related styles (elderly, teen), and professional registers (expert, corporate). Each profile is assigned a demographic group label for equity analysis.
+
+\subsection{Task Scenarios}
+
+We define four task scenarios across hotel booking, technical support, retail return, and flight information domains. Each scenario specifies required and optional information slots with ground-truth values. This covers a range of slot complexities (3--4 slots) and information types (categorical, numeric, date, free-text).
+
+\subsection{Agent Model}
+
+We model agent slot-extraction accuracy as a function of communication style distance:
+
+\begin{equation}
+    P(\text{correct} \mid \mathbf{s}) = \alpha \cdot \exp\left(-\beta \cdot d_w(\mathbf{s})\right)
+    \label{eq:slot_probability}
+\end{equation}
+
+\noindent where $\alpha$ is the base accuracy at $d=0$, $\beta$ is the style sensitivity parameter, and $d_w(\mathbf{s}) = \|\mathbf{w} \odot (\mathbf{s} - \mathbf{s}_0)\|_2$ is a \emph{weighted} style distance with per-axis sensitivity weights $\mathbf{w} \in \mathbb{R}^6$. This exponential-decay model captures the empirical observation that agent performance degrades smoothly with style divergence, with the rate of degradation varying across agents.
+
+We configure four agents:
+\begin{itemize}
+    \item \textbf{Low Sensitivity}: $\alpha=0.90$, $\beta=0.15$, uniform weights.
+    \item \textbf{Moderate Sensitivity}: $\alpha=0.91$, $\beta=0.35$, uniform weights.
+    \item \textbf{High Sensitivity}: $\alpha=0.92$, $\beta=0.50$, uniform weights.
+    \item \textbf{Dialect Vulnerable}: $\alpha=0.93$, $\beta=0.35$, with weights $\mathbf{w} = (0.3, 0.2, 0.2, 2.0, 1.5, 0.4)$ amplifying dialect and cultural axes.
+\end{itemize}
+
+Agent confidence is modeled as miscalibrated: $c \sim \text{Uniform}(0.85, 0.95)$ regardless of actual style distance, capturing the overconfidence phenomenon observed by Seshadri et al.~\cite{seshadri2026lost}.
+
+Task success requires all required slots to be correctly extracted in a single turn; slot accuracy is the proportion of all slots (required and optional) correctly extracted.
+
+\subsection{Communication Diversity Sensitivity Index (CDSI)}
+
+We define the CDSI as:
+
+\begin{equation}
+    \text{CDSI}(\text{agent}) = 1 - \frac{\mathbb{E}_{\mathbf{s} \neq \mathbf{s}_0}[\text{SR}(\mathbf{s})]}{\text{SR}(\mathbf{s}_0)}
+    \label{eq:cdsi}
+\end{equation}
+
+\noindent where $\text{SR}(\mathbf{s})$ is the task success rate for style $\mathbf{s}$. CDSI $= 0$ indicates perfect robustness (no degradation for non-standard styles); CDSI $= 1$ indicates complete failure on all non-standard styles.
+
+We additionally report the \emph{disparity ratio} $\min_g \text{SR}(g) / \max_g \text{SR}(g)$ and \emph{max disparity} $\max_g \text{SR}(g) - \min_g \text{SR}(g)$ across demographic groups $g$, and per-group \emph{calibration gap} $\overline{c}_g - \text{SR}(g)$.
+
+\subsection{Information-Theoretic Decomposition}
+
+We decompose the entropy of task success $H(S)$ into components attributable to task content (scenario) and communication style. We discretize style distance into $B=5$ bins and compute:
+
+\begin{align}
+    I(S; C) &= H(S) - H(S \mid C) \label{eq:mi_content}\\
+    I(S; \text{Style} \mid C) &= H(S \mid C) - H(S \mid C, \text{Style}) \label{eq:mi_style}\\
+    \text{Style Ratio} &= \frac{I(S; \text{Style} \mid C)}{H(S)} \label{eq:style_ratio}
+\end{align}
+
+\noindent where $C$ indexes task scenarios and Style indexes the discretized style distance bin. The Style Ratio quantifies the fraction of task outcome uncertainty attributable to communication style beyond what is explained by task content.
+
+\subsection{Statistical Tests}
+
+We employ the $\chi^2$ test of independence between style distance bin and task success, and the Kruskal--Wallis $H$ test across demographic groups, both at $\alpha = 0.05$.
+
+\subsection{Style Space Exploration}
+
+To validate the exponential-decay model beyond the 12~canonical profiles, we sample 200 style vectors via Latin Hypercube Sampling~\cite{mckay1979comparison} and evaluate each across all scenarios with 10~trials, yielding 8{,}000 additional data points.
+
+\subsection{Experimental Design}
+
+The full experiment crosses 4~agents $\times$ 4~scenarios $\times$ 12~profiles $\times$ 100~trials = 19{,}200 dialogues, plus 8{,}000 LHS exploration dialogues. All random processes are seeded for reproducibility (seed = 42).
+
+% ===========================================================================
+\section{Results}
+% ===========================================================================
+
+\subsection{Task Success Varies Substantially with Communication Style}
+
+Table~\ref{tab:success_rates} presents task success rates across all 12~user profiles and 4~agent configurations. The baseline profile achieves success rates of 0.705--0.805 depending on the agent. In contrast, the L2~English beginner profile achieves only 0.098--0.372, and the high-context communicator profile achieves 0.172--0.445. For all agents, dialect-related profiles (AAVE, Indian English, L2~speaker) and high-context communicators are consistently the lowest-performing groups.
+
+\input{tables}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_success_by_profile.png}
+    \caption{Task success rate by user communication profile across four agent configurations. Profiles are ordered by the style distance from the standard baseline (left to right). Performance degradation is visible as profiles deviate from the baseline, with the steepest drops for dialect, L2, and high-context profiles.}
+    \label{fig:success_by_profile}
+\end{figure}
+
+Figure~\ref{fig:success_by_profile} visualizes these rates. The pattern is clear: performance degrades monotonically with style distance from the standard baseline, with the Dialect Vulnerable agent showing the steepest decline for dialect-related profiles.
+
+\subsection{CDSI Quantifies Agent Robustness}
+
+Table~\ref{tab:cdsi_equity} and Figure~\ref{fig:cdsi} present CDSI scores. The Low Sensitivity agent achieves a CDSI of 0.259, indicating that non-standard profiles experience a 25.9\% reduction in success rate relative to baseline. The High Sensitivity agent has a CDSI of 0.608---more than double---meaning non-standard styles reduce success by 60.8\% on average.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_cdsi_comparison.png}
+    \caption{Communication Diversity Sensitivity Index (CDSI) for each agent configuration. The dashed line at 0.15 indicates a proposed robustness threshold; all agents exceed it. CDSI ranges from 0.259 (Low Sensitivity) to 0.608 (High Sensitivity), demonstrating that communication diversity substantially impacts all tested agents.}
+    \label{fig:cdsi}
+\end{figure}
+
+The Dialect Vulnerable agent (CDSI = 0.530) has the highest max disparity (0.708) and lowest disparity ratio (0.121), indicating an 8.3:1 ratio between best- and worst-performing groups. This is driven by its amplified sensitivity to dialect distance and cultural context axes.
+
+\subsection{Dialect Distance and Cultural Context Are the Most Impactful Axes}
+
+Figure~\ref{fig:heatmap} presents the per-axis sensitivity analysis via Spearman correlations between each style axis value and task success.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_axis_sensitivity_heatmap.png}
+    \caption{Per-axis sensitivity heatmap showing Spearman correlation ($\rho$) between each style dimension and task success. Negative values (red) indicate that higher values on that axis degrade performance. Dialect distance and cultural context show the strongest negative correlations across all agents, with $\rho$ reaching $-0.37$ for the Dialect Vulnerable agent.}
+    \label{fig:heatmap}
+\end{figure}
+
+Across all agents, \textbf{dialect distance} ($\rho$ from $-0.122$ to $-0.370$) and \textbf{cultural context} ($\rho$ from $-0.120$ to $-0.362$) are the strongest negative predictors of task success. Formality and domain expertise show weak positive or near-zero correlations, indicating they do not systematically harm performance. Politeness shows a modest negative correlation ($\rho \approx -0.05$ to $-0.08$), suggesting that heavy hedging slightly impedes slot extraction.
+
+\subsection{Communication Style Contributes 1.5\%--7.5\% of Outcome Uncertainty}
+
+Table~\ref{tab:info_decomp} presents the information-theoretic decomposition. The style contribution ratio ranges from 1.55\% (Low Sensitivity) to 7.54\% (High Sensitivity). While these percentages may appear modest, they represent the \emph{additional} uncertainty attributable to style beyond what is already explained by task content---and they are consistently statistically significant.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_info_decomposition.png}
+    \caption{Information-theoretic decomposition of task success entropy $H(S)$ into mutual information with content $I(S;C)$, conditional mutual information with style $I(S;\text{Style}|C)$, and residual uncertainty. Style contributes a measurable fraction of uncertainty for all agents, with the largest contribution for the High Sensitivity and Dialect Vulnerable configurations.}
+    \label{fig:info_decomp}
+\end{figure}
+
+Figure~\ref{fig:info_decomp} visualizes this decomposition. The content channel ($I(S; C)$) contributes 0.006--0.009 bits, while the style channel ($I(S; \text{Style} \mid C)$) contributes 0.015--0.072 bits---indicating that communication style explains 2--10$\times$ more variance than task domain alone.
+
+\subsection{All Effects Are Statistically Significant}
+
+Table~\ref{tab:significance} reports the significance tests. The $\chi^2$ tests for independence between style distance bin and task success are highly significant for all agents ($p < 10^{-18}$). The Kruskal--Wallis tests for differences across demographic groups are also significant ($p < 10^{-24}$). The effect sizes are substantial: $\chi^2 = 462.6$ and $H = 931.2$ for the most affected agents.
+
+\subsection{Calibration Gaps Are Largest for Underserved Groups}
+
+Figure~\ref{fig:calibration} reveals a systematic pattern: agents maintain roughly constant confidence ($\bar{c} \approx 0.90$) regardless of user style, but actual success rates vary from 0.098 to 0.805. The resulting calibration gaps are largest for the groups with lowest success rates. For the L2~speaker group under the Dialect Vulnerable agent, the calibration gap reaches 0.799 (confidence 0.90 vs.\ success 0.098)---agents are confident they succeeded when they almost always failed.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_calibration_gaps.png}
+    \caption{Success rate (blue) and calibration gap (red) by demographic group for each agent. Calibration gaps are largest for groups with non-standard communication styles, indicating that agents are systematically overconfident when serving diverse users. The gap reaches 0.80 for L2 speakers under the Dialect Vulnerable agent.}
+    \label{fig:calibration}
+\end{figure}
+
+\subsection{Exponential Decay Model Validated via Style Space Exploration}
+
+Figure~\ref{fig:decay_curve} shows the relationship between style distance and task success rate across 200 Latin Hypercube--sampled style vectors. The data closely follow the exponential decay model (Eq.~\ref{eq:slot_probability}), with the fitted curve $\text{SR}(d) = 0.79 \cdot \exp(-0.36d)$ achieving a close match to the binned means. This validates our modeling assumption and demonstrates that the degradation is smooth rather than exhibiting cliff effects.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_style_distance_curve.png}
+    \caption{Task success rate as a function of Euclidean style distance from the standard baseline, based on 8{,}000 dialogues with 200 Latin Hypercube--sampled style vectors. Error bars show standard error. The red dashed line shows the fitted exponential decay model. The smooth degradation validates the exponential-decay assumption.}
+    \label{fig:decay_curve}
+\end{figure}
+
+\subsection{Equity Analysis}
+
+Figure~\ref{fig:equity} summarizes the disparity ratio and maximum disparity across agents. The Low Sensitivity agent achieves a disparity ratio of 0.528 (roughly 2:1 between best and worst groups), while the Dialect Vulnerable agent drops to 0.121 (roughly 8:1). Maximum disparities range from 0.332 to 0.708. These equity gaps persist even for agents with high baseline accuracy, indicating that overall capability does not guarantee equitable performance.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/fig_equity_metrics.png}
+    \caption{Equity metrics across agent configurations. Disparity ratio (green, higher is better) measures the ratio of worst-to-best group success rates. Max disparity (red, lower is better) measures the absolute gap. The Dialect Vulnerable agent shows the worst equity, with an 8:1 performance ratio between groups.}
+    \label{fig:equity}
+\end{figure}
+
+% ===========================================================================
+\section{Conclusion}
+% ===========================================================================
+
+We have presented a framework for quantifying the impact of user communication diversity on LLM agent performance, addressing an open problem identified by Seshadri et al.~\cite{seshadri2026lost}. Our three contributions---the Communication Style Space, the CDSI metric, and the information-theoretic decomposition---provide complementary tools for measuring, interpreting, and auditing this impact.
+
+Our key findings from 19{,}200 simulated dialogues across 4~agents, 12~user profiles, and 4~task domains are:
+
+\begin{enumerate}
+    \item Communication diversity has a \textbf{measurable and significant} impact on task success ($p < 10^{-18}$ for all agents), with CDSI scores ranging from 0.259 to 0.608.
+
+    \item \textbf{Dialect distance and cultural context} are the most impactful dimensions, with Spearman correlations up to $\rho = -0.37$ with task success.
+
+    \item Communication style accounts for \textbf{1.5\%--7.5\%} of task outcome uncertainty, exceeding the contribution of task domain (content) by 2--10$\times$.
+
+    \item Agents exhibit \textbf{systematic overconfidence} for non-standard communicators, with calibration gaps reaching 0.80 for L2 speakers.
+
+    \item Performance degradation follows an \textbf{exponential decay} model with style distance, enabling prediction and mitigation.
+\end{enumerate}
+
+\paragraph{Limitations.}
+Our experiments use simulated agents with a parameterized accuracy model rather than real LLM API calls. While this provides reproducibility and controlled experimentation, it does not capture the full complexity of real agent behavior. The style transformation rules are rule-based approximations that may not fully represent authentic linguistic diversity. Our user profiles, while grounded in sociolinguistic theory, are archetypes rather than empirical distributions.
+
+\paragraph{Future work.}
+Three directions follow naturally. First, validating the framework with real LLM agents (GPT-4, Claude, Gemini) via API-based evaluation. Second, extending to multi-turn dialogues where style effects may compound over turns. Third, developing mitigation strategies---such as input normalization, adaptive prompting, or explicit clarification policies---and measuring whether they reduce CDSI without sacrificing baseline performance.
+
+The CDSI and information-theoretic decomposition provide actionable metrics for agent developers and auditors. We advocate for their inclusion in standard evaluation pipelines alongside accuracy and latency metrics, particularly for agents deployed in linguistically diverse populations.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

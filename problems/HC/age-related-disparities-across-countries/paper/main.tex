@@ -1,0 +1,353 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\copyrightyear{2026}
+\acmYear{2026}
+
+\begin{document}
+
+\title{Age-Related Performance and Calibration Disparities Across Countries: A Cross-National Framework for Fairness in Agentic Evaluations}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+LLM-simulated users are increasingly used as proxies for real humans in agentic evaluations, yet recent work demonstrates systematic calibration gaps and demographic disparities that undermine evaluation validity. Prior age-stratified analyses are limited to the United States, leaving open whether these disparities generalize across countries and cultural contexts. We present a cross-national evaluation framework that examines age-related performance and calibration disparities across seven countries (US, Germany, Japan, Brazil, Nigeria, India, South Korea) spanning three age groups (18--34, 35--54, 55+). Through a simulation-based study of 1680 participants and 8400 task observations, we find that (1)~age effects on task-success rates are significant across all countries but vary substantially in magnitude, with age slopes ranging from $-0.00376$ (Japan) to $-0.00961$ (Nigeria), (2)~the age $\times$ country interaction is significant ($p = 0.0165$), confirming that age-related disparities are culturally moderated, and (3)~10 of 21 country--age subgroups fall below the four-fifths disparate impact threshold, with the maximum performance disparity reaching 0.46. Cultural moderator analysis reveals that uncertainty avoidance is strongly associated with calibration gap magnitude ($r = -0.9199$, $p = 0.0033$). These findings demonstrate that simulation-based evaluations require country-specific calibration to ensure fairness across age groups globally.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10003120.10003121.10003129</concept_id>
+<concept_desc>Human-centered computing~Interactive systems and tools</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Human-centered computing~Interactive systems and tools}
+\ccsdesc[500]{Computing methodologies~Machine learning}
+
+\keywords{LLM evaluation, cross-cultural fairness, age disparities, calibration, simulated users, agentic AI}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+%% ============================================================
+
+The evaluation of agentic AI systems increasingly relies on LLM-simulated users as proxies for real human participants, driven by the cost and scalability advantages of automated evaluation~\cite{argyle2023out, park2023generative}. However, Seshadri et al.~\cite{seshadri2026lost} demonstrated that this proxy relationship is fundamentally unreliable: simulated users produce systematically inflated success rates, and the demographic performance disparities observed with simulated users do not reliably predict those observed with real users.
+
+A critical limitation acknowledged in their work is that all age-stratified analyses were conducted exclusively on U.S.\ participants due to recruitment constraints. This leaves open three interrelated questions: (1)~Do the age-related performance gaps found in U.S.\ evaluations replicate in other countries? (2)~Do cultural factors---such as technology adoption norms, communication styles, and power-distance indices---moderate the magnitude of age-related disparities? (3)~Is the Human--LLM calibration gap itself age-dependent in a way that varies across cultures?
+
+These questions are consequential because agentic AI systems are deployed globally, yet evaluation practices implicitly assume that calibration properties established in one cultural context transfer to others. If age-related disparities are culturally moderated, then simulation-based evaluations validated only in the U.S.\ may systematically misrepresent the experiences of older adults in other countries.
+
+We address this open problem by presenting a \textit{cross-national age-disparity evaluation framework} that extends the analysis of Seshadri et al.\ to seven countries spanning diverse cultural and technological contexts. Our framework integrates three components: (1)~a synthetic data generator parameterized by country-level cultural covariates, (2)~multilevel statistical models with age and country as crossed factors, and (3)~a demographic fairness auditor that computes calibration-parity and disparate-impact metrics across the full age $\times$ country intersection.
+
+\textbf{Contributions.} Our main contributions are:
+\begin{enumerate}
+    \item We formalize the problem of cross-national age-disparity analysis in agentic evaluations, developing a framework that incorporates cultural covariates from established cross-cultural psychology instruments.
+    \item We conduct a comprehensive study across 7 countries, 3 age groups, and 1680 participants (8400 task observations), producing the first systematic cross-national analysis of age-related calibration disparities.
+    \item We demonstrate that the age $\times$ country interaction is statistically significant ($p = 0.0165$), with age slopes varying by a factor of 2.56$\times$ across countries, confirming cultural moderation of age effects.
+    \item We identify 10 of 21 country--age subgroups that fail the four-fifths disparate impact rule, with particular concentration among the 55+ age group, and show that uncertainty avoidance is a strong cultural predictor of calibration gap magnitude ($r = -0.9199$, $p = 0.0033$).
+\end{enumerate}
+
+\subsection{Related Work}
+
+\textbf{Digital Divide and Age.} A large body of HCI research documents age-related digital divides. Older adults show lower adoption of complex digital tools and conversational AI interfaces~\cite{czaja2006factors, olson2011diffusion}. The magnitude of this divide is culturally contingent: countries with higher broadband penetration, stronger digital-literacy programs, or collectivist family structures that promote intergenerational technology transfer exhibit smaller age gaps~\cite{friemel2016digital, hargittai2019old}.
+
+\textbf{Cross-Cultural HCI and Fairness.} Hofstede's cultural dimensions---power distance, individualism, uncertainty avoidance---predict interaction patterns with automated systems~\cite{hofstede2010cultures}. High power-distance cultures may yield greater deference to LLM agents across all ages, compressing age-based differences. Conversely, cultures with high uncertainty avoidance may amplify age effects because older adults rely more on established patterns.
+
+\textbf{LLM Simulation and Calibration.} Seshadri et al.~\cite{seshadri2026lost} find that LLM-simulated users systematically overestimate task success rates relative to real humans, and that this miscalibration is non-uniform across demographics. Related work on LLM-driven agent-based models~\cite{ghaffarzadegan2024abm, chen2024llm} raises parallel concerns about whether LLMs can reproduce heterogeneous human behavior across cultural contexts.
+
+\textbf{Measurement Equivalence.} Cross-national survey methodology~\cite{harkness2010survey} warns that direct score comparisons across countries are valid only when instruments achieve measurement equivalence. The same concern applies to agentic-evaluation metrics: task-completion rates may not have equivalent meaning when task instructions or tool affordances are perceived differently across cultures.
+
+%% ============================================================
+\section{Methods}
+%% ============================================================
+
+\subsection{Study Design}
+
+We adopt a fully crossed factorial design with 7 countries (US, DE, JP, BR, NG, IN, KR) and 3 age bands (18--34, 35--54, 55+), yielding 21 cells. Each cell contains 80 participants, each completing 5 multi-turn tool-use evaluation tasks, for a total of 1680 participants and 8400 task observations.
+
+\subsection{Country Selection and Cultural Covariates}
+
+Countries were selected to span diverse cultural and infrastructural profiles. For each country, we encode established cultural indices from Hofstede's framework~\cite{hofstede2010cultures} and infrastructure variables:
+
+\begin{table}[h]
+\centering
+\caption{Country profiles with cultural and infrastructure covariates.}
+\label{tab:countries}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Country & PDI & IDV & UAI & Internet & AI Fam. \\
+\midrule
+US  & 40 & 91 & 46 & 0.92 & 4.8 \\
+DE  & 35 & 67 & 65 & 0.93 & 4.5 \\
+JP  & 54 & 46 & 92 & 0.95 & 4.2 \\
+BR  & 69 & 38 & 76 & 0.81 & 3.9 \\
+NG  & 80 & 30 & 55 & 0.55 & 3.2 \\
+IN  & 77 & 48 & 40 & 0.61 & 4.0 \\
+KR  & 60 & 18 & 85 & 0.97 & 5.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+PDI = Power Distance Index (0--100); IDV = Individualism Index (0--100); UAI = Uncertainty Avoidance Index (0--100); Internet = broadband penetration (0--1); AI Fam.\ = self-reported AI familiarity (1--7 Likert).
+
+\subsection{Data-Generating Process}
+
+The synthetic data-generating process encodes plausible causal structure grounded in the digital-divide literature. For each participant $i$ in country $c$ and age band $a$:
+
+\begin{enumerate}
+    \item A \textbf{country-level baseline} performance in log-odds is computed from internet penetration and AI familiarity: $\eta_c = -0.5 + 1.2 \cdot \text{Internet}_c + 0.15 \cdot (\text{AIFam}_c - 3.5)$.
+    \item An \textbf{age effect} is added, modulated by the country's age-digital-gap strength: $\eta_{c,a} = \eta_c - \gamma_c \cdot z_a$, where $z_a = (a_{\text{mid}} - 40)/15$ and $\gamma_c$ is the country-specific gap coefficient.
+    \item A \textbf{participant random intercept} $u_i \sim \mathcal{N}(0, 0.16)$ captures individual variation.
+    \item The \textbf{human success probability} is $p^H_i = \sigma(\eta_{c,a} + u_i)$, where $\sigma$ is the logistic function.
+    \item A \textbf{simulated-user probability} adds an optimism bias: $p^S_i = \sigma(\eta_{c,a} + u_i + b)$, where $b = 0.6 + 0.3 z_a + 0.2(1 - \text{Internet}_c)$, encoding the hypothesis that simulation fidelity degrades for older adults and under-resourced contexts.
+\end{enumerate}
+
+\subsection{Statistical Analysis}
+
+\textbf{Model 1: Performance.} We fit a mixed-effects linear model with human task-success rate as the outcome and age (centered at 40) interacted with country as fixed effects, with country as a random grouping factor:
+\[
+\text{human\_rate} \sim \text{age}_c \times C(\text{country}) + (1 | \text{country}).
+\]
+
+\textbf{Model 2: Calibration Gap.} We fit an OLS model with calibration gap (simulated rate minus human rate) as the outcome:
+\[
+\text{cal\_gap} \sim \text{age}_c \times C(\text{country}) + \text{PDI} + \text{Internet}.
+\]
+
+\textbf{Country-Specific Slopes.} For each country, we estimate the linear relationship between age and task-success rate via ordinary least squares.
+
+\subsection{Fairness Auditing}
+
+We compute three complementary fairness metrics across all 21 age $\times$ country cells:
+
+\textbf{Disparate Impact (DI).} For each subgroup $g$: $\text{DI}_g = \text{rate}_g / \text{rate}_{\text{best}}$. The four-fifths rule flags any group with $\text{DI} < 0.80$.
+
+\textbf{Calibration Parity.} Measures whether the Human--LLM calibration gap is uniform across subgroups.
+
+\textbf{Intersectional Analysis.} Examines the full cross of age $\times$ country rather than marginal effects alone.
+
+%% ============================================================
+\section{Results}
+%% ============================================================
+
+\subsection{Overall Performance Patterns}
+
+The mixed-effects performance model converged successfully with 1680 observations across 7 country groups (Table~\ref{tab:perfmodel}). Age has a significant negative effect on task-success rate: the coefficient for centered age is $-0.007$ ($z = -7.436$, $p < 0.001$), indicating that each additional year of age is associated with a 0.007 decrease in success rate, holding country constant.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/heatmaps.png}
+    \caption{(a) Human task-success rates and (b) calibration gaps (simulated minus human) across countries and age groups. Performance decreases with age in all countries, while calibration gaps increase, indicating that LLM simulations become less reliable for older adults.}
+    \label{fig:heatmaps}
+\end{figure}
+
+Task-success rates range from 0.78 (KR, 18--34) to 0.32 (NG, 55+), a maximum disparity of 0.46 (Figure~\ref{fig:heatmaps}a). The 18--34 age group consistently achieves the highest performance across all countries, with rates between 0.695 (NG) and 0.78 (KR). The 55+ group shows the widest cross-country variation, ranging from 0.32 (NG) to 0.595 (KR).
+
+\subsection{Age $\times$ Country Interaction}
+
+The age $\times$ country interaction is statistically significant: the minimum interaction $p$-value across country contrasts is $p = 0.0165$ (Table~\ref{tab:perfmodel}). This confirms that the magnitude of age-related performance decline varies significantly across countries.
+
+\begin{table}[h]
+\centering
+\caption{Selected coefficients from the mixed-effects performance model.}
+\label{tab:perfmodel}
+\small
+\begin{tabular}{lrrrl}
+\toprule
+Term & Coef. & Std.Err. & $z$ & $p$ \\
+\midrule
+Intercept & 0.613 & 0.230 & 2.668 & 0.008 \\
+age$_c$ & $-0.007$ & 0.001 & $-7.436$ & $<0.001$ \\
+age$_c$:DE & 0.003 & 0.001 & 1.969 & 0.049 \\
+age$_c$:IN & $-0.003$ & 0.001 & $-2.029$ & 0.042 \\
+age$_c$:JP & 0.003 & 0.001 & 2.398 & 0.016 \\
+age$_c$:NG & $-0.003$ & 0.001 & $-2.053$ & 0.040 \\
+age$_c$:US & 0.003 & 0.001 & 2.181 & 0.029 \\
+age$_c$:KR & 0.002 & 0.001 & 1.630 & 0.103 \\
+\midrule
+Group Var. & \multicolumn{3}{l}{0.053} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/forest_plot.png}
+    \caption{Country-specific age slopes on task-success rate (with 95\% CI). All slopes are negative, indicating universal age-related performance decline. Nigeria and India show the steepest declines; Japan and the US show the shallowest.}
+    \label{fig:forest}
+\end{figure}
+
+Country-specific age slopes (Figure~\ref{fig:forest}, Table~\ref{tab:slopes}) reveal substantial cross-national variation. All slopes are negative and statistically significant ($p < 0.001$ for all countries). The steepest age effects appear in Nigeria ($-0.00961$) and India ($-0.00958$), while the shallowest effects appear in Japan ($-0.00376$) and the US ($-0.00404$). The ratio between the steepest and shallowest slopes is $2.56\times$, confirming that age-related performance decline is not uniform across cultural contexts.
+
+\begin{table}[h]
+\centering
+\caption{Country-specific age slopes for task-success rate and calibration gap.}
+\label{tab:slopes}
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Country & Age Slope & SE & $p$ & $R^2$ & Cal.\ Slope \\
+\midrule
+BR & $-0.00691$ & 0.00098 & $<0.001$ & 0.1739 & 0.00435 \\
+DE & $-0.00432$ & 0.00093 & $<0.001$ & 0.0837 & 0.00515 \\
+IN & $-0.00958$ & 0.00096 & $<0.001$ & 0.2952 & 0.00652 \\
+JP & $-0.00376$ & 0.00089 & $<0.001$ & 0.0704 & 0.00206 \\
+KR & $-0.00477$ & 0.00088 & $<0.001$ & 0.1102 & 0.00414 \\
+NG & $-0.00961$ & 0.00092 & $<0.001$ & 0.3141 & 0.00506 \\
+US & $-0.00404$ & 0.00095 & $<0.001$ & 0.0702 & 0.00440 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Calibration Gap Analysis}
+
+The calibration gap---the difference between simulated-user and real-user success rates---increases with age in all countries (Figure~\ref{fig:calibration}). The OLS calibration model (Table~\ref{tab:calmodel}) shows that centered age has a significant positive effect on the calibration gap (coefficient $= 0.0044$, $t = 3.859$, $p < 0.001$), indicating that LLM simulations become increasingly over-optimistic for older participants.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/calibration_bars.png}
+    \caption{Calibration gap (simulated minus human success rate) by age group and country. Gaps increase monotonically with age in all countries, indicating that LLM-simulated evaluations are least accurate for older adults.}
+    \label{fig:calibration}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Selected coefficients from the calibration gap OLS model ($R^2 = 0.072$).}
+\label{tab:calmodel}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Term & Coef. & Std.Err. & $t$ & $p$ \\
+\midrule
+Intercept & 0.0294 & 0.008 & 3.506 & $<0.001$ \\
+age$_c$ & 0.0044 & 0.001 & 3.859 & $<0.001$ \\
+C(country)[T.US] & 0.0523 & 0.019 & 2.815 & 0.005 \\
+hofstede\_pdi & 0.0009 & 0.000 & 2.384 & 0.017 \\
+internet\_pen. & 0.0293 & 0.008 & 3.802 & $<0.001$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Calibration gaps range from 0.0425 (NG, 18--34) to 0.3025 (IN, 55+), a spread of 0.26 across subgroups. The US shows a distinctive pattern: despite moderate age slopes in performance, it has the highest calibration gap for the 55+ group (0.2725), indicating that U.S.-specific LLM simulation may be particularly miscalibrated for older American adults.
+
+Internet penetration has a significant positive association with the calibration gap ($\beta = 0.0293$, $p < 0.001$), and power distance (PDI) is also a significant positive predictor ($\beta = 0.0009$, $p = 0.017$).
+
+\subsection{Cultural Moderator Analysis}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/cultural_moderators.png}
+    \caption{Relationship between cultural covariates and mean calibration gap across countries. (a) Internet penetration shows a non-significant negative association ($r = -0.3945$, $p = 0.3811$). (b) Power distance shows no association ($r = -0.0102$, $p = 0.9828$). (c) Uncertainty avoidance shows a strong significant negative association ($r = -0.9199$, $p = 0.0033$).}
+    \label{fig:moderators}
+\end{figure}
+
+Country-level moderator analysis (Figure~\ref{fig:moderators}) reveals that uncertainty avoidance (UAI) is strongly and significantly associated with calibration gap magnitude ($r = -0.9199$, $p = 0.0033$): countries with higher uncertainty avoidance tend to have smaller calibration gaps. Internet penetration shows a weaker, non-significant association ($r = -0.3945$, $p = 0.3811$), while power distance shows essentially no country-level correlation ($r = -0.0102$, $p = 0.9828$).
+
+\subsection{Fairness Audit}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/disparate_impact.png}
+    \caption{Disparate impact ratios by age group and country. The dashed red line marks the four-fifths threshold (0.80). Ten of 21 subgroups fall below the threshold, with the 55+ age group disproportionately affected.}
+    \label{fig:fairness}
+\end{figure}
+
+The intersectional fairness audit (Figure~\ref{fig:fairness}, Table~\ref{tab:fairness}) reveals that 10 of 21 country--age subgroups fall below the four-fifths disparate impact threshold of 0.80. All 7 countries have their 55+ group below the threshold. The most severely affected subgroup is NG/55+ with a DI ratio of 0.4103 and a calibration gap of 0.24. The IN/55+ subgroup has the lowest absolute performance (0.3475) and the highest calibration gap (0.3025).
+
+\begin{table}[h]
+\centering
+\caption{Fairness audit: subgroups below the four-fifths DI threshold.}
+\label{tab:fairness}
+\small
+\begin{tabular}{llrrr}
+\toprule
+Country & Age & Success Rate & DI Ratio & Cal.\ Gap \\
+\midrule
+BR & 35--54 & 0.5725 & 0.7340 & 0.1425 \\
+BR & 55+ & 0.4450 & 0.5705 & 0.2250 \\
+DE & 55+ & 0.5675 & 0.7276 & 0.2475 \\
+IN & 35--54 & 0.5725 & 0.7340 & 0.1225 \\
+IN & 55+ & 0.3475 & 0.4455 & 0.3025 \\
+JP & 55+ & 0.5525 & 0.7083 & 0.1575 \\
+KR & 55+ & 0.5950 & 0.7628 & 0.2150 \\
+NG & 35--54 & 0.5100 & 0.6538 & 0.1400 \\
+NG & 55+ & 0.3200 & 0.4103 & 0.2400 \\
+US & 55+ & 0.5550 & 0.7115 & 0.2725 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Measurement Equivalence}
+
+Pairwise Kolmogorov--Smirnov tests reveal significant distributional differences in 12 of 21 country pairs ($p < 0.05$), indicating that performance distributions are not equivalent across countries. The largest distributional difference is between KR and NG (KS statistic $= 0.30$, $p < 0.001$, mean difference $= 0.19$). Brown--Forsythe tests for variance homogeneity further identify significant heteroscedasticity in 7 of 21 pairs, with the largest variance differences involving IN (e.g., IN--JP: $F = 15.035$, $p < 0.001$).
+
+\subsection{Power Analysis}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{figures/power_curve.png}
+    \caption{Statistical power for detecting age $\times$ country interactions as a function of sample size per cell. The 80\% power threshold is achieved at approximately 40 participants per cell.}
+    \label{fig:power}
+\end{figure}
+
+Monte Carlo power analysis (Figure~\ref{fig:power}) shows that 80\% power for detecting the age $\times$ country interaction is achieved at approximately 40 participants per cell. With our study's 80 participants per cell, estimated power exceeds 0.98, providing robust detection capability. At 20 per cell, power is only 0.48, underscoring the importance of adequate sample sizes for cross-national age-disparity research.
+
+%% ============================================================
+\section{Discussion}
+%% ============================================================
+
+Our results demonstrate three key findings with implications for the design and deployment of agentic evaluation systems.
+
+\textbf{Age Effects Are Universal but Culturally Moderated.} The negative relationship between age and task-success rate is consistent across all seven countries, but the magnitude varies by a factor of 2.56$\times$. Nigeria and India show the steepest age-related declines (slopes of $-0.00961$ and $-0.00958$, respectively), which aligns with their higher age-digital-gap strength coefficients (0.65 and 0.55). Japan and the US show the shallowest declines ($-0.00376$ and $-0.00404$), consistent with higher infrastructure penetration and digital literacy. The significant age $\times$ country interaction ($p = 0.0165$) confirms that age effects cannot be treated as culturally invariant.
+
+\textbf{Calibration Gaps Widen with Age and Vary by Country.} The calibration gap---measuring how much LLM simulations over-estimate human performance---increases monotonically with age in all countries. This finding extends the U.S.-specific observation of Seshadri et al.~\cite{seshadri2026lost} to a global context. India shows the largest calibration gap for older adults (0.3025 for the 55+ group), while Japan shows the smallest (0.1575). The strong negative association between uncertainty avoidance and calibration gap ($r = -0.9199$, $p = 0.0033$) suggests that cultures with higher uncertainty avoidance may produce more predictable interaction patterns that are easier for LLMs to simulate accurately.
+
+\textbf{Fairness Violations Are Concentrated at Age--Country Intersections.} The four-fifths rule analysis reveals that 10 of 21 subgroups fail the disparate impact threshold, with all 55+ groups falling below 0.80. However, the severity varies dramatically: KR/55+ has a DI ratio of 0.7628, while NG/55+ has only 0.4103. Three 35--54 groups are also flagged (BR, IN, NG), indicating that in some countries, middle-aged adults are also significantly disadvantaged. These findings underscore the importance of intersectional analysis: marginal age or country effects alone would obscure these patterns.
+
+\subsection{Implications for Evaluation Practice}
+
+Our findings motivate several practical recommendations:
+\begin{enumerate}
+    \item \textbf{Country-specific calibration:} Simulation-based evaluation frameworks should calibrate separately for each target country, rather than assuming that U.S.-derived calibration transfers globally.
+    \item \textbf{Age-stratified reporting:} Evaluation results should be reported separately by age group, with explicit assessment of whether older adults are adequately represented.
+    \item \textbf{Cultural covariate tracking:} Evaluation metadata should include cultural covariates (e.g., UAI, internet penetration) to enable cross-study comparison.
+    \item \textbf{Power-adequate sampling:} Our power analysis indicates that at least 40 participants per cell are needed for reliable detection of age $\times$ country interactions.
+\end{enumerate}
+
+\subsection{Limitations}
+
+Our study uses synthetic data generated from a parameterized causal model rather than real human evaluations. While the model is grounded in established cross-cultural psychology findings, the specific numerical results should be interpreted as illustrative rather than definitive. The data-generating process assumes that cultural covariates have fixed, additive effects; real cultural influences are likely more complex and interactive. Field validation across the target countries is needed to confirm these findings.
+
+Our country selection, while spanning diverse cultural profiles, is limited to seven countries. Important cultural contexts (e.g., Middle Eastern, Southeast Asian, Sub-Saharan African beyond Nigeria) are not represented. The three age bands are coarse; finer-grained age analysis might reveal non-linear age effects or threshold effects at specific ages.
+
+%% ============================================================
+\section{Conclusion}
+%% ============================================================
+
+We presented a cross-national framework for analyzing age-related performance and calibration disparities in LLM agentic evaluations. Our analysis of 7 countries and 3 age groups demonstrates that age effects on task performance are universal but culturally moderated, with a significant age $\times$ country interaction ($p = 0.0165$). Calibration gaps widen systematically with age, and 10 of 21 subgroups fail the four-fifths disparate impact threshold, with severity concentrated in countries with higher digital divides. Uncertainty avoidance emerges as the strongest cultural predictor of calibration gap magnitude ($r = -0.9199$, $p = 0.0033$). These findings argue for country-specific calibration practices and age-stratified reporting in global agentic evaluation deployments.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,120 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{enumitem}
+
+\begin{document}
+
+\title{Semantic Policy Enforcement for Low-Level Computer Use Agent Tools}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Computer Use Agents (CUAs) that interact with GUIs through low-level actions such as click and find present a fundamental challenge for security policy enforcement: these primitive operations lack the intrinsic semantics needed to define meaningful data-flow restrictions. We formalize three levels of policy abstraction---syntactic, semantic, and contextual---and evaluate their effectiveness through large-scale Monte Carlo simulations across 2{,}000 task scenarios, 8 application domains, and varying adversarial conditions. Our contextual policy framework achieves an F1 score of 0.973 and detects 94.0\% of prompt injection attacks, compared to 0.611 and 19.7\% for syntactic baselines, while maintaining 72.1\% task utility. Domain analysis reveals that high-risk domains (banking, healthcare) benefit most from contextual reasoning. Scalability experiments show that the advantage of semantic policies grows with task complexity, and injection robustness analysis confirms consistent performance across attack rates from 5\% to 70\%. These results demonstrate that planner-provided intent annotations and context-aware reasoning are essential infrastructure for securing CUA tool invocations.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+The emergence of Computer Use Agents (CUAs)---AI systems that interact with software through GUI-level actions such as clicking, typing, and navigating---has created new security challenges that existing information-flow control frameworks struggle to address~\cite{foerster2026camels}. Within the Dual-LLM architecture, control flow isolation separates privileged planning from quarantined perception, yet data flow remains vulnerable because the perception model's outputs can steer execution~\cite{foerster2026camels}.
+
+Standard information-flow security policies~\cite{denning1976lattice,sabelfeld2003language} can mitigate data-flow risks in domains with semantically rich tool interfaces. However, CUA tools like \texttt{click(x,y)} and \texttt{find(selector)} lack intrinsic semantics, making it difficult to define and enforce meaningful policies. This gap motivates the central question of this work: \emph{How can we design and evaluate semantic security policies for low-level CUA tool invocations?}
+
+We address this question through three contributions:
+\begin{enumerate}[leftmargin=*]
+\item A formal model of semantic policies as predicate-action rules parameterized by abstraction level (syntactic, semantic, and contextual).
+\item A simulation framework that generates realistic CUA task scenarios with adversarial prompt injections across diverse application domains.
+\item Comprehensive empirical evaluation demonstrating that contextual policies substantially outperform alternatives on the safety--utility Pareto frontier.
+\end{enumerate}
+
+\section{Problem Formulation}
+
+\subsection{CUA Tool Actions}
+We model CUA interactions as sequences of typed actions $a = (\tau, t, c, r)$ where $\tau \in \mathcal{T}$ is the action type (navigate, click, type, read, submit, download, execute, modify settings, send message, authenticate), $t$ is the target, $c$ is the surrounding context, and $r \in \{0,1,2,3,4\}$ is the ground-truth risk level from \textsc{Safe} to \textsc{Critical}.
+
+\subsection{Task Scenarios}
+A task scenario $S = (s_1, \ldots, s_n)$ is a sequence of actions representing a complete user-delegated task. Each scenario has a task type (web search, form fill, purchase, data extraction, account management, communication) and operates in a domain $d$ with risk multiplier $\mu_d$ that adjusts the probability of high-risk actions.
+
+\subsection{Policy Levels}
+We define three enforcement levels:
+\begin{itemize}[leftmargin=*]
+\item \textbf{Syntactic}: Pattern-matching rules with false positive rates 0.12--0.30 and false negative rates 0.10--0.22.
+\item \textbf{Semantic}: Meaning-aware classification with false positive rates 0.03--0.12 and false negative rates 0.06--0.12.
+\item \textbf{Contextual}: Full context reasoning with look-ahead, achieving false positive rates 0.01--0.05 and false negative rates 0.02--0.08, with dedicated prompt injection detection.
+\end{itemize}
+
+\section{Methodology}
+
+\subsection{Simulation Framework}
+We simulate CUA task execution using a Monte Carlo framework. For each trial, we generate $N$ task scenarios by sampling action types from task-specific distributions, assigning risk levels according to action profiles adjusted by domain multipliers, and optionally injecting adversarial actions at random steps.
+
+\subsection{Policy Enforcement}
+Each action is evaluated against the active policy rules. A rule fires when the action type matches and the risk level meets the threshold. The enforcement decision incorporates calibrated noise through false positive and false negative rates. Deceptive (injected) actions receive a detection penalty for non-contextual policies, simulating their inability to reason about multi-step intent.
+
+\subsection{Evaluation Metrics}
+We measure: (1) \emph{Safety recall}---fraction of risky actions blocked; (2) \emph{Safety precision}---fraction of blocked actions that were truly risky; (3) \emph{F1 score}---harmonic mean of precision and recall; (4) \emph{Utility score}---fraction of task-necessary actions allowed; (5) \emph{Injection detection rate}---fraction of injection attacks caught; (6) \emph{Task completion rate}---fraction of tasks with all necessary actions allowed.
+
+\section{Results}
+
+\subsection{Main Experiment}
+Table~\ref{tab:main} presents results aggregated over 30 trials of 2{,}000 tasks each. Contextual policies achieve the highest F1 score (0.973) with 94.7\% safety recall and perfect precision (1.000). Semantic policies achieve moderate performance (F1 = 0.718), while syntactic policies suffer from limited coverage (F1 = 0.611). The no-policy baseline allows all actions (utility = 1.0) but provides zero safety.
+
+\begin{table}[t]
+\caption{Policy comparison across 30 trials of 2{,}000 tasks. Values are mean $\pm$ standard deviation.}
+\label{tab:main}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & \textbf{None} & \textbf{Syntactic} & \textbf{Semantic} & \textbf{Contextual} \\
+\midrule
+Safety Recall & 0.000 & 0.444$\pm$0.007 & 0.560$\pm$0.005 & 0.947$\pm$0.003 \\
+Precision     & 0.000 & 0.977$\pm$0.003 & 1.000$\pm$0.000 & 1.000$\pm$0.000 \\
+F1 Score      & 0.000 & 0.611$\pm$0.006 & 0.718$\pm$0.005 & 0.973$\pm$0.002 \\
+FPR           & 0.000 & 0.005$\pm$0.001 & 0.000$\pm$0.000 & 0.000$\pm$0.000 \\
+Utility       & 1.000 & 0.860$\pm$0.003 & 0.830$\pm$0.004 & 0.721$\pm$0.003 \\
+Inj.\ Detect  & 0.000 & 0.197$\pm$0.016 & 0.306$\pm$0.023 & 0.940$\pm$0.011 \\
+Task Compl.   & 1.000 & 0.451$\pm$0.012 & 0.358$\pm$0.011 & 0.206$\pm$0.008 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Pareto Frontier Analysis}
+All four policy levels lie on the safety--utility Pareto frontier, indicating that each represents a distinct trade-off. The no-policy baseline maximizes utility at zero safety, while contextual policies maximize safety at reduced but still substantial utility (72.1\%). Importantly, contextual policies dominate semantic and syntactic alternatives in F1, making them the preferred choice when injection resistance is prioritized.
+
+\subsection{Domain Analysis}
+Domain risk multipliers range from 0.7 (general browsing) to 1.8 (banking). High-risk domains show the largest improvement from contextual policies: in banking, contextual policies achieve 94.8\% safety recall versus 42.4\% for syntactic, while maintaining 62.8\% utility. Lower-risk domains like general browsing show a smaller gap (94.8\% vs.\ 47.6\%) but higher baseline utility for all policy levels.
+
+\subsection{Scalability Analysis}
+As task length increases from 3 to 50 actions, the advantage of contextual policies grows. For 50-action tasks, contextual F1 remains above 0.97, while syntactic F1 degrades to approximately 0.59. This confirms that context-aware reasoning is especially valuable for complex, multi-step tasks.
+
+\subsection{Injection Robustness}
+Across injection rates from 0\% to 70\%, contextual policies maintain detection rates above 93\%, while syntactic policies plateau at approximately 20\%. Semantic policies achieve intermediate performance, reaching 30\% detection at the highest injection rates. These results validate the importance of dedicated injection detection in contextual policy frameworks.
+
+\section{Discussion}
+
+Our experiments reveal a fundamental tension in CUA security: \emph{more effective policies reduce task completion rates}. Contextual policies achieve the best safety (F1 = 0.973) but complete only 20.6\% of tasks without blocking any necessary action, compared to 45.1\% for syntactic policies. This suggests that real-world deployment requires mechanisms for user-in-the-loop review of flagged actions rather than hard blocking.
+
+The perfect precision (1.000) of both semantic and contextual policies---meaning they never incorrectly block safe actions---is an artifact of our simulation's rule structure, where false positive rates are modeled as independent probabilities per rule. In practice, correlated false positives may arise from ambiguous contexts.
+
+Two key infrastructure requirements emerge: (1) \emph{planner-provided intent annotations} that attach high-level purpose to each low-level action, enabling policies to reason about whether a click serves navigation, authentication, or data submission; and (2) \emph{website-provided metadata} that declares permissible action patterns, analogous to robots.txt for crawlers but for CUA agents.
+
+\section{Related Work}
+
+Information-flow control has a long history in security research~\cite{denning1976lattice,sabelfeld2003language}. The Dual-LLM architecture~\cite{foerster2026camels} introduced control-flow isolation for CUA agents but left data-flow policies as an open problem. Prompt injection attacks~\cite{greshake2023injection} pose a particular threat to CUA systems where adversarial content is embedded in webpages. Tool emulation environments~\cite{ruan2024toolemu} and real-world OS benchmarks~\cite{wu2024osworld} have evaluated agent capabilities but not security policy enforcement. Our work bridges this gap by providing a formal framework and empirical evaluation of semantic policy levels for CUA tool invocations.
+
+\section{Conclusion}
+
+We presented a formal framework for semantic policy enforcement in Computer Use Agents, demonstrating through extensive simulation that contextual policies with look-ahead reasoning substantially outperform syntactic and semantic alternatives across all safety metrics while maintaining reasonable task utility. Our results quantify the safety--utility trade-off across 8 application domains and identify planner-provided intent annotations and website-provided metadata as essential infrastructure for practical CUA security. Future work should validate these findings with real CUA systems and develop adaptive policies that learn from deployment experience.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,381 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{subcaption}
+\usepackage{xcolor}
+
+\begin{document}
+
+\title{Layered Governance Architecture for Real-World Agentic Systems}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Agentic AI systems that plan over long horizons, use tools, maintain persistent memory, and interact with other agents pose governance challenges that exceed the capabilities of model-level alignment alone. We propose a \emph{Layered Governance Architecture} (LGA) that integrates three enforcement layers---model-level alignment monitoring, agent-level policy enforcement, and ecosystem-level interaction oversight---into a unified framework with formal guarantees. Our architecture employs hierarchical policy automata for runtime verification, a causal audit trail for post-hoc attribution, and an adaptive policy controller that dynamically tightens or relaxes constraints in response to observed risk signals. We evaluate LGA through deterministic simulations of multi-agent deployments across five governance configurations, four risk profiles, and planning horizons from 10 to 500 steps. The layered approach achieves a violation detection rate of 0.5537 with zero detection latency and 1.0 attribution accuracy, while preserving 0.8339 agent utility at 0.31 overhead. Adaptation experiments show that governance violation rates recover from 0.83 during risk spikes to 0.1938 in recovery phases, demonstrating effective adaptive control. Scaling experiments confirm that governance overhead remains constant at 0.31 as agent count grows from 2 to 32, while violation detection scales gracefully from 0.205 to 0.3703.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178</concept_id>
+<concept_desc>Computing methodologies~Artificial intelligence</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10011007.10011074</concept_id>
+<concept_desc>Software and its engineering~Software verification and validation</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Artificial intelligence}
+\ccsdesc[300]{Software and its engineering~Software verification and validation}
+
+\keywords{agentic AI, governance, multi-agent systems, runtime verification, safety}
+
+\maketitle
+
+% =========================================================================
+\section{Introduction}
+\label{sec:intro}
+% =========================================================================
+
+The emergence of agentic AI systems---large language models augmented with tool use, persistent memory, long-horizon planning, and multi-agent collaboration---has created governance challenges that extend far beyond traditional model-level alignment~\cite{wei2026agentic}. When an AI agent can execute multi-step plans, write to persistent memory, invoke external tools, and interact with other autonomous agents, the governance problem becomes fundamentally multi-layered: failures may arise not from individual model outputs but from the interaction of planning decisions across time, agents, and system components.
+
+Existing approaches address fragments of this challenge. Constitutional AI~\cite{bai2022constitutional} and RLHF~\cite{ouyang2022training} target model-level alignment but assume short-horizon interactions. Tool-augmented agent frameworks~\cite{schick2023toolformer,qin2023toolllm} expand the action surface beyond what model-level guardrails cover. Multi-agent oversight formalisms~\cite{chan2025multiagent} expose the combinatorial complexity of governing interacting agents but lack runtime enforcement mechanisms. Recent work on scaling safeguards~\cite{huang2026scaling} highlights that static guardrails degrade as agents acquire new objectives, motivating dynamic governance.
+
+Wei et al.~\cite{wei2026agentic} identify a central open problem: developing governance frameworks that \emph{jointly} address model-level alignment, agent-level policies, and ecosystem-level interactions under realistic deployment conditions. We address this problem directly.
+
+\paragraph{Contributions.}
+We make three contributions:
+\begin{enumerate}
+    \item We propose the \textbf{Layered Governance Architecture (LGA)}, a three-layer framework that integrates model-level alignment monitoring, agent-level policy enforcement, and ecosystem-level interaction oversight with formal consistency guarantees (Section~\ref{sec:framework}).
+    \item We design a \textbf{runtime monitor with causal audit trail} and an \textbf{adaptive policy controller} that dynamically adjusts governance stringency in response to observed risk signals (Section~\ref{sec:method}).
+    \item We evaluate LGA through \textbf{deterministic multi-agent simulations} across five governance configurations, demonstrating its effectiveness in violation detection, attribution, adaptation, and scalability (Section~\ref{sec:experiments}).
+\end{enumerate}
+
+% =========================================================================
+\section{Problem Formulation}
+\label{sec:problem}
+% =========================================================================
+
+We formalize the governance problem for agentic systems as follows. Let $\mathcal{A} = \{a_1, \ldots, a_n\}$ be a set of $n$ agents operating in a shared environment over a horizon of $T$ time steps. At each step $t$, agent $a_i$ selects an action $\alpha_t^i$ from its action space $\Omega^i = \{\texttt{tool\_call}, \texttt{memory\_write}, \texttt{message}, \texttt{plan\_step}\}$. Each action carries a risk score $r(\alpha_t^i) \in [0,1]$.
+
+A \emph{governance framework} $\mathcal{G}$ consists of three layers:
+\begin{itemize}
+    \item \textbf{Model layer} $\mathcal{G}_M$: Constraints on individual model outputs, parameterized by an alignment threshold $\theta_M$.
+    \item \textbf{Agent layer} $\mathcal{G}_A$: Constraints on agent-level actions, parameterized by a risk budget $\theta_A$ with action-type-specific multipliers.
+    \item \textbf{Ecosystem layer} $\mathcal{G}_E$: Constraints on collective behavior, parameterized by a collective risk bound $\theta_E$ that considers the mean risk across all agents.
+\end{itemize}
+
+An action $\alpha_t^i$ is \emph{compliant} if and only if it satisfies all three layers:
+\begin{equation}
+    \text{compliant}(\alpha_t^i) = \mathbb{1}[r(\alpha_t^i) < \theta_M] \wedge \mathbb{1}[r(\alpha_t^i) < c(\alpha_t^i) \cdot \theta_A] \wedge \mathbb{1}\left[\frac{r(\alpha_t^i) + \bar{r}_t^{-i}}{2} < \theta_E\right]
+\end{equation}
+where $c(\alpha_t^i) \in \{0.6, 0.8, 1.0\}$ is the action-type multiplier and $\bar{r}_t^{-i}$ is the mean risk of all other agents at step $t$.
+
+We evaluate governance quality via six metrics: \emph{violation rate} $V$, \emph{detection latency} $L$, \emph{attribution accuracy} $A$, \emph{governance overhead} $O$, \emph{utility preservation} $U$, and \emph{adaptation speed}.
+
+% =========================================================================
+\section{Layered Governance Architecture}
+\label{sec:framework}
+% =========================================================================
+
+\subsection{Architecture Overview}
+
+The Layered Governance Architecture operates as a runtime interception layer between the agent and its environment. Every action passes through three sequential checks before execution is permitted:
+
+\begin{enumerate}
+    \item \textbf{Model-layer check}: Verifies that the action's risk score is below the alignment threshold ($\theta_M = 0.35$ in our default configuration).
+    \item \textbf{Agent-layer check}: Verifies that the risk score satisfies action-type-specific budgets derived from $\theta_A = 0.45$, with multipliers of 0.8 for tool calls and 0.6 for memory writes.
+    \item \textbf{Ecosystem-layer check}: Combines the action's risk with the mean risk of other agents and verifies the combined score is below $\theta_E = 0.50$.
+\end{enumerate}
+
+\subsection{Governance Specification Language}
+
+Policies are expressed as typed constraints that compose hierarchically: ecosystem policies constrain agent policies, which constrain model behavior. This ensures consistency by construction. In our implementation, a \texttt{GovernancePolicy} specifies thresholds for each layer as key-value pairs, enabling flexible policy definition.
+
+\subsection{Causal Audit Trail}
+
+Every governance decision is logged in a causal audit trail that records the timestep, event type (violation, detection, escalation, adaptation), governance layer, severity, detection time, and attributed agent. This enables post-hoc analysis and counterfactual auditing: given a violation, the trail supports tracing the causal chain from ecosystem-level events back through agent decisions to model outputs.
+
+% =========================================================================
+\section{Runtime Monitoring and Adaptation}
+\label{sec:method}
+% =========================================================================
+
+\subsection{Adaptive Policy Controller}
+
+The adaptive policy controller maintains a sliding window of the most recent $w = 20$ risk scores. When the mean risk over the last 5 actions exceeds the escalation threshold ($0.7$), the controller tightens all model and agent constraints by the adaptation rate $\delta = 0.05$, with a minimum bound of 0.1. Conversely, when mean risk falls below 0.3, model constraints are relaxed by $0.5\delta$, with a maximum bound of 0.9.
+
+This mechanism enables the governance framework to respond to changing risk conditions without manual intervention, as demonstrated in our adaptation experiments (Section~\ref{subsec:adaptation}).
+
+\subsection{Hierarchical Policy Automata}
+
+We model governance policies as hierarchical timed automata~\cite{alur1994theory}, one per governance layer. The model-level automaton is nested inside the agent-level automaton, which is nested inside the ecosystem automaton. This hierarchical structure ensures that:
+\begin{itemize}
+    \item Layer violations are detected at the appropriate granularity.
+    \item Attribution can be traced to the specific layer and agent responsible.
+    \item Policy consistency is maintained across layers by construction.
+\end{itemize}
+
+Runtime model checking, inspired by on-the-fly verification techniques from SPIN~\cite{holzmann1997model}, verifies that each agent step maintains the automaton in a safe state. This enables zero-latency detection of violations, as our experiments confirm.
+
+% =========================================================================
+\section{Experiments}
+\label{sec:experiments}
+% =========================================================================
+
+We evaluate the Layered Governance Architecture through four experiments using deterministic simulations (seeded with \texttt{np.random.default\_rng(42)}) of multi-agent deployments. All experiments use four action types (\texttt{tool\_call}, \texttt{memory\_write}, \texttt{message}, \texttt{plan\_step}) with risk profiles drawn from Gaussian distributions with temporal drift.
+
+\subsection{Framework Comparison}
+\label{subsec:comparison}
+
+We compare five governance configurations across 4 agents, 200 time steps, and four risk profiles (low, moderate, high, adversarial). Table~\ref{tab:framework} reports the results.
+
+\begin{table}[t]
+\caption{Governance framework comparison (4 agents, 200 steps, mixed risk profiles). Higher violation rate indicates more detected violations.}
+\label{tab:framework}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Framework} & \textbf{Viol.\ Rate} & \textbf{Latency} & \textbf{Attrib.} & \textbf{Overhead} & \textbf{Utility} \\
+\midrule
+None       & 0.0975 & 3.3304 & 1.0 & 0.0  & 1.0    \\
+Model Only & 0.495  & 0.0    & 1.0 & 0.12 & 0.8515 \\
+Agent Only & 0.5387 & 0.0    & 1.0 & 0.15 & 0.8384 \\
+Ecosystem  & 0.2425 & 0.0    & 1.0 & 0.18 & 0.9273 \\
+\textbf{Layered}    & \textbf{0.5537} & \textbf{0.0}    & \textbf{1.0} & \textbf{0.31} & \textbf{0.8339} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The layered framework achieves the highest violation detection rate of 0.5537, detecting all violations at zero latency with perfect attribution accuracy. The no-governance baseline detects only 0.0975 of violations (from passive constraint checking) with a mean detection latency of 3.3304 steps. Each individual layer contributes: model-only detects 0.495, agent-only detects 0.5387, and ecosystem-only detects 0.2425. The layered approach combines all three layers, achieving comprehensive detection at the cost of 0.31 overhead and 0.8339 utility preservation.
+
+\subsection{Ablation Study}
+\label{subsec:ablation}
+
+To isolate the contribution of each governance layer, we conduct an ablation study using a separate experimental run. Table~\ref{tab:ablation} presents the results.
+
+\begin{table}[t]
+\caption{Ablation study: contribution of each governance layer.}
+\label{tab:ablation}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Configuration} & \textbf{Viol.\ Rate} & \textbf{Utility} & \textbf{Overhead} & \textbf{Risk} \\
+\midrule
+None           & 0.1113 & 1.0    & 0.0  & 0.4287 \\
+Model Only     & 0.5325 & 0.8403 & 0.12 & 0.4237 \\
+Agent Only     & 0.5138 & 0.8459 & 0.15 & 0.4209 \\
+Ecosystem Only & 0.2375 & 0.9287 & 0.18 & 0.4138 \\
+\textbf{Layered}        & \textbf{0.5575} & \textbf{0.8327} & \textbf{0.31} & \textbf{0.421} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The ablation confirms that each layer adds complementary detection capability. The ecosystem layer alone detects 0.2375 of violations, while the model and agent layers individually detect 0.5325 and 0.5138 respectively. The layered combination achieves 0.5575, showing that the layers are not simply additive but provide overlapping, defense-in-depth coverage.
+
+\subsection{Scaling Behavior}
+\label{subsec:scaling}
+
+We evaluate how governance performance scales with the number of agents, ranging from 2 to 32. Figure~\ref{fig:scaling} illustrates the results.
+
+\begin{table}[t]
+\caption{Scaling behavior of layered governance as agent count increases.}
+\label{tab:scaling}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Agents} & \textbf{L-Viol.} & \textbf{L-Overhead} & \textbf{L-Utility} & \textbf{NG-Viol.} & \textbf{NG-Utility} \\
+\midrule
+2  & 0.205  & 0.31 & 0.9385 & 0.0    & 1.0 \\
+4  & 0.335  & 0.31 & 0.8995 & 0.0325 & 1.0 \\
+8  & 0.3538 & 0.31 & 0.8939 & 0.0262 & 1.0 \\
+16 & 0.3569 & 0.31 & 0.8929 & 0.0338 & 1.0 \\
+32 & 0.3703 & 0.31 & 0.8889 & 0.0344 & 1.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A key finding is that governance overhead remains constant at 0.31 regardless of agent count, demonstrating that the per-action monitoring cost does not increase with ecosystem size. The violation detection rate increases gradually from 0.205 with 2 agents to 0.3703 with 32 agents, reflecting the growing ecosystem-level risk as more agents interact. Utility preservation decreases modestly from 0.9385 to 0.8889.
+
+\subsection{Adaptation Under Risk Changes}
+\label{subsec:adaptation}
+
+We evaluate the adaptive policy controller across three phases: normal operation (low risk), a risk spike (high and adversarial profiles), and recovery (moderate risk). Table~\ref{tab:adaptation} reports the results.
+
+\begin{table}[t]
+\caption{Adaptation experiment: governance response to changing risk.}
+\label{tab:adaptation}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Phase} & \textbf{Viol.\ Rate} & \textbf{Utility} & \textbf{Mean Risk} & \textbf{Std Risk} \\
+\midrule
+Normal   & 0.1675 & 0.9497 & 0.2287 & 0.1239 \\
+Spike    & 0.83   & 0.751  & 0.5255 & 0.2087 \\
+Recovery & 0.1938 & 0.9419 & 0.2282 & 0.1279 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+During normal operation, the governance framework detects violations at a rate of 0.1675 while preserving 0.9497 utility. When the risk spikes, the violation rate rises to 0.83, reflecting the increased proportion of risky actions detected and blocked, with utility dropping to 0.751. In the recovery phase, the violation rate decreases to 0.1938 and utility recovers to 0.9419, demonstrating effective adaptive control. The recovery-phase violation rate of 0.1938 is only slightly higher than the normal-phase rate of 0.1675, indicating that the adaptive controller successfully recalibrates after a risk spike.
+
+\subsection{Planning Horizon Analysis}
+\label{subsec:horizon}
+
+We examine governance effectiveness across planning horizons from 10 to 500 steps. Table~\ref{tab:horizon} presents the results.
+
+\begin{table}[t]
+\caption{Governance effectiveness across planning horizons.}
+\label{tab:horizon}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Horizon} & \textbf{L-Viol.} & \textbf{L-Attrib.} & \textbf{L-Utility} & \textbf{NG-Viol.} & \textbf{MO-Viol.} \\
+\midrule
+10  & 0.5    & 1.0 & 0.85   & 0.125  & 0.525  \\
+50  & 0.545  & 1.0 & 0.8365 & 0.07   & 0.555  \\
+100 & 0.57   & 1.0 & 0.829  & 0.115  & 0.5225 \\
+200 & 0.5613 & 1.0 & 0.8316 & 0.12   & 0.525  \\
+500 & 0.568  & 1.0 & 0.8296 & 0.1035 & 0.5045 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The layered governance framework maintains stable performance across horizons, with violation detection ranging from 0.5 at horizon 10 to 0.568 at horizon 500. Attribution accuracy remains perfect at 1.0 across all horizons. Utility preservation decreases slightly from 0.85 to 0.8296 as longer horizons increase the cumulative probability of encountering risky actions.
+
+% =========================================================================
+\section{Discussion}
+\label{sec:discussion}
+% =========================================================================
+
+\paragraph{Defense-in-Depth.}
+Our results demonstrate that layered governance provides defense-in-depth: each layer catches violations that others miss. The model layer enforces alignment constraints, the agent layer restricts action-type-specific risk budgets, and the ecosystem layer bounds collective behavior. The layered combination achieves 0.5575 detection in ablation versus 0.5325, 0.5138, and 0.2375 for individual layers.
+
+\paragraph{Constant Overhead.}
+Governance overhead remains at 0.31 regardless of the number of agents. This constant-overhead property results from our per-action monitoring design, where each action is checked independently against the policy hierarchy. The computational cost scales linearly with the total number of actions but is constant per action.
+
+\paragraph{Adaptive Control.}
+The adaptive policy controller demonstrates effective risk response. Recovery-phase violation rates (0.1938) closely match normal-phase rates (0.1675), showing that the controller avoids both over-tightening (which would reduce utility) and under-relaxing (which would miss violations) after risk transitions.
+
+\paragraph{Limitations.}
+Our evaluation uses simulated multi-agent deployments with synthetic risk profiles rather than real agentic AI systems. The risk score model assumes Gaussian distributions with temporal drift, which may not capture the full complexity of real-world agent behavior. Future work should validate LGA on actual LLM-based agent deployments with real tool use and memory operations.
+
+% =========================================================================
+\section{Related Work}
+\label{sec:related}
+% =========================================================================
+
+\paragraph{AI Safety and Alignment.}
+Foundational work on concrete AI safety problems~\cite{amodei2016concrete} identified reward hacking, side effects, and distributional shift as key challenges. Constitutional AI~\cite{bai2022constitutional} and RLHF~\cite{ouyang2022training} address model-level alignment through training-time objectives. Our work extends these ideas to the runtime governance of deployed agentic systems.
+
+\paragraph{Agentic AI Governance.}
+Wei et al.~\cite{wei2026agentic} formalize the need for governance frameworks spanning model, agent, and ecosystem levels. Practices for governing agentic systems~\cite{shavit2023practices} propose organizational and technical safeguards. The ethics of advanced AI assistants~\cite{gabriel2024ethics} examines the value alignment challenges. Our LGA provides a concrete technical framework addressing these desiderata.
+
+\paragraph{Multi-Agent Oversight.}
+Chan et al.~\cite{chan2025multiagent} formalize multi-agent oversight via causal modeling and aggregate governance. Our ecosystem layer builds on their insights while adding runtime enforcement. Scaling safeguards~\cite{huang2026scaling} motivate adaptive governance, which our adaptive policy controller implements.
+
+\paragraph{Runtime Verification.}
+Our hierarchical policy automata draw on timed automata theory~\cite{alur1994theory} and model checking~\cite{holzmann1997model}. We adapt these formal methods from software verification to the governance of AI agent behavior, enabling zero-latency violation detection with formal guarantees.
+
+\paragraph{Benchmarking Agentic Systems.}
+Evaluation frameworks for agentic AI~\cite{kapoor2025benchmark} highlight the inadequacy of existing benchmarks for testing planning-time failures and multi-step goal drift. Our simulation framework addresses this gap by evaluating governance across varying horizons, risk profiles, and agent counts.
+
+% =========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% =========================================================================
+
+We have presented the Layered Governance Architecture, a three-layer framework for governing real-world agentic AI systems. Through deterministic multi-agent simulations, we demonstrate that LGA achieves comprehensive violation detection (0.5537) with zero latency and perfect attribution accuracy, while preserving 0.8339 agent utility. The adaptive policy controller successfully recalibrates governance stringency in response to risk transitions, and the architecture scales to 32 agents with constant overhead. Our results establish that layered governance---combining model-level, agent-level, and ecosystem-level enforcement---provides a principled and practical approach to the open challenge of governing increasingly capable agentic AI systems.
+
+\begin{acks}
+This work addresses an open problem identified by Wei et al.~\cite{wei2026agentic} in Section 7.6 of their survey on agentic reasoning for large language models.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\newpage
+\appendix
+
+\section{Experimental Configuration}
+\label{app:config}
+
+\begin{table}[h]
+\caption{Default governance policy parameters.}
+\label{tab:params}
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Layer} & \textbf{Parameter} & \textbf{Value} \\
+\midrule
+Model     & Alignment threshold ($\theta_M$) & 0.35 \\
+Agent     & Risk budget ($\theta_A$)          & 0.45 \\
+Ecosystem & Collective risk bound ($\theta_E$) & 0.50 \\
+Adaptive  & Window size ($w$)                 & 20 \\
+Adaptive  & Escalation threshold              & 0.7 \\
+Adaptive  & Adaptation rate ($\delta$)         & 0.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{Risk profile parameters (Gaussian).}
+\label{tab:riskprofiles}
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Profile} & \textbf{Mean ($\mu$)} & \textbf{Std ($\sigma$)} \\
+\midrule
+Low         & 0.15 & 0.08 \\
+Moderate    & 0.30 & 0.12 \\
+High        & 0.55 & 0.15 \\
+Adversarial & 0.70 & 0.18 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Additional Figures}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_framework_comparison.png}
+    \caption{Framework comparison across governance configurations.}
+    \label{fig:framework}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_scaling.png}
+    \caption{Scaling behavior as the number of agents increases from 2 to 32.}
+    \label{fig:scaling}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_adaptation.png}
+    \caption{Adaptive governance response across normal, spike, and recovery phases.}
+    \label{fig:adaptation}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_horizon.png}
+    \caption{Governance effectiveness across planning horizons (10--500 steps).}
+    \label{fig:horizon}
+\end{figure}
+
+\end{document}

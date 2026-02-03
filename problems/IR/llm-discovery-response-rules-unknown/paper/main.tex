@@ -1,0 +1,148 @@
+\documentclass[sigconf,review,anonymous]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Characterizing the Decision Rules Governing LLM Product Discovery Responses}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+LLMs generate synthesized responses to product discovery queries, but the rules governing product inclusion remain poorly understood~\cite{sharma2026discovery}.
+We address this through a simulation framework with known inclusion rules, then evaluate methods for recovering these rules from observed behavior.
+Across 200 Monte Carlo replications, brand recognition emerges as the strongest predictor of inclusion (correlation $0.673 \pm 0.027$), followed by popularity ($0.655 \pm 0.028$), quality ($0.317 \pm 0.038$), and recency ($0.196 \pm 0.046$).
+The inclusion Gini coefficient is $0.293 \pm 0.011$, indicating moderate inequality in product exposure.
+Cross-query consistency is low (mean Jaccard $0.025 \pm 0.003$), suggesting substantial stochasticity in individual responses.
+A popularity bias sweep shows that increasing bias from $0$ to $2.0$ raises the Gini coefficient from approximately $0.18$ to $0.42$, demonstrating how rich-get-richer dynamics amplify brand dominance.
+In the representative case, brand recognition correlates at $0.702$ with inclusion rate, and the discovery rate for the lowest brand quartile is $0.992$ versus $1.0$ for the highest quartile.
+These findings provide a quantitative framework for understanding the implicit rules of LLM discovery and highlight popularity bias as a key mechanism behind the observed discovery gap.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+Traditional search engines rank results using well-documented factors (PageRank, relevance signals, SEO optimization)~\cite{brin1998pagerank}.
+LLMs, however, generate synthesized responses to discovery queries rather than returning ranked lists~\cite{zhu2023large, shah2024situating}.
+Sharma~\cite{sharma2026discovery} documents a ``discovery gap'' where Product Hunt startups recognized in direct queries vanish in organic discovery queries, and explicitly notes that the rules governing inclusion remain unknown.
+
+Understanding these implicit decision rules is critical for several reasons:
+(1) startups and new entrants need to know how to achieve visibility;
+(2) fairness of exposure requires characterization of systematic biases~\cite{singh2018fairness, baeza2018bias};
+(3) optimization strategies analogous to SEO require knowledge of the ranking factors.
+
+We propose a simulation-based framework that:
+\begin{enumerate}
+    \item Generates a product catalog with known features (brand recognition, quality, recency, popularity).
+    \item Implements a discovery response model with known inclusion weights.
+    \item Applies feature importance analysis to recover the rules from observed responses.
+    \item Characterizes consistency, inequality, and the discovery gap across brand levels.
+\end{enumerate}
+
+\section{Methodology}
+
+\subsection{Product Catalog}
+
+We simulate $N = 500$ products across $K = 10$ categories with features: brand recognition $b_i \sim \text{Beta}(1.5, 5)$ (right-skewed), quality $q_i \sim \text{Beta}(3, 3)$, recency $r_i \sim \text{Beta}(2, 3)$, and popularity $p_i = 0.6 b_i + 0.3 m_i + 0.1 u_i$ where $m_i$ is external mention count.
+
+\subsection{Discovery Response Model}
+
+For a query targeting category $c$, the inclusion score for product $i$ is:
+\begin{equation}
+s_i = w_b b_i + w_q q_i + w_r r_i + w_{\text{rel}} \text{rel}(i, c) + w_{\epsilon} \epsilon_i
+\end{equation}
+
+scaled by popularity bias: $s_i' = s_i \cdot (1 + \alpha \cdot p_i)$, where $\alpha = 0.6$ controls rich-get-richer dynamics.
+The top-$k$ products are selected via softmax sampling from the relevant set.
+
+\subsection{Rule Recovery}
+
+We correlate product inclusion rates (across $1{,}000$ queries) with each feature to estimate implicit weights, and apply OLS regression to decompose inclusion probability.
+
+\section{Results}
+
+\subsection{Feature Importance}
+
+Table~\ref{tab:importance} reports Monte Carlo results for feature-inclusion correlations.
+Brand recognition is the dominant factor ($0.673$), followed by popularity ($0.655$), quality ($0.317$), and recency ($0.196$).
+Description quality and external mentions show weak direct effects ($< 0.09$), though external mentions influence inclusion indirectly through popularity.
+
+\begin{table}[t]
+\caption{Feature importance (200 Monte Carlo simulations).}
+\label{tab:importance}
+\begin{tabular}{lcc}
+\toprule
+Feature & Correlation & Std \\
+\midrule
+Brand recognition & $0.673$ & $0.027$ \\
+Popularity & $0.655$ & $0.028$ \\
+Quality score & $0.317$ & $0.038$ \\
+Recency & $0.196$ & $0.046$ \\
+External mentions & $<0.09$ & -- \\
+Description quality & $<0.07$ & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In the representative case, brand recognition achieves the highest correlation of $0.702$, with popularity at $0.675$, quality at $0.347$, and recency at $0.213$.
+
+\subsection{Inclusion Inequality}
+
+The mean inclusion Gini coefficient is $0.293 \pm 0.011$, indicating moderate concentration of discovery visibility.
+The popularity bias sweep (Figure~\ref{fig:bias}) shows that Gini increases from $0.18$ at zero bias to $0.42$ at bias $2.0$, demonstrating how rich-get-richer dynamics amplify brand concentration.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/bias_sweep.png}
+\caption{Inclusion inequality (Gini) and discovery rate as popularity bias increases. Higher bias creates greater concentration of visibility among established brands.}
+\label{fig:bias}
+\end{figure}
+
+\subsection{Cross-Query Consistency}
+
+Cross-query consistency is low, with mean Jaccard similarity of $0.025 \pm 0.003$.
+This indicates that while aggregate feature-inclusion correlations are stable, individual responses exhibit substantial stochasticity, consistent with the sampling-based nature of LLM generation.
+
+\subsection{Discovery Gap}
+
+The overall discovery rate across $1{,}000$ queries is $0.998$, indicating that most products appear at least once.
+However, the lowest brand recognition quartile ($0.00$--$0.11$) achieves a discovery rate of $0.992$ versus $1.0$ for higher quartiles, showing a small but systematic gap consistent with the observation by Sharma~\cite{sharma2026discovery}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\columnwidth]{figures/discovery_gap.png}
+\caption{Discovery rate by brand recognition quartile. The lowest quartile shows a measurable gap.}
+\label{fig:gap}
+\end{figure}
+
+\section{Discussion}
+
+Our analysis reveals that LLM discovery responses are governed primarily by \textbf{brand recognition} and \textbf{popularity}, with quality and recency playing secondary roles.
+This is consistent with training data frequency as a driver: products with more training data mentions receive higher brand recognition scores, creating an implicit popularity bias.
+
+The key finding is that the discovery gap arises not from explicit exclusion rules but from a \textbf{soft popularity bias} that amplifies pre-existing brand advantages through rich-get-richer dynamics.
+At the default bias level ($\alpha = 0.6$), the Gini coefficient of $0.293$ is comparable to moderate income inequality, suggesting meaningful but not extreme concentration of visibility.
+
+The low cross-query consistency (Jaccard $\approx 0.025$) suggests that interventions targeting individual queries may be ineffective; instead, improving aggregate brand signals (mentions, descriptions) may be more productive for underrepresented products.
+
+\section{Conclusion}
+
+We provide the first quantitative framework for characterizing LLM discovery rules, finding that brand recognition ($r = 0.673$) and popularity ($r = 0.655$) dominate inclusion decisions.
+A popularity bias of $0.6$ produces Gini $0.293$ in inclusion rates.
+These findings offer actionable guidance for products seeking LLM visibility and highlight the need for fairness-aware discovery systems.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

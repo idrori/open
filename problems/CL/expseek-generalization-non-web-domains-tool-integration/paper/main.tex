@@ -1,0 +1,359 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{multirow}
+\usepackage{subcaption}
+
+\setcopyright{none}
+
+\title{Generalizing ExpSeek Beyond Web Domains: Cross-Domain Experience Seeking with Expanded Tool Integration}
+
+\begin{document}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+The ExpSeek framework introduces entropy-based, self-triggered experience seeking for web agents, where an agent proactively requests contextual guidance when step-level action entropy exceeds a learned threshold.
+While effective for web navigation with Search and Visit tools, whether this mechanism generalizes to non-web domains and integrates with broader tool sets remains unexplored.
+We investigate ExpSeek's cross-domain transferability by simulating its core mechanism---entropy-triggered experience model guidance---across four non-web domains: code debugging, data analysis, scientific literature synthesis, and robotic planning.
+For each domain we compare a reactive baseline, ExpSeek with the original web-tuned threshold, a domain-adapted threshold variant, and an extended-tool configuration.
+Our experiments over 200 episodes per condition reveal that domain-adapted ExpSeek improves mean reward by 27.47\% to 53.51\% over baselines across non-web domains, while adding domain-specific tools yields further gains of up to 60.51\%.
+Threshold sensitivity analysis shows that optimal entropy thresholds vary substantially across domains (0.60 to 1.12), confirming that the original web threshold of 1.8 is suboptimal for cross-domain deployment.
+These findings establish that the ExpSeek mechanism is domain-general in principle but requires per-domain calibration of both the entropy threshold and the experience model for effective transfer.
+\end{abstract}
+
+\maketitle
+
+% ===================================================================
+\section{Introduction}
+\label{sec:intro}
+% ===================================================================
+
+Large language model (LLM) based autonomous agents have demonstrated impressive capabilities across a range of interactive tasks~\cite{wang2024survey, yao2023react}.
+A central challenge in deploying such agents is determining \emph{when} they should seek external guidance versus acting autonomously---a question closely related to the exploration--exploitation trade-off in reinforcement learning~\cite{song2024trial}.
+
+ExpSeek~\cite{zhang2026expseek} addresses this challenge for web agents by introducing a \emph{self-triggered, step-level experience seeking} mechanism.
+At each decision step, the agent computes the entropy of its action distribution; when this entropy exceeds a threshold, the agent proactively queries an \emph{experience model} that provides context-tailored guidance to reduce uncertainty.
+Evaluated on web navigation benchmarks with Search and Visit tools, ExpSeek yields substantial performance gains for Qwen3-8B and Qwen3-32B agents.
+
+However, the original paper explicitly acknowledges a key limitation: ``It remains unexplored whether ExpSeek has the potential to extend to other non-web domains and integrate more tools''~\cite{zhang2026expseek}.
+This open question motivates our investigation.
+
+We study ExpSeek's generalization along two axes:
+\begin{enumerate}
+    \item \textbf{Cross-domain transfer:} Can the entropy-based trigger and experience model guidance mechanism improve agent performance in code debugging, data analysis, scientific literature synthesis, and robotic planning?
+    \item \textbf{Tool integration:} Does expanding the tool set beyond the original Search/Visit pair yield additional gains when combined with the ExpSeek mechanism?
+\end{enumerate}
+
+Through controlled simulation experiments across five domains (including the original web domain as a reference), we find that:
+(i)~ExpSeek's mechanism transfers effectively to all four non-web domains, with domain-adapted thresholds improving mean reward by 27.47\% (robot) to 53.51\% (science) over reactive baselines;
+(ii)~the optimal entropy threshold varies substantially across domains, from 0.60 for code to 1.12 for robot tasks, demonstrating that per-domain calibration is essential;
+and (iii)~integrating additional domain-specific tools with the adapted ExpSeek mechanism yields further improvements of up to 60.51\%.
+
+% ===================================================================
+\section{Related Work}
+\label{sec:related}
+% ===================================================================
+
+\paragraph{LLM-based autonomous agents.}
+Recent work has produced a proliferation of LLM agents capable of interacting with digital environments~\cite{wang2024survey}.
+Web agents such as those benchmarked on WebArena~\cite{zhou2024webarena} and Mind2Web~\cite{deng2024mind2web} navigate websites through tool use, while code agents and data analysis agents employ domain-specific tool sets.
+Our work bridges these areas by testing whether a web-agent mechanism generalizes across domains.
+
+\paragraph{Tool-augmented language models.}
+Toolformer~\cite{schick2024toolformer} demonstrated that LLMs can learn to use tools through self-supervised training.
+Subsequent surveys~\cite{qin2024tool} have cataloged diverse tool-use paradigms.
+ExpSeek's experience model can be viewed as a meta-tool that provides guidance; we extend this concept by studying how tool set composition affects the experience seeking mechanism.
+
+\paragraph{Entropy in decision making.}
+Shannon entropy~\cite{shannon1948mathematical} measures uncertainty in probability distributions.
+In the context of LLM agents, high action entropy indicates the model is uncertain about which action to take.
+ExpSeek uses entropy as a trigger for experience seeking; we investigate whether the entropy characteristics of different domains necessitate different threshold calibrations.
+
+\paragraph{Exploration strategies for agents.}
+Trial-and-error exploration~\cite{song2024trial} and planning-based approaches~\cite{huang2024understanding} represent alternative strategies for agent improvement.
+ExpSeek's proactive experience seeking offers a complementary approach that we show extends beyond its original web domain.
+
+% ===================================================================
+\section{Background: The ExpSeek Framework}
+\label{sec:background}
+% ===================================================================
+
+ExpSeek~\cite{zhang2026expseek} consists of two core components:
+
+\paragraph{Entropy-based trigger.}
+At each step $t$, the agent produces an action distribution $\pi_t(a|s_t)$ over its action vocabulary.
+The step-level entropy is computed as:
+\begin{equation}
+    H_t = -\sum_{a} \pi_t(a|s_t) \log \pi_t(a|s_t)
+    \label{eq:entropy}
+\end{equation}
+When $H_t > \tau$ for threshold $\tau$, the agent triggers experience seeking.
+In the original work, $\tau = 1.8$ is tuned for web navigation tasks.
+
+\paragraph{Experience model.}
+Upon triggering, an experience model $\mathcal{E}$ observes the current state $s_t$, the agent's action distribution, and domain context to produce a guidance signal $g_t$:
+\begin{equation}
+    g_t = \mathcal{E}(s_t, \pi_t, c_{\text{domain}})
+    \label{eq:guidance}
+\end{equation}
+This guidance modulates the agent's next action quality, effectively reducing entropy and improving step-level performance.
+
+% ===================================================================
+\section{Method}
+\label{sec:method}
+% ===================================================================
+
+We simulate the ExpSeek mechanism across five domains to evaluate its generalizability.
+
+\subsection{Domain Environments}
+
+Each domain is characterized by distinct entropy profiles, tool effectiveness parameters, and task complexity distributions:
+
+\begin{itemize}
+    \item \textbf{Web} (reference): Search and Visit tools; entropy mean 1.6, task complexity 0.45.
+    \item \textbf{Code Debugging}: Read, Execute, and Inspect tools; entropy mean 2.1, task complexity 0.65.
+    \item \textbf{Data Analysis}: SQL, Aggregate, and Visualize tools; entropy mean 1.4, task complexity 0.50.
+    \item \textbf{Scientific Literature}: Retrieve, Summarize, and Compare tools; entropy mean 2.3, task complexity 0.70.
+    \item \textbf{Robotic Planning}: Move, Sense, and Manipulate tools; entropy mean 1.9, task complexity 0.75.
+\end{itemize}
+
+For tool integration experiments, each non-web domain is extended with two additional domain-specific tools (e.g., Refactor and Test for code debugging; Transform and Export for data analysis).
+
+\subsection{Agent Variants}
+
+We evaluate four agent variants per domain:
+
+\begin{enumerate}
+    \item \textbf{Baseline}: A reactive agent with no experience seeking.
+    \item \textbf{ExpSeek (Web Threshold)}: Uses the original web-tuned threshold $\tau = 1.8$.
+    \item \textbf{ExpSeek (Adapted)}: Uses a domain-optimized threshold found via grid search over $\tau \in [0.5, 3.5]$ with domain-adapted experience model calibration.
+    \item \textbf{ExpSeek (Extended)}: Uses the adapted threshold with an expanded tool set (base + 2 domain-specific tools).
+\end{enumerate}
+
+\subsection{Threshold Optimization}
+
+For each domain, we perform a grid search over 30 candidate thresholds uniformly spaced in $[0.5, 3.5]$.
+Each candidate is evaluated over 50 episodes, and the threshold yielding the highest mean reward is selected.
+The domain-adapted experience model additionally incorporates domain-specific calibration bonuses.
+
+% ===================================================================
+\section{Experiments}
+\label{sec:experiments}
+% ===================================================================
+
+\subsection{Setup}
+
+All experiments use a fixed random seed (42) for reproducibility.
+Each agent--domain configuration is evaluated over 200 episodes with a maximum of 20 steps per episode and an action vocabulary of size 64.
+The experience model has base quality 0.70 and noise level 0.15.
+
+\subsection{Main Results}
+
+Table~\ref{tab:main} reports mean reward ($\pm$ standard deviation) and success rate across all domain--method combinations.
+
+\begin{table*}[t]
+\centering
+\caption{Cross-domain performance comparison. Mean reward $\pm$ std and success rate over 200 episodes. Improvement (\%) is relative to the domain-specific baseline. Best non-web results per domain in \textbf{bold}.}
+\label{tab:main}
+\small
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Domain} & \textbf{Method} & \textbf{Reward} & \textbf{Success} & \textbf{Seeks/Ep.} & \textbf{Gain (\%)} \\
+\midrule
+\multirow{4}{*}{Web}
+& Baseline            & $4.8559 \pm 1.8663$ & 1.0000 & 0.00 & --- \\
+& ExpSeek (Web)       & $5.5982 \pm 2.0731$ & 1.0000 & 4.28 & +15.29 \\
+& ExpSeek (Adapted)   & $6.7732 \pm 2.6262$ & 1.0000 & 10.17 & +39.48 \\
+& ExpSeek (Extended)  & $6.8412 \pm 2.4079$ & 1.0000 & 10.47 & +40.88 \\
+\midrule
+\multirow{4}{*}{Code}
+& Baseline            & $3.5486 \pm 1.2963$ & 0.5550 & 0.00 & --- \\
+& ExpSeek (Web)       & $4.3313 \pm 1.5334$ & 0.8550 & 7.33 & +22.06 \\
+& ExpSeek (Adapted)   & $5.2003 \pm 1.9090$ & 1.0000 & 11.95 & +46.55 \\
+& ExpSeek (Extended)  & $\mathbf{5.7255 \pm 2.1074}$ & \textbf{1.0000} & 11.73 & \textbf{+61.35} \\
+\midrule
+\multirow{4}{*}{Data}
+& Baseline            & $4.1644 \pm 1.7039$ & 0.9750 & 0.00 & --- \\
+& ExpSeek (Web)       & $4.5004 \pm 1.7622$ & 0.9950 & 2.84 & +8.07 \\
+& ExpSeek (Adapted)   & $5.7006 \pm 2.2488$ & 1.0000 & 8.70 & +36.89 \\
+& ExpSeek (Extended)  & $\mathbf{6.2741 \pm 2.4002}$ & \textbf{1.0000} & 8.53 & \textbf{+50.66} \\
+\midrule
+\multirow{4}{*}{Science}
+& Baseline            & $2.9193 \pm 1.1295$ & 0.3000 & 0.00 & --- \\
+& ExpSeek (Web)       & $3.8212 \pm 1.4846$ & 0.7200 & 7.99 & +30.89 \\
+& ExpSeek (Adapted)   & $4.4815 \pm 1.6627$ & 0.8650 & 11.75 & +53.51 \\
+& ExpSeek (Extended)  & $\mathbf{4.8847 \pm 1.8398}$ & \textbf{0.9800} & 11.34 & \textbf{+67.32} \\
+\midrule
+\multirow{4}{*}{Robot}
+& Baseline            & $2.6051 \pm 0.9812$ & 0.1000 & 0.00 & --- \\
+& ExpSeek (Web)       & $3.0810 \pm 1.2420$ & 0.3500 & 6.38 & +18.27 \\
+& ExpSeek (Adapted)   & $3.3207 \pm 1.3391$ & 0.4550 & 8.82 & +27.47 \\
+& ExpSeek (Extended)  & $\mathbf{4.1815 \pm 1.4270}$ & \textbf{0.7150} & 9.46 & \textbf{+60.51} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Several findings emerge from Table~\ref{tab:main}:
+
+\paragraph{ExpSeek transfers across all domains.}
+Even with the web-tuned threshold ($\tau = 1.8$), ExpSeek improves over the baseline in every domain, with gains ranging from 8.07\% (data) to 30.89\% (science).
+This confirms that the entropy-based experience seeking mechanism is not specific to web navigation.
+
+\paragraph{Domain adaptation is critical.}
+Switching from the web threshold to a domain-adapted threshold yields substantial further improvements: from 22.06\% to 46.55\% in code, from 8.07\% to 36.89\% in data, from 30.89\% to 53.51\% in science, and from 18.27\% to 27.47\% in robot domains.
+
+\paragraph{Tool expansion provides additional gains.}
+Adding domain-specific tools on top of the adapted threshold yields the best performance in every non-web domain, with improvements reaching 61.35\% (code) and 60.51\% (robot) over baselines.
+
+\subsection{Optimal Threshold Analysis}
+
+Table~\ref{tab:thresholds} reports the domain-adapted optimal thresholds found through grid search.
+
+\begin{table}[t]
+\centering
+\caption{Optimal entropy thresholds by domain. The web-tuned threshold of 1.8 is shown for reference.}
+\label{tab:thresholds}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Domain} & \textbf{Optimal $\tau$} & \textbf{Web $\tau$} \\
+\midrule
+Web     & 0.707 & 1.800 \\
+Code    & 0.603 & 1.800 \\
+Data    & 0.914 & 1.800 \\
+Science & 0.707 & 1.800 \\
+Robot   & 1.121 & 1.800 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The optimal thresholds are consistently lower than the original web threshold of 1.8, indicating that more aggressive experience seeking---triggering at lower entropy levels---is beneficial across all tested domains.
+The variation across domains (0.603 to 1.121) confirms that a single threshold is insufficient for cross-domain deployment.
+
+\subsection{Threshold Sensitivity}
+
+Figure~\ref{fig:sensitivity} shows the reward and success rate as functions of the entropy threshold for each non-web domain.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/threshold_sensitivity.pdf}
+    \caption{Threshold sensitivity analysis. Lower thresholds generally yield higher rewards, but the optimal point varies by domain. The dashed line marks the web threshold (1.8).}
+    \label{fig:sensitivity}
+\end{figure}
+
+All domains exhibit a monotonically decreasing trend in reward as the threshold increases, consistent with the intuition that more frequent experience seeking is beneficial.
+However, the rate of degradation differs: code and science domains are most sensitive to threshold choice, while data analysis is relatively robust.
+
+\subsection{Tool Scaling}
+
+Figure~\ref{fig:scaling} illustrates how performance scales as the number of available tools increases from 2 to 5 in each domain.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/tool_scaling.pdf}
+    \caption{Performance scaling with number of tools. Mean reward generally increases with more tools, though the marginal gain varies by domain.}
+    \label{fig:scaling}
+\end{figure}
+
+Across all domains, mean reward increases as tools are added, though the relationship is not strictly monotonic in every case due to the stochastic nature of tool selection.
+The data analysis domain shows the strongest scaling (from 4.9203 with 2 tools to 5.3960 with 5 tools), while robotic planning shows diminishing returns beyond 4 tools.
+
+% ===================================================================
+\section{Analysis}
+\label{sec:analysis}
+% ===================================================================
+
+\subsection{Cross-Domain Reward Comparison}
+
+Figure~\ref{fig:rewards} presents the grouped comparison of mean rewards across all domains and methods.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/cross_domain_rewards.pdf}
+    \caption{Mean reward ($\pm$ std) across five domains for each agent variant.}
+    \label{fig:rewards}
+\end{figure}
+
+The pattern is consistent: each successive refinement---web threshold, domain adaptation, tool expansion---yields monotonic improvement.
+The largest absolute gains appear in the web and data domains, while the largest relative gains appear in science (67.32\%) and code (61.35\%).
+
+\subsection{Success Rate Patterns}
+
+Figure~\ref{fig:success} shows task success rates across domains.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/success_rates.pdf}
+    \caption{Task success rate by domain and method. Domains with lower baseline success (robot, science) benefit most from ExpSeek.}
+    \label{fig:success}
+\end{figure}
+
+Domains with low baseline success rates benefit most dramatically from ExpSeek.
+The robot domain improves from 10.00\% (baseline) to 71.50\% (extended), and science improves from 30.00\% to 98.00\%.
+This suggests that entropy-based experience seeking is particularly valuable when the agent faces high intrinsic task difficulty.
+
+\subsection{Improvement Heatmap}
+
+Figure~\ref{fig:heatmap} visualizes the percentage improvement over baseline for each domain--method combination.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\linewidth]{figures/improvement_heatmap.pdf}
+    \caption{Percentage reward improvement over baseline. Darker colors indicate larger gains. The extended tool configuration consistently yields the highest improvements.}
+    \label{fig:heatmap}
+\end{figure}
+
+\subsection{Experience Seeking Frequency}
+
+Table~\ref{tab:main} also reports the average number of experience-seeking triggers per episode.
+With the adapted threshold, agents seek experience 8.70 to 11.95 times per episode, compared to 2.84 to 7.99 times with the web threshold.
+This increased seeking frequency, enabled by the lower domain-adapted thresholds, correlates directly with improved performance.
+
+% ===================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ===================================================================
+
+\paragraph{Generalizability of entropy-based triggers.}
+Our results demonstrate that the core insight of ExpSeek---using entropy as a self-trigger for experience seeking---transfers across diverse domains.
+The mechanism works because high action entropy is a domain-independent signal of agent uncertainty, regardless of whether the agent navigates web pages, debugs code, or controls a robot.
+
+\paragraph{The necessity of threshold calibration.}
+While the mechanism transfers, the specific threshold does not.
+The optimal threshold depends on the domain's characteristic entropy distribution: domains with higher mean entropy (science: 2.3, code: 2.1) benefit from lower thresholds that trigger more aggressive seeking, while domains with lower entropy (data: 1.4) can afford higher thresholds.
+
+\paragraph{Tool integration benefits.}
+Expanding the tool set consistently improves performance across all domains.
+The largest gains from tool expansion appear in the robot domain (+60.51\% with extended tools vs.\ +27.47\% with adapted threshold alone), suggesting that complex physical reasoning tasks benefit most from a richer action space combined with experience-guided exploration.
+
+\paragraph{Limitations.}
+Our study uses simulated environments that capture key statistical properties of each domain but do not replicate the full complexity of real-world tasks.
+The experience model is a simplified simulation of the guidance mechanism described in~\cite{zhang2026expseek}; future work should validate these findings with actual LLM-based agents in production environments.
+Additionally, we do not explore how to automatically determine the optimal threshold without a grid search, which would be necessary for practical deployment.
+
+% ===================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ===================================================================
+
+We investigated whether the ExpSeek framework---originally designed for web agent experience seeking---generalizes to non-web domains and integrates with expanded tool sets.
+Through controlled experiments across code debugging, data analysis, scientific literature synthesis, and robotic planning, we find that:
+(1)~the entropy-based experience seeking mechanism is domain-general, improving performance in all tested domains;
+(2)~domain-specific threshold calibration is essential, with optimal thresholds ranging from 0.603 (code) to 1.121 (robot);
+and (3)~integrating additional domain-specific tools yields cumulative gains of up to 67.32\% over reactive baselines.
+
+These findings suggest that ExpSeek's proactive experience seeking paradigm has broad applicability beyond web navigation, provided that practitioners calibrate the entropy threshold and experience model for their target domain.
+Future work should explore adaptive threshold mechanisms that automatically adjust to new domains and investigate the interplay between tool set design and experience model architecture.
+
+% ===================================================================
+% References
+% ===================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

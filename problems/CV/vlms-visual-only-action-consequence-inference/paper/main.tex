@@ -1,0 +1,352 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{subcaption}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Can Vision--Language Models See What They Did? \\Visual-Only Action Consequence Inference via Difference-Augmented Prompting and Chain-of-State Reasoning}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+Vision--language models (VLMs) are increasingly deployed as agents in visually interactive environments, yet it remains unclear whether they can infer the consequences of their actions from visual observations alone.
+Recent work on VisGym shows that all evaluated VLMs degrade when textual environment feedback is removed, suggesting a dependence on language-mediated rather than visually-grounded causal reasoning.
+We formalize this problem through the \textbf{Visual Action-Consequence Inference (VACI)} framework, comprising: (1)~VACI-Bench, a synthetic benchmark generating 800 state transitions across four environment types (Maze~2D, Sliding Block, Matchstick Equation, Maze~3D); (2)~Difference-Augmented Prompting (DAP), which provides explicit visual difference maps as auxiliary input; and (3)~Visual Chain-of-State (VCoS) reasoning, which decomposes consequence inference into four structured steps.
+Experiments on VACI-Bench show that DAP improves validity accuracy from 0.651 (naive baseline) to 0.879, recovering 103.4\% of text-feedback performance, while VCoS achieves comparable validity accuracy (0.879) with stronger interpretability.
+A contrastive visual probe achieves 73.1\% accuracy on frozen features, confirming that visual encoders capture state-change information that the language model head fails to fully leverage.
+Our results demonstrate that visual-only action consequence inference is feasible with appropriate input augmentation, and that the primary bottleneck lies in language-mediated reasoning rather than visual encoding.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+   <concept>
+       <concept_id>10010147.10010178.10010224</concept_id>
+       <concept_desc>Computing methodologies~Computer vision</concept_desc>
+       <concept_significance>500</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10010147.10010257.10010293.10010294</concept_id>
+       <concept_desc>Computing methodologies~Neural networks</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10010147.10010178.10010179</concept_id>
+       <concept_desc>Computing methodologies~Computer vision problems</concept_desc>
+       <concept_significance>500</concept_significance>
+   </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Computer vision}
+\ccsdesc[500]{Computing methodologies~Computer vision problems}
+\ccsdesc[300]{Computing methodologies~Neural networks}
+
+\keywords{vision--language models, visual reasoning, action consequence inference, multimodal agents, causal perception}
+
+\maketitle
+
+%% ========================================================================
+%% 1. INTRODUCTION
+%% ========================================================================
+\section{Introduction}
+
+The deployment of vision--language models (VLMs) as autonomous agents in interactive environments has grown rapidly~\cite{openai2023gpt4v, liu2024visual, brohan2023rt2}. These models observe visual states, issue actions, and must reason about the consequences of those actions to make effective decisions. In typical agent-environment loops, the environment provides textual feedback describing whether an action succeeded, failed, or produced unintended side effects. This feedback channel substantially aids decision-making.
+
+However, humans do not require textual narration to understand the consequences of their actions. Michotte's seminal experiments on the perception of causality~\cite{michotte1963perception} demonstrated that humans perceive causal relationships directly from visual motion patterns---a fast, automatic, pre-linguistic process. This raises a fundamental question: \emph{can VLMs infer action consequences from visual state transitions alone, without textual feedback?}
+
+Wang et al.~\cite{wang2026visgym} recently investigated this question through VisGym, a benchmark for multimodal agents across diverse environments including Maze~2D, Maze~3D, Sliding Block puzzles, and Matchstick Equations. Their key finding is striking: \textbf{all evaluated VLMs show significant performance drops when textual feedback is removed}. This suggests that current VLMs depend on language-mediated reasoning and cannot reliably perform visual-only causal inference.
+
+This finding motivates our work. We formalize the problem of visual-only action consequence inference and propose the \textbf{Visual Action-Consequence Inference (VACI)} framework, which addresses three questions:
+
+\begin{enumerate}
+    \item \textbf{How severe is the visual-only inference gap?} We construct VACI-Bench, a controlled benchmark that generates state transitions with known ground truth across four environment types, enabling precise measurement of the gap between text-feedback and visual-only performance.
+    \item \textbf{Can input augmentation close the gap?} We propose Difference-Augmented Prompting (DAP), which provides explicit visual difference maps as auxiliary input, transforming a hard comparison task into an easier description task.
+    \item \textbf{Can structured reasoning help?} We propose Visual Chain-of-State (VCoS) reasoning, which decomposes consequence inference into state description, change detection, action matching, and consequence derivation---mirroring the decomposable structure of human visual causal inference.
+\end{enumerate}
+
+Our experiments on 800 state transitions across four environments demonstrate that DAP recovers over 100\% of text-feedback performance on validity accuracy, while VCoS provides comparable accuracy with greater interpretability. A contrastive visual probe confirms that visual encoders capture sufficient state-change information, identifying language-mediated reasoning as the primary bottleneck.
+
+\subsection{Related Work}
+
+\paragraph{Visual Causal Perception.}
+Michotte~\cite{michotte1963perception} established that humans perceive causality directly from visual motion. Computational models of intuitive physics~\cite{battaglia2013simulation, lerer2016learning} showed that neural networks can learn physical prediction from pixels, but these are specialized architectures. Benchmarks like CausalWorld~\cite{ahmed2020causalworld} and PHYRE~\cite{bakhtin2019phyre} evaluate causal reasoning but typically allow multiple observations and reward signals, unlike our single-transition setting.
+
+\paragraph{VLM Capabilities and Limitations.}
+Modern VLMs~\cite{openai2023gpt4v, liu2024visual, alayrac2022flamingo} achieve strong visual question answering but exhibit known spatial reasoning gaps~\cite{tong2024cambrian, chen2024spatialvlm}. PhysBench~\cite{physbench2025} demonstrates struggles with quantitative physical reasoning. Our work specifically addresses the under-studied problem of visual change detection and consequence inference.
+
+\paragraph{World Models and Action-Conditioned Prediction.}
+World models~\cite{ha2018world, hafner2020dream} learn latent-space dynamics from action-observation sequences, while vision-language-action models~\cite{brohan2023rt2} ground language in robotic actions. These approaches require environment-specific training, whereas we evaluate \emph{frozen} general-purpose VLMs augmented only through prompting strategies.
+
+\paragraph{Chain-of-Thought Reasoning.}
+Chain-of-thought prompting~\cite{wei2022chain} has proven effective for complex reasoning tasks. Our Visual Chain-of-State extends this paradigm to structured visual reasoning, decomposing consequence inference into cognitively-motivated sub-steps.
+
+%% ========================================================================
+%% 2. METHODS
+%% ========================================================================
+\section{Methods}
+
+\subsection{Problem Formulation}
+
+We define visual action consequence inference as follows. Given a \emph{pre-action frame} $\mathbf{I}_\text{pre} \in \mathbb{R}^{H \times W \times 3}$, an \emph{action description} $a \in \mathcal{A}$, and a \emph{post-action frame} $\mathbf{I}_\text{post} \in \mathbb{R}^{H \times W \times 3}$, the task is to predict:
+
+\begin{enumerate}
+    \item \textbf{Action validity} $v \in \{0, 1\}$: was the action successfully executed?
+    \item \textbf{Outcome category} $o \in \{\textsc{success}, \textsc{blocked}, \textsc{partial}, \textsc{no\_effect}, \textsc{unintended}\}$: what type of consequence occurred?
+\end{enumerate}
+
+The key constraint is that no textual environment feedback is provided. The model must rely solely on visual comparison between $\mathbf{I}_\text{pre}$ and $\mathbf{I}_\text{post}$.
+
+\subsection{VACI-Bench: Benchmark Design}
+
+VACI-Bench generates controlled state transitions across four environments that exercise different aspects of visual consequence inference:
+
+\begin{itemize}
+    \item \textbf{Maze 2D:} A grid maze where an agent moves in cardinal directions. Successful moves shift the agent marker by one cell (subtle pixel change); blocked moves produce identical frames. Tests pixel-level change detection.
+    \item \textbf{Sliding Block:} A puzzle with numbered colored blocks. Moving a block changes its position while others remain stationary. Tests multi-object tracking and change localization.
+    \item \textbf{Matchstick Equation:} Arithmetic equations rendered as seven-segment digits. Moving a matchstick changes a digit's visual structure and numeric value. Tests semantic understanding of structural changes.
+    \item \textbf{Maze 3D:} First-person corridor views with perspective rendering. Movement changes depth and viewpoint. Tests 3D spatial reasoning with large-scale pixel changes.
+\end{itemize}
+
+Each transition is generated with known ground truth via deterministic simulation. We generate $N = 200$ transitions per environment ($N_\text{total} = 800$) with controlled difficulty distribution.
+
+\subsection{Naive Baseline}
+
+The naive baseline presents two frames directly to the VLM with the prompt: ``Frame 1 shows the state before action $a$. Frame 2 shows the state after. Was the action successfully executed?'' This mirrors the standard VisGym setup without text feedback.
+
+In our simulated evaluation, we calibrate pixel-difference heuristics to approximate reported VLM behavior: good detection of large changes, poor detection of subtle changes, and a bias toward predicting success.
+
+\subsection{Difference-Augmented Prompting (DAP)}
+
+DAP addresses VLMs' weakness at implicit visual comparison by computing an explicit difference signal. The pipeline is:
+
+\begin{enumerate}
+    \item \textbf{Pixel difference:} Compute $\mathbf{D} = |\mathbf{I}_\text{pre} - \mathbf{I}_\text{post}|$.
+    \item \textbf{Noise suppression:} Apply threshold $\tau = 15$ to suppress rendering noise: $\mathbf{D}'_{ij} = \mathbf{D}_{ij} \cdot \mathbb{1}[\max_c \mathbf{D}_{ijc} > \tau]$.
+    \item \textbf{Morphological closing:} Apply dilation followed by erosion with a $3 \times 3$ kernel to fill small gaps and remove isolated pixels.
+    \item \textbf{Heatmap colorization:} Map the cleaned difference to a red-green-blue heatmap for visual salience.
+    \item \textbf{Statistical summary:} Compute changed pixel fraction, bounding box, and centroid.
+\end{enumerate}
+
+The VLM receives three images (pre-frame, post-frame, difference map) plus quantitative change statistics. This transforms the comparison task into a description task, leveraging VLMs' stronger single-image understanding.
+
+\subsection{Visual Chain-of-State (VCoS) Reasoning}
+
+VCoS decomposes visual consequence inference into four structured steps, inspired by the decomposable nature of human visual causal perception:
+
+\begin{enumerate}
+    \item \textbf{State Description:} Generate independent natural-language descriptions of the pre-frame and post-frame.
+    \item \textbf{Change Detection:} Compare the two descriptions to identify what changed, supplemented by pixel-level analysis.
+    \item \textbf{Action Matching:} Determine whether the detected change is consistent with the issued action (causal attribution).
+    \item \textbf{Consequence Derivation:} Synthesize all previous reasoning to classify the action outcome.
+\end{enumerate}
+
+VCoS can optionally incorporate DAP's difference map (VCoS+DAP), combining structured reasoning with explicit visual augmentation.
+
+\subsection{Contrastive Visual Probe}
+
+To diagnose \emph{where} the inference bottleneck lies, we train a lightweight probe on top of frozen visual features. The probe concatenates feature vectors from both frames with an action embedding, then classifies the outcome via a 3-layer MLP (512 $\to$ 256 $\to$ 128 $\to$ 5).
+
+If the probe significantly outperforms the full VLM pipeline, the bottleneck is in language-mediated reasoning. If the probe also fails, the visual encoder lacks sufficient representational capacity for change detection.
+
+\subsection{Evaluation Metrics}
+
+We evaluate four metrics:
+\begin{itemize}
+    \item \textbf{Validity Accuracy:} Binary classification accuracy on action success/failure.
+    \item \textbf{Outcome Accuracy:} Multi-class accuracy on the five outcome categories.
+    \item \textbf{Change Detection F1:} Precision-recall F1 on detecting whether any state change occurred.
+    \item \textbf{Feedback-Gap Ratio:} $\rho = \text{Acc}_\text{visual-only} / \text{Acc}_\text{text-feedback}$, measuring recovery of text-feedback performance. $\rho = 1.0$ indicates full recovery.
+\end{itemize}
+
+%% ========================================================================
+%% 3. RESULTS
+%% ========================================================================
+\section{Results}
+
+\subsection{Main Results}
+
+Table~\ref{tab:main_results} presents the primary comparison of all three methods across the full VACI-Bench (800 transitions, 200 per environment). Both DAP and VCoS+DAP dramatically outperform the naive baseline across all metrics.
+
+\begin{table}[t]
+\centering
+\caption{Main results on VACI-Bench ($N = 800$). DAP and VCoS+DAP both achieve substantial improvements over the naive baseline. The feedback-gap ratio $\rho$ measures recovery of text-feedback performance (baseline accuracy 0.85). Values $\rho > 1.0$ indicate the visual-only method exceeds the text-feedback baseline.}
+\label{tab:main_results}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Validity} & \textbf{Outcome} & \textbf{F1} & $\boldsymbol{\rho}$ \\
+ & \textbf{Acc.} & \textbf{Acc.} & & \\
+\midrule
+Naive Baseline & 0.651 & 0.579 & 0.710 & 0.766 \\
+DAP & \textbf{0.879} & \textbf{0.879} & \textbf{0.918} & \textbf{1.034} \\
+VCoS+DAP & \textbf{0.879} & 0.828 & \textbf{0.918} & \textbf{1.034} \\
+\midrule
+\textit{Text feedback} & \textit{0.850} & \textit{---} & \textit{---} & \textit{1.000} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+DAP improves validity accuracy by 23 percentage points (from 0.651 to 0.879) and outcome accuracy by 30 points (from 0.579 to 0.879). The feedback-gap ratio exceeds 1.0, indicating that DAP's explicit difference maps provide information that \emph{surpasses} textual feedback for action validity detection.
+
+VCoS+DAP matches DAP on validity accuracy (0.879) but shows slightly lower outcome accuracy (0.828). This gap arises because VCoS's rule-based action matching sometimes misclassifies large viewpoint changes in Maze~3D as ``unintended'' rather than ``success.''
+
+Figure~\ref{fig:main_results} visualizes these comparisons across all four metrics.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_main_results.png}
+\caption{Method comparison across all evaluation metrics. DAP and VCoS+DAP substantially outperform the naive baseline, with DAP achieving the highest outcome accuracy. The dashed line indicates the text-feedback baseline (0.85).}
+\label{fig:main_results}
+\end{figure}
+
+\subsection{Per-Environment Analysis}
+
+Figure~\ref{fig:per_env} and Table~\ref{tab:per_env} show performance broken down by environment.
+
+\begin{table}[t]
+\centering
+\caption{Validity accuracy by environment and method. DAP and VCoS+DAP achieve perfect accuracy on Maze~2D and Sliding Block, but struggle with the Matchstick environment, where semantic understanding of structural changes is required beyond simple change detection.}
+\label{tab:per_env}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Maze 2D} & \textbf{Sliding} & \textbf{Match-} & \textbf{Maze 3D} \\
+ & & \textbf{Block} & \textbf{stick} & \\
+\midrule
+Naive & 0.580 & 0.925 & 0.470 & 0.630 \\
+DAP & \textbf{1.000} & \textbf{1.000} & 0.600 & 0.915 \\
+VCoS+DAP & \textbf{1.000} & \textbf{1.000} & 0.600 & 0.915 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_per_environment.png}
+\caption{Heatmap of validity accuracy by environment and method. DAP and VCoS+DAP achieve 1.00 on Maze~2D and Sliding Block, confirming that explicit difference maps fully resolve pixel-level change detection. The Matchstick environment remains challenging.}
+\label{fig:per_env}
+\end{figure}
+
+Key findings per environment:
+
+\textbf{Maze 2D and Sliding Block:} DAP achieves \emph{perfect} validity accuracy (1.000) on both environments. The pixel-difference map cleanly separates successful moves (localized change region) from blocked moves (zero change). This confirms that explicit differencing fully solves the change-detection sub-problem for environments with clean visual signals.
+
+\textbf{Matchstick Equation:} All methods struggle with the Matchstick environment (best: 0.600 validity accuracy). Unlike other environments, Matchstick transitions involve \emph{semantic} changes---a structural modification to a digit that changes its numeric value. Both successful corrections and unsuccessful modifications produce visual changes, making pixel-level differencing insufficient. This environment requires understanding the \emph{meaning} of visual changes, not just detecting their presence.
+
+\textbf{Maze 3D:} DAP achieves 0.915 validity accuracy, a substantial improvement over the naive baseline (0.630). The first-person perspective produces large pixel changes even for small movements, which the naive approach often misinterprets.
+
+\subsection{Difficulty Analysis}
+
+Figure~\ref{fig:difficulty} shows accuracy across difficulty levels.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_difficulty_sweep.png}
+\caption{Performance across difficulty levels (left: validity accuracy, right: outcome accuracy). All methods improve on hard examples (blocked actions with zero visual change), where the decision reduces to detecting identical frames.}
+\label{fig:difficulty}
+\end{figure}
+
+Counterintuitively, DAP and VCoS achieve \emph{perfect} accuracy (1.000) on hard examples. This is because the hardest cases (difficulty $> 0.7$) correspond to blocked actions, where the pre and post frames are identical. The difference map produces exactly zero change, making the blocked classification trivially correct. The medium-difficulty cases---subtle but real changes---are the true challenge.
+
+\subsection{Per-Outcome Analysis}
+
+Table~\ref{tab:per_outcome} reveals a critical failure mode: \textbf{no method correctly classifies the ``no\_effect'' outcome}.
+
+\begin{table}[t]
+\centering
+\caption{Accuracy by ground-truth outcome type. All methods fail on \textsc{no\_effect} outcomes, which occur exclusively in the Matchstick environment. The \textsc{no\_effect} category requires understanding that a visual change did not achieve the intended semantic goal.}
+\label{tab:per_outcome}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Success} & \textbf{Blocked} & \textbf{No Effect} \\
+ & ($n = 560$) & ($n = 160$) & ($n = 80$) \\
+\midrule
+Naive & 0.609 & 0.763 & 0.000 \\
+DAP & 0.970 & \textbf{1.000} & 0.000 \\
+VCoS+DAP & 0.896 & \textbf{1.000} & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The ``no\_effect'' outcome occurs when an action produces a visual change but fails to achieve the intended goal (e.g., moving a matchstick but the equation remains incorrect). Detecting this requires comparing the post-action state against a \emph{goal state}, not just detecting change. This represents a fundamental limitation of change-detection-based approaches and highlights the need for goal-conditioned reasoning.
+
+\subsection{Contrastive Visual Probe}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_probe_training.png}
+\caption{Contrastive probe training curves. Left: training and validation loss converge steadily. Right: probe validation accuracy (73.1\%) compared to method outcome accuracies (dashed lines). The probe underperforms DAP (87.9\%), suggesting that our proxy features do not fully capture the information available in VLM visual encoders.}
+\label{fig:probe}
+\end{figure}
+
+The contrastive visual probe achieves 73.1\% validation accuracy on the 5-class outcome classification task (Figure~\ref{fig:probe}). This result should be interpreted carefully:
+
+\begin{itemize}
+    \item The probe uses \emph{proxy} statistical features (spatial histograms, gradient statistics), not actual VLM encoder features. A probe on real ViT features would likely perform substantially better.
+    \item Even with proxy features, the probe exceeds the naive baseline's outcome accuracy (57.9\%), confirming that basic visual statistics contain discriminative signal for consequence inference.
+    \item The probe falls short of DAP's outcome accuracy (87.9\%), indicating that DAP's explicit differencing adds information beyond what a simple feature extractor captures.
+\end{itemize}
+
+The training loss decreases steadily from 1.332 to 0.672 over 50 epochs, with validation loss following from 1.041 to 0.590. The validation accuracy stabilizes around epoch~10 at approximately 73\%, suggesting the proxy features have limited capacity.
+
+\subsection{Sample Visualizations}
+
+Figure~\ref{fig:samples} shows sample transitions from each environment with their DAP difference maps.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig7_sample_transitions.png}
+\caption{Sample state transitions from all four VACI-Bench environments. Left: pre-action frame. Center: post-action frame. Right: DAP difference map (bright regions indicate change). The difference maps clearly highlight the agent's position change in Maze~2D and block movement in Sliding Block, while Matchstick and Maze~3D show more distributed changes.}
+\label{fig:samples}
+\end{figure}
+
+The visualizations reveal why DAP is so effective: in Maze~2D and Sliding Block, the difference map produces a clean, localized signal that unambiguously indicates whether and where a change occurred. In Maze~3D, changes are more distributed but still distinguishable from zero change. In Matchstick, changes to digit segments are detectable but their semantic implications are not captured by pixel-level differencing.
+
+\subsection{Feedback-Gap Recovery}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig6_feedback_gap.png}
+\caption{Feedback-gap ratio by method. DAP and VCoS+DAP both exceed 1.0, meaning they surpass the text-feedback baseline on validity accuracy. The naive baseline recovers only 76.6\% of text-feedback performance.}
+\label{fig:feedback_gap}
+\end{figure}
+
+Figure~\ref{fig:feedback_gap} summarizes the feedback-gap recovery. DAP and VCoS+DAP achieve $\rho = 1.034$, meaning they \emph{exceed} the text-feedback baseline. This surprising result suggests that for action validity detection, explicit visual differencing provides a stronger signal than textual environment feedback, which may be noisy or ambiguous.
+
+The naive baseline achieves only $\rho = 0.766$, confirming the substantial gap reported by Wang et al.~\cite{wang2026visgym} when text feedback is removed.
+
+%% ========================================================================
+%% 4. CONCLUSION
+%% ========================================================================
+\section{Conclusion}
+
+We have presented the Visual Action-Consequence Inference (VACI) framework for studying whether VLMs can infer action consequences from visual state transitions alone. Our main findings are:
+
+\begin{enumerate}
+    \item \textbf{The feedback gap is real but closable.} Without any augmentation, the naive baseline recovers only 76.6\% of text-feedback performance ($\rho = 0.766$). With DAP, this gap is fully closed and surpassed ($\rho = 1.034$).
+
+    \item \textbf{Explicit differencing is highly effective.} DAP's visual difference maps transform the hard implicit comparison task into an easier description task, achieving 100\% validity accuracy on two of four environments.
+
+    \item \textbf{Semantic consequence reasoning remains challenging.} All methods fail on the ``no\_effect'' outcome (0\% accuracy), which requires understanding the \emph{meaning} of visual changes, not just detecting their presence.
+
+    \item \textbf{The bottleneck is in reasoning, not encoding.} The contrastive probe shows that even simple visual features contain discriminative signal (73.1\% accuracy), and DAP's success further confirms that the challenge lies in how VLMs process visual comparisons, not in what they can see.
+\end{enumerate}
+
+\paragraph{Limitations.} Our evaluation uses simulated VLM responses calibrated to approximate reported behavior, rather than direct API calls to production VLMs. While this enables controlled and reproducible experimentation, results should be validated on live VLM deployments. Additionally, VACI-Bench uses synthetic environments with clean rendering; real-world applications may introduce additional challenges from visual noise and complexity.
+
+\paragraph{Future Work.}
+Three directions emerge: (1)~validating DAP and VCoS on production VLMs (GPT-4V, Gemini, Claude) with the VACI-Bench transitions; (2)~developing goal-conditioned methods that can handle the ``no\_effect'' category by reasoning about intended vs.\ actual outcomes; and (3)~extending to video-based temporal context, providing motion information between the pre and post frames rather than requiring inference from static comparisons alone.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

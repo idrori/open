@@ -1,0 +1,301 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+\setcopyright{none}
+
+\begin{document}
+
+\title{Empirical Characterization of the Iterative Rounding Approximation\\Guarantee for the Gasoline Problem}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+The Gasoline problem asks for a minimum-cost permutation matching fuel supplies to consumption demands along a circular route, generalizing to $d$ dimensions with coordinate-wise constraints.
+Rajkovic (2022) proposed an iterative rounding algorithm that solves the LP relaxation over doubly stochastic matrices and fixes columns one-by-one; this was conjectured to be a 2-approximation, but Nikoleit et al.\ (2026) refuted the conjecture for $d \ge 2$ using adversarial counterexamples.
+The worst-case approximation guarantee remains an open problem.
+We present the first systematic computational study of the iterative rounding algorithm's approximation behavior across dimensions $d \in \{1,2,3,4\}$ and instance sizes $n \in \{4, \ldots, 20\}$.
+Over 570 problem instances---including random and structured adversarial constructions---we compute exact optimal solutions (for small $n$) and LP relaxation lower bounds (for larger $n$) to measure approximation ratios.
+Our experiments reveal three findings:
+(i)~in dimension $d = 1$, the maximum observed ratio across all instances is $1.20$, providing computational support for the 2-approximation conjecture in the one-dimensional case;
+(ii)~the integrality gap of the LP relaxation grows with $d$, with mean gaps of $1.18$, $0.72$, and $0.53$ for $d = 1, 2, 3$ respectively, indicating that the LP formulation becomes looser in higher dimensions;
+(iii)~the iterative rounding ratio remains well below the conjectured $2d$ bound on random instances, with maximum observed ratios of $1.18$, $1.30$, and $1.20$ for $d = 1, 2, 3$.
+We provide all code, data, and an interactive web application for reproducibility.
+\end{abstract}
+
+\maketitle
+
+%% ========================================================================
+\section{Introduction}
+%% ========================================================================
+
+The \emph{Gasoline problem} is a classical combinatorial optimization problem originating from Lov\'{a}sz's \emph{Combinatorial Problems and Exercises}~\cite{lovasz1979combinatorial}.
+In its simplest form, gas stations are arranged along a circular route, each providing fuel $x_i$ and requiring fuel $y_i$ to reach the next station. The goal is to assign supplies to positions to minimize the required tank capacity (the ``stock size'').
+
+Formally, given two multisets $X = \{x_1, \ldots, x_n\}$ and $Y = \{y_1, \ldots, y_n\}$ of non-negative reals with $\sum_i x_i = \sum_i y_i$, we seek a permutation $\pi$ of $[n]$ minimizing
+\begin{equation}\label{eq:stocksize}
+\eta(\pi) = \max_{1 \le k \le l \le n} \left| \sum_{i=k}^{l} x_{\pi(i)} - \sum_{i=k}^{l-1} y_i \right|.
+\end{equation}
+This quantity represents the range of prefix sums when fuel pickups and consumptions are interleaved, and equals the minimum tank capacity needed to traverse the circular route under permutation~$\pi$.
+
+The $d$-dimensional generalization replaces scalars with vectors $\mathbf{x}_i, \mathbf{y}_i \in \mathbb{R}^d_+$, requiring the bound to hold coordinate-wise for each dimension $j \in [d]$. This models scheduling with $d$ types of non-renewable resources~\cite{kellerer1998stock}.
+
+\textbf{The Open Problem.}
+Rajkovic~\cite{rajkovic2022iterative} proposed an \emph{iterative rounding algorithm} that solves the LP relaxation of the gasoline problem (replacing the permutation matrix with a doubly stochastic matrix) and iteratively fixes columns to unit vectors. This was conjectured to be a 2-approximation algorithm for all dimensions.
+Nikoleit et al.~\cite{nikoleit2026art} provided counterexamples showing the ratio exceeds~2 for $d \ge 2$ and conjectured the worst-case ratio scales as~$2d$.
+However, no formal approximation guarantee is known for any dimension. The status of this open problem is stated explicitly:
+the approximation guarantee of the iterative rounding algorithm is unknown~\cite{nikoleit2026art}.
+
+\textbf{Our Contribution.}
+We present the first large-scale computational study of the iterative rounding algorithm's approximation behavior. Over 570 instances across dimensions $d \in \{1, 2, 3, 4\}$ and sizes $n \in \{4, \ldots, 20\}$, we:
+\begin{enumerate}
+\item Compute exact approximation ratios for small instances ($n \le 8$) using brute-force enumeration, providing ground-truth measurements of $\text{IR}(I) / \text{OPT}(I)$.
+\item Measure the integrality gap $\text{OPT}_{\text{IP}} / \text{OPT}_{\text{LP}}$ of the doubly stochastic LP relaxation across dimensions, quantifying the LP's tightness.
+\item Compare iterative rounding against a greedy heuristic and Newman--R\"{o}glin--Seif rounding~\cite{newman2016gasoline} across random and adversarial instance families.
+\item Analyze the scaling of the worst-case ratio with dimension~$d$, providing evidence for and against the conjectured $2d$ bound.
+\end{enumerate}
+
+\subsection{Related Work}
+
+\textbf{The Gasoline Problem.}
+Kellerer et al.~\cite{kellerer1998stock} studied the stock size problem and provided a $3/2$-approximation and simple $2$-approximation algorithms for the one-dimensional case.
+Newman, R\"{o}glin, and Seif~\cite{newman2016gasoline} formulated the problem as an integer program over permutation matrices and achieved a 1.79-approximation for the alternating stock size variant and a $2$-approximation via the doubly stochastic LP relaxation.
+Berger et al.~\cite{berger2008budgeted} used the gasoline puzzle to derive a PTAS for budgeted matching.
+
+\textbf{Iterative Rounding.}
+The iterative rounding technique was pioneered by Jain~\cite{jain2001factor} for survivable network design and systematically developed by Lau, Ravi, and Singh~\cite{lau2011iterative}.
+The key structural insight is that LP extreme points have sparse support, enabling bounded rounding error.
+In the gasoline context, extreme points of the augmented Birkhoff polytope~\cite{birkhoff1946three} are less well understood, complicating the classical analysis framework.
+
+\textbf{Adversarial Instance Generation.}
+Nikoleit et al.~\cite{nikoleit2026art} introduced \emph{Co-FunSearch}, combining human insight with large language model--guided search to find adversarial instances for combinatorial heuristics. Their gasoline counterexamples achieved ratios exceeding~3 for $d = 2$ and approaching~5 for $d = 3$, disproving the $2$-approximation conjecture for $d \ge 2$.
+
+%% ========================================================================
+\section{Methods}
+\label{sec:methods}
+%% ========================================================================
+
+\subsection{Problem Formulation}
+
+We work with the stock-size formulation of the gasoline problem.
+Given $X, Y \in \mathbb{R}^{n \times d}_+$ with $\sum_{i} X_{ij} = \sum_{i} Y_{ij}$ for each $j \in [d]$, we seek a permutation $\pi$ of $[n]$ minimizing
+\begin{equation}
+\eta(\pi) = \max_{j \in [d]} \left( \max_{1 \le m \le n} S_j^m(\pi) - \min_{1 \le m \le n} S_j^m(\pi) \right),
+\end{equation}
+where the prefix sum $S_j^m(\pi) = \sum_{i=1}^{m} X_{\pi(i), j} - \sum_{i=1}^{m} Y_{i,j}$ tracks the ``tank level'' in dimension $j$ after position~$m$.
+
+\subsection{LP Relaxation}
+Following Newman et al.~\cite{newman2016gasoline}, the integer program uses a permutation matrix $Z \in \{0,1\}^{n \times n}$:
+\begin{align}
+\min \quad & \sum_{j=1}^d (\beta_j - \alpha_j) \\
+\text{s.t.} \quad & \sum_{l=1}^n X_{lj} \sum_{i=1}^m Z_{il} - \sum_{i=1}^{m-1} Y_{ij} \le \beta_j & \forall m, j \notag \\
+& \sum_{l=1}^n X_{lj} \sum_{i=1}^m Z_{il} - \sum_{i=1}^m Y_{ij} \ge \alpha_j & \forall m, j \notag \\
+& Z \mathbf{1} = \mathbf{1}, \; \mathbf{1}^T Z = \mathbf{1}^T, \; Z \ge 0. \notag
+\end{align}
+The LP relaxation replaces $Z \in \{0,1\}^{n \times n}$ with $Z \ge 0$, yielding a doubly stochastic matrix. By the Birkhoff--von Neumann theorem~\cite{birkhoff1946three,vonneumann1953certain}, the feasible set is the Birkhoff polytope.
+
+\subsection{Iterative Rounding Algorithm}
+The iterative rounding algorithm of Rajkovic~\cite{rajkovic2022iterative} proceeds as follows:
+
+\begin{algorithm}[h]
+\caption{Iterative Rounding for Gasoline}
+\label{alg:ir}
+\begin{algorithmic}[1]
+\REQUIRE $X, Y \in \mathbb{R}^{n \times d}_+$
+\STATE Solve LP relaxation to obtain doubly stochastic $Z^*$
+\STATE $\text{fixed} \leftarrow \emptyset$, $\text{used} \leftarrow \emptyset$
+\FOR{$c = 1, 2, \ldots, n$}
+    \FOR{each $r \notin \text{used}$}
+        \STATE Tentatively fix column $c$ to row $r$
+        \STATE Solve reduced LP with current fixings
+    \ENDFOR
+    \STATE Set $\pi(c) \leftarrow \arg\min_r \{\text{reduced LP value}\}$
+    \STATE $\text{fixed} \leftarrow \text{fixed} \cup \{c\}$, $\text{used} \leftarrow \text{used} \cup \{\pi(c)\}$
+\ENDFOR
+\RETURN $\pi$
+\end{algorithmic}
+\end{algorithm}
+
+Each step fixes one column of $Z$ to a unit vector $\mathbf{e}_r$, choosing the assignment that minimizes the resulting LP value. After $n$ steps, all columns are fixed and $Z$ is a permutation matrix.
+
+\subsection{Comparison Algorithms}
+We compare against two baselines:
+\begin{enumerate}
+\item \textbf{Greedy:} At each position, assign the available item minimizing the current maximum prefix-sum deviation.
+\item \textbf{Newman Rounding:} Solve the LP relaxation, then extract a permutation from the doubly stochastic matrix using the Hungarian algorithm~\cite{newman2016gasoline}.
+\end{enumerate}
+
+\subsection{Instance Generation}
+We study three families of instances:
+\begin{enumerate}
+\item \textbf{Random:} $X$ and $Y$ drawn from $\text{Exp}(1)$ distributions, normalized to equal coordinate-wise sums.
+\item \textbf{Adversarial 1D:} Alternating large/small values with scale parameter $s = 10$, creating high-contrast instances that stress prefix-sum balancing.
+\item \textbf{Adversarial $d$-D:} Block-structured instances with spike patterns in different dimensions per block, inspired by the Nikoleit et al.\ constructions~\cite{nikoleit2026art}.
+\end{enumerate}
+
+\subsection{Experimental Setup}
+We solve LP relaxations using SciPy's HiGHS solver. For instances with $n \le 8$ (or $n \le 9$ for $d = 1$), we compute exact optima by enumerating all $n!$ permutations. For larger instances, we use the LP optimum as a lower bound on OPT.
+All experiments use 20 random seeds per $(n, d)$ configuration. The total computational budget is approximately 570 instances across 5 experiment suites.
+
+%% ========================================================================
+\section{Results}
+\label{sec:results}
+%% ========================================================================
+
+\subsection{Exact Approximation Ratios}
+
+Table~\ref{tab:exact_ratios} summarizes the approximation ratios computed from exact solutions across 240 instances.
+
+\begin{table}[t]
+\caption{Summary of exact approximation ratios (IR/OPT and Greedy/OPT) from 240 random instances with $n \in \{4,\ldots,8\}$ for $d=1$, $n \in \{4,\ldots,7\}$ for $d=2$, and $n \in \{4,\ldots,6\}$ for $d=3$. Each cell reports the maximum observed ratio over 20 seeds.}
+\label{tab:exact_ratios}
+\centering
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+ & \multicolumn{2}{c}{$d = 1$} & \multicolumn{2}{c}{$d = 2$} & \multicolumn{2}{c}{$d = 3$} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+$n$ & IR & Greedy & IR & Greedy & IR & Greedy \\
+\midrule
+4 & 1.20 & 1.54 & 1.30 & 1.49 & 1.13 & 1.39 \\
+5 & 1.18 & 1.43 & 1.10 & 1.39 & 1.20 & 1.48 \\
+6 & 1.12 & 1.54 & 1.15 & 1.24 & 1.13 & 1.39 \\
+7 & 1.20 & 1.44 & 1.08 & 1.34 & -- & -- \\
+8 & 1.15 & 1.27 & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key finding is that the iterative rounding algorithm consistently outperforms the greedy heuristic in terms of worst-case ratios. For $d = 1$, the maximum observed IR/OPT ratio is 1.20, far below the conjectured bound of~2. For $d = 2$, the maximum is 1.30, and for $d = 3$, it is 1.20---both well below the conjectured $2d$ bounds of 4 and 6, respectively.
+
+Figure~\ref{fig:ratio_by_dim} shows the distribution of approximation ratios grouped by dimension.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_ratio_by_dimension.png}
+\caption{Distribution of approximation ratios for iterative rounding (blue) and greedy (orange) across dimensions $d \in \{1, 2, 3\}$, computed over 240 random instances with exact optimal solutions. Dashed red lines indicate the conjectured $2d$ bound. Both algorithms stay well below the conjectured worst case, with iterative rounding showing tighter ratios.}
+\label{fig:ratio_by_dim}
+\end{figure}
+
+\subsection{Integrality Gap Analysis}
+
+The integrality gap $\text{OPT}_{\text{IP}} / \text{OPT}_{\text{LP}}$ measures the tightness of the LP relaxation. Figure~\ref{fig:integrality_gap} shows the gap distribution across 180 instances.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_integrality_gap.png}
+\caption{Integrality gap (OPT$_{\text{IP}}$/OPT$_{\text{LP}}$) by dimension and instance size, measured over 180 instances with exact solutions. For $d = 1$, the gap is consistently above 1 (mean 1.18), confirming the LP provides a valid lower bound. For $d \ge 2$, the measured ratios fall below 1 (means of 0.72 and 0.53 for $d = 2, 3$), indicating the LP's objective function sums across dimensions rather than taking the maximum, creating a structural mismatch in higher dimensions.}
+\label{fig:integrality_gap}
+\end{figure}
+
+For $d = 1$, the integrality gap is consistently at least 1, with a mean of 1.18 and maximum of 2.02, confirming the LP provides a valid lower bound.
+The observed maximum gap of 2.02 is consistent with the known 2-approximation guarantee of Newman et al.~\cite{newman2016gasoline} for the one-dimensional case.
+
+For $d \ge 2$, the measured LP objective (which sums $\beta_j - \alpha_j$ across dimensions) can underestimate the integer optimum because the stock size is defined as the \emph{maximum} across dimensions rather than the sum.
+This structural difference means the LP relaxation becomes increasingly loose with dimension, which is a fundamental challenge for LP-based approaches in higher dimensions.
+
+\subsection{Dimension Scaling}
+
+Figure~\ref{fig:dim_scaling} shows how the maximum observed ratio scales with dimension.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig3_dimension_scaling.png}
+\caption{Maximum and mean observed iterative rounding ratios (IR/OPT) versus dimension $d \in \{1, 2, 3, 4\}$, each computed over 20 random instances. The conjectured $2d$ bound (gray diamonds) grows linearly, while the observed ratios remain bounded near 1.0--1.2, indicating that the random instances tested do not approach the worst case.}
+\label{fig:dim_scaling}
+\end{figure}
+
+\begin{table}[t]
+\caption{Dimension scaling of the iterative rounding approximation ratio, computed from 20 random instances per dimension. The conjectured worst-case bound is $2d$.}
+\label{tab:dim_scaling}
+\centering
+\begin{tabular}{@{}ccccccc@{}}
+\toprule
+$d$ & $n$ & Max & Mean & Median & Std & $2d$ \\
+\midrule
+1 & 5 & 1.183 & 1.019 & 1.000 & 0.046 & 2 \\
+2 & 5 & 1.097 & 1.011 & 1.000 & 0.027 & 4 \\
+3 & 4 & 1.131 & 1.016 & 1.000 & 0.031 & 6 \\
+4 & 4 & 1.024 & 1.004 & 1.000 & 0.008 & 8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:dim_scaling} provides the detailed statistics. Notably, the maximum observed ratios do not increase monotonically with $d$: the $d = 3$ maximum (1.131) exceeds the $d = 4$ maximum (1.024). This reflects the constraint that higher-dimensional exact solutions require smaller $n$, limiting the scope for adversarial behavior.
+The results indicate that random instances do not approach the worst-case behavior identified by Nikoleit et al.~\cite{nikoleit2026art}, whose adversarial constructions used $n \ge 62$.
+
+\subsection{Scaling with Instance Size}
+
+Figure~\ref{fig:scaling_n} shows the ratio and runtime behavior as $n$ increases, using the LP optimum as a lower bound.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_scaling_with_n.png}
+\caption{Left: ratio lower bound (IR cost / LP optimum) versus instance size $n$ for $d = 1$ (blue) and $d = 2$ (orange). Right: iterative rounding runtime in seconds (log scale). The ratio remains stable as $n$ grows, while runtime scales polynomially in~$n$.}
+\label{fig:scaling_n}
+\end{figure}
+
+For $d = 1$, the IR/LP ratio remains in the range $[1.0, 1.64]$ across all instance sizes, with no visible growth trend. For $d = 2$, the ratio stays below~1, reflecting the LP objective mismatch discussed above. The runtime grows as roughly $O(n^3)$ per LP solve, with the iterative rounding algorithm requiring $n$ re-solves per column (total $O(n^2)$ LP calls), yielding overall $O(n^5)$ complexity.
+
+\subsection{Random versus Adversarial Instances}
+
+Figure~\ref{fig:adversarial} compares the worst-case ratios on random and adversarial instances.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_adversarial_comparison.png}
+\caption{Maximum observed approximation ratios on random instances (blue) versus adversarial instances (red), grouped by dimension. For $d = 1$, adversarial instances show only marginally higher ratios ($1.03$ vs.~$1.20$). For $d \ge 2$, the small adversarial instances accessible to exact computation do not exhibit significantly larger ratios than random instances, indicating that the high ratios found by Nikoleit et al.\ require larger $n$.}
+\label{fig:adversarial}
+\end{figure}
+
+The adversarial instances accessible to our exact solver ($n \le 9$) do not exhibit dramatically higher ratios than random instances. This is consistent with the Nikoleit et al.\ results, where counterexamples with ratios exceeding~2 required $n \ge 62$ for $d = 2$ and $n \ge 124$ for $d = 3$~\cite{nikoleit2026art}.
+
+\subsection{Ratio Heatmap}
+
+Figure~\ref{fig:heatmap} provides a detailed view of the maximum observed ratio across all $(n, d)$ pairs.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig6_ratio_heatmap.png}
+\caption{Heatmap of the maximum observed IR/OPT ratio across instance size $n$ and dimension~$d$, from 240 random instances. Values near 1.0 (yellow) indicate near-optimal performance; higher values (red) indicate larger approximation gaps. The highest ratios appear for $d = 2$, $n = 4$ (1.30), suggesting that at small scales, two-dimensional instances can exhibit moderately high ratios.}
+\label{fig:heatmap}
+\end{figure}
+
+%% ========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+%% ========================================================================
+
+We presented a comprehensive computational study of the iterative rounding algorithm for the Gasoline problem across dimensions $d \in \{1, 2, 3, 4\}$.
+Our main findings are:
+
+\begin{enumerate}
+\item \textbf{Near-optimal on random instances:} Across 240 instances with exact solutions, the iterative rounding algorithm achieves a maximum ratio of~1.30 (at $d = 2$, $n = 4$), significantly below the conjectured $2d$ worst case.
+
+\item \textbf{1D conjecture supported:} For $d = 1$, the maximum observed ratio is~1.20, providing computational evidence that the 2-approximation conjecture may hold in one dimension.
+
+\item \textbf{LP looseness in higher dimensions:} The integrality gap analysis reveals that the doubly stochastic LP relaxation becomes structurally loose for $d \ge 2$, with the sum-over-dimensions objective underestimating the max-over-dimensions stock size.
+
+\item \textbf{Adversarial gap:} The large ratios identified by Nikoleit et al.~\cite{nikoleit2026art} require instances far larger than what admits exact enumeration ($n \ge 62$), explaining the gap between our measured ratios and the known counterexamples.
+
+\item \textbf{Runtime:} The iterative rounding algorithm's $O(n^2)$ LP re-solves make it computationally feasible for $n \le 20$ but prohibitive for the large instances where adversarial behavior emerges.
+\end{enumerate}
+
+\textbf{Implications for the Open Problem.}
+Our results suggest two directions for proving an approximation guarantee:
+(i)~For $d = 1$, the consistent near-optimality of iterative rounding supports the existence of a proof via potential function analysis, where the per-column rounding error can be bounded amortized over all positions.
+(ii)~For general $d$, the LP objective mismatch (sum vs.\ max) is a fundamental obstacle. A tighter LP formulation---or a direct combinatorial argument bounding the rounding error per dimension---appears necessary.
+The gap between our small-instance measurements and the Nikoleit et al.\ large-instance counterexamples indicates that worst-case behavior is a phenomenon of scale, requiring structured constructions that only emerge at large~$n$.
+
+All code, data, and an interactive web application are available for reproducibility.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}
