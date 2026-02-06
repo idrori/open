@@ -1,0 +1,139 @@
+PEER REVIEW: Identifying Non-Learned Matrix Components in Neural Network Training
+==================================================================================
+
+1. SUMMARY
+----------
+
+This paper investigates optimization-induced flaws in neural network training beyond the known unlearned matrix scale identified by Velikanov et al. (2026). The authors decompose trained weight matrices into six components -- row norms, column norms, singular values, condition number, effective rank, and spectral gap -- and systematically measure which properties SGD learns well versus poorly. Experiments are conducted on synthetic matrix regression tasks across varying dimensions (32-256) and three target matrix structures (low-rank, block-diagonal, heterogeneous-norm).
+
+The central finding is that while row/column norms exhibit moderate learning errors (~13% relative error), the condition number and spectral gap show substantially worse learning quality, with condition number errors reaching 100%+ at higher dimensions. The paper further shows that learnable multipliers (the corrective strategy from Velikanov et al.) improve norm-related components but provide limited benefit for spectral properties, suggesting that spectral structure represents a distinct class of optimization flaws requiring new corrective strategies.
+
+The paper is concise and clearly written. It addresses an explicitly stated open question from Velikanov et al. (2026) and provides initial empirical evidence that spectral properties are systematically poorly learned. However, the experimental setup is limited to synthetic single-matrix regression, the analysis lacks theoretical depth, and the corrective strategies explored are narrow.
+
+2. STRENGTHS
+------------
+
+S1. Clear problem formulation: The paper directly addresses a well-defined open question from a recent paper (Velikanov et al., 2026), making the motivation crisp and the contribution well-scoped.
+
+S2. Systematic decomposition: The choice to decompose weight matrices into six distinct components provides a structured way to reason about what SGD learns and what it fails to learn. The component-level analysis is a useful analytical lens.
+
+S3. Controlled experimental design: The use of synthetic tasks with known target matrices allows ground-truth comparison, enabling precise measurement of component-level learning errors. The use of multiple random trials (n=10) adds some statistical rigor.
+
+S4. Interesting empirical finding: The observation that condition number errors grow dramatically with dimension (from ~18% at d=32 to ~100% at d=128-256) while norm errors remain essentially flat (~13%) is a genuinely interesting and non-obvious result.
+
+S5. Structure-dependent findings: The observation that block-diagonal targets produce the worst condition number errors while heterogeneous-norm targets make row/column norms harder to learn adds nuance and suggests that different layer types may need different corrections.
+
+S6. Reproducibility: The code is clean, well-structured, uses fixed random seeds, and produces JSON data files that can be directly verified against paper claims.
+
+3. WEAKNESSES
+-------------
+
+Major Issues:
+
+W1. Exclusively synthetic experiments: This is the paper's most critical limitation. All experiments use single-matrix regression (y = Wx + noise), which is far removed from actual neural network training. The paper makes claims about "optimization flaws in neural network training" but never trains an actual neural network. At minimum, the authors should:
+   (a) Test with multi-layer networks (even 2-3 layer MLPs) to verify that spectral learning failures persist when gradient dynamics are more complex.
+   (b) Include experiments with real transformer architectures (even small ones, e.g., a 2-layer transformer on a simple language modeling task) to validate that the findings transfer beyond matrix regression.
+   (c) Analyze pre-trained model weights (publicly available checkpoints) to see if the predicted spectral distortions are observable in practice.
+
+W2. Small dimensions: Dimensions tested range from 32 to 256, whereas real LLM weight matrices are typically 4096x4096 or larger. The scaling behavior observed (condition number error growing with dimension) is precisely the finding that demands testing at larger scales to understand the asymptotic trend. The authors should test at least up to d=1024 or d=2048.
+
+W3. No theoretical analysis: The paper observes that condition number and spectral gap are poorly learned but offers no explanation for WHY this happens. A gradient dynamics analysis would substantially strengthen the paper. Specifically:
+   (a) How do gradients of the loss with respect to individual singular values behave? Do small singular values receive vanishing gradient signal?
+   (b) Is the condition number learning failure related to the well-known issue of gradient flow through ill-conditioned matrices?
+   (c) Can the authors derive bounds on the rate at which SGD can reduce condition number error?
+
+W4. Very limited corrective strategies: The paper tests only learnable row/column multipliers as a corrective strategy. This is the known baseline from Velikanov et al. Given that the paper's main claim is that spectral structure needs new corrections, it should propose and test at least some candidates:
+   (a) Spectral regularization: Adding penalties on condition number or spectral gap.
+   (b) Orthogonal regularization: Penalizing deviation from orthogonality.
+   (c) SVD-based corrections: Learnable singular value multipliers (analogous to how learnable row/col multipliers correct norms).
+   (d) Structured weight decay: Decay schedules that preferentially target spectral properties.
+   (e) Periodic SVD re-projection during training.
+
+W5. Missing error bars and confidence intervals in the paper: While the code computes standard deviations across trials, the paper text reports no confidence intervals or error bars. The condition number errors have extremely high variance (std of 0.54-2.53 at different dimensions), which substantially weakens the claims. The paper should report mean +/- std or confidence intervals for all key numbers.
+
+W6. Data inconsistency with paper claims: The paper claims condition number and spectral gap errors are "2-5x larger" than row/column norm errors. Examining the data:
+   - Row/col norm errors: ~0.133 across all dimensions.
+   - Spectral gap errors: 0.030-0.040, which is actually LOWER than norm errors.
+   - Condition number errors: 0.18 (d=32) to 1.10 (d=128), which ranges from 1.3x to 8.3x.
+   The spectral gap finding appears to contradict the paper's claim. The paper should be more precise about which components are problematic and at which dimensions.
+
+Minor Issues:
+
+W7. Incomplete related work: The paper cites only 5 references and misses several important lines of work:
+   - Spectral normalization (Miyato et al., 2018): Directly addresses control of spectral properties during training.
+   - Orthogonal initialization (Saxe et al., 2014): Studies how initialization affects spectral structure learning.
+   - Singular value analysis of trained weights (Martin & Mahoney, 2021): Empirical studies of weight matrix spectra in real networks.
+   - Implicit bias toward low nuclear norm (Li et al., 2021): Theoretical analysis of spectral implicit bias.
+   - Weight matrix SVD analysis in transformers (Sharma & Kaplan, 2020): Scaling laws and spectral structure.
+
+W8. Paper is very short: At approximately 2 pages of content (excluding references), the paper lacks depth. The Discussion and Conclusion are brief and largely restate the findings. There is room to expand with:
+   - Detailed analysis of learning dynamics (how do errors evolve during training, not just final values?)
+   - Ablations on learning rate, optimizer choice (Adam vs SGD), batch size, and training duration.
+   - Visualization of singular value spectra (target vs trained) for representative cases.
+   - Analysis of how multiplier learning rates affect the correction quality.
+
+W9. No ablations: The experiments use fixed hyperparameters (lr=0.01, batch_size=64, epochs=200) without studying sensitivity:
+   - Does Adam exhibit the same spectral learning failures as SGD?
+   - Does longer training eventually close the spectral gap, or is it a fundamental limitation?
+   - How does learning rate affect the condition number error scaling?
+   - Does weight decay help or hurt spectral learning?
+
+W10. Multiplier experiment uses different random states: In scan_multiplier_effect(), the standard and multiplier runs use different random states (rng_std and rng_mult), which means they train on different target matrices (W_target vs W_target2). While the code uses the same seed, the RNG state diverges because generate_target_matrix and train_matrix_sgd consume different numbers of random values depending on whether multipliers are used. This is a subtle but important experimental confound -- the comparison should be on identical target matrices.
+
+W11. Effective rank shows near-zero error: The data shows effective rank errors of essentially 0 across all dimensions, yet the paper groups it with "spectral properties" that are poorly learned. This finding should be discussed explicitly, as it suggests not all spectral properties are problematic.
+
+4. DETAILED COMMENTS
+--------------------
+
+Section 2 (Methodology):
+- The effective rank threshold (0.01 * sigma_1) is arbitrary. How sensitive are the results to this choice? Consider testing with 0.001, 0.01, and 0.1 thresholds.
+- The paper should clarify that the condition number is computed as sigma_max / sigma_min (not some other variant). For near-rank-deficient matrices, this ratio can be astronomically large, making relative error comparisons problematic.
+- The experimental design section says "dimensions range from 16 to 64" but the code and data use 32 to 256. This discrepancy must be corrected.
+
+Section 3 (Results):
+- The paper would benefit from a table summarizing key numerical results alongside the figures.
+- The multiplier effect analysis (Section 3.2) only tracks row_norms, col_norms, singular_values, and overall_matrix -- it does NOT track condition_number or spectral_gap, which are the very components the paper claims multipliers fail to correct. This is a significant gap. The multiplier experiment should include all six components.
+- Figure descriptions are minimal. Each figure caption should include key quantitative takeaways.
+
+Section 4 (Discussion):
+- The claim that "different correction strategies may be needed for different layer types" is interesting but unsupported by any concrete proposal or evidence. Expanding this into a concrete taxonomy of layer types and corresponding correction strategies would strengthen the paper.
+- The paper should discuss the relationship between its findings and the well-known problem of exploding/vanishing gradients through ill-conditioned weight matrices.
+
+Code-level observations:
+- The training procedure uses fresh random batches every epoch (online learning) rather than a fixed dataset. This is fine but should be stated explicitly.
+- The noise level (0.01) in the regression target is very low. Testing with higher noise levels would be informative.
+- The multiplier learning rate is 10x smaller than the base learning rate (lr * 0.1). This choice is not justified and could significantly affect results.
+
+5. QUESTIONS FOR AUTHORS
+-------------------------
+
+Q1. Does the condition number learning failure persist with Adam optimizer? Adam's per-parameter adaptive learning rates might handle different singular value scales better.
+
+Q2. How do the results change with longer training (e.g., 1000 or 5000 epochs)? Is the spectral learning failure a convergence-speed issue or a fundamental limitation?
+
+Q3. Have you examined the gradient signal for individual singular values during training? This could illuminate WHY spectral properties are poorly learned.
+
+Q4. The spectral gap errors in the data (~0.03-0.04) are actually lower than norm errors (~0.13). Can you reconcile this with the paper's claim that spectral gap shows "substantially worse learning quality"?
+
+Q5. For low-rank target matrices, the condition number error is ~1.0 (100%), suggesting the trained matrix has very different conditioning from the target. Is this because SGD converges to a higher-rank solution due to implicit regularization, and if so, how does this relate to the known low-rank bias of gradient descent?
+
+Q6. Would learnable singular value multipliers (as opposed to row/column multipliers) address the spectral learning failures you identify?
+
+Q7. Have you considered analyzing weight matrices from pre-trained models (e.g., GPT-2 or LLaMA checkpoints) to see if the spectral distortions you predict are observable in practice?
+
+6. OVERALL ASSESSMENT
+---------------------
+
+Rating: 4/10 (Borderline reject)
+
+The paper addresses a timely and well-motivated question -- whether optimization flaws in neural network training extend beyond the known unlearned scale. The core finding that condition number is poorly learned by SGD is interesting and potentially impactful. However, the current version has significant limitations that prevent acceptance:
+
+1. The exclusively synthetic experimental setup (single-matrix regression) makes it impossible to draw conclusions about actual neural network training.
+2. The lack of theoretical analysis leaves the findings as unexplained empirical observations.
+3. The corrective strategies explored are limited to the existing baseline (learnable multipliers) without proposing or testing new approaches for spectral properties.
+4. The paper is very short and lacks the depth expected for a venue contribution -- no ablations, no error bars in text, no learning dynamics analysis.
+5. There is a data inconsistency regarding the spectral gap claim that must be resolved.
+
+The path to a strong revision is clear: (a) add experiments with real neural networks (at least MLPs, ideally transformers), (b) provide theoretical analysis of why spectral properties are hard to learn, (c) propose and evaluate at least 2-3 new corrective strategies targeting spectral structure, (d) add ablations and error bars, and (e) expand the related work. With these additions, this could become a solid contribution to the understanding of optimization flaws in deep learning.
+
+Confidence: 4/5 (Confident in the assessment; familiar with the relevant literature on implicit regularization and spectral properties of neural networks)

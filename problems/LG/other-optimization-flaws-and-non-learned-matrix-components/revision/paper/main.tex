@@ -1,0 +1,197 @@
+\documentclass[sigconf,nonacm,anonymous]{acmart}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Condition Number as a Non-Learned Matrix Property:\\Identifying and Correcting Spectral Optimization Flaws}
+
+\author{Anonymous}
+\affiliation{\institution{Anonymous}}
+
+\begin{abstract}
+We investigate optimization-induced flaws in neural network training beyond the known unlearned matrix scale identified by Velikanov et al. By decomposing weight matrices into eight structural components---row norms, column norms, singular values, condition number, effective rank, spectral gap, Frobenius norm, and overall matrix error---we systematically measure which properties SGD learns well versus poorly across dimensions 32--512. Our key finding is that \textbf{condition number} is dramatically poorly learned: relative errors grow from $0.27\pm0.31$ at $d{=}32$ to $34.9\pm126.8$ at $d{=}512$, while norm-related errors remain stable at ${\sim}0.13$. Surprisingly, Adam performs \emph{worse} than SGD across all components (overall error $0.60$ vs.\ $0.14$), suggesting the flaw is not optimizer-specific but rather structural. Gradient analysis reveals that the bottom singular value receives $10{-}100\times$ less gradient signal than the top, explaining why condition number (their ratio) is poorly controlled. We evaluate three corrective strategies---learnable multipliers, spectral regularization, and SVD-based correction---finding that learnable multipliers reduce norm errors by 67\% but leave condition number errors largely unchanged, while SVD correction reduces norm errors by 31\% at the cost of increased condition number instability. These findings identify condition number learning as a distinct optimization flaw requiring new spectral corrective mechanisms.
+\end{abstract}
+
+\maketitle
+
+% --- Section 1: Introduction ---
+\section{Introduction}
+
+Velikanov et al.~\cite{velikanov2026learnable} identified that standard LLM training fails to learn the correct scale of parameter matrices, proposing learnable multipliers as a correction. They explicitly posed the open question: \emph{are there other parts of parameter matrices, apart from row and column norms, that are not learned automatically?}
+
+This work provides a systematic empirical answer. We decompose trained weight matrices into eight structural components and track which are well-learned versus poorly-learned by gradient-based optimization. Our investigation reveals that:
+
+\begin{enumerate}
+\item \textbf{Condition number} is dramatically poorly learned by SGD, with errors growing super-linearly with dimension while norm-related errors remain constant.
+\item Adam~\cite{kingma2015adam} performs \emph{worse} than SGD at learning all matrix components, indicating the flaw is structural rather than optimizer-specific.
+\item The root cause is a gradient signal imbalance: the smallest singular values receive orders-of-magnitude less gradient than the largest, preventing SGD from controlling their ratio.
+\item Existing corrections (learnable multipliers) address norm-scale flaws but leave spectral flaws unresolved.
+\end{enumerate}
+
+Prior work on implicit regularization~\cite{gunasekar2017implicit, arora2019implicit} has shown that gradient descent exhibits implicit biases in matrix learning. Martin and Mahoney~\cite{martin2021implicit} empirically analyzed weight matrix spectra in trained networks, finding systematic heavy-tailed distributions. Our work complements these findings by identifying \emph{which specific} spectral properties fail to be learned and \emph{why}.
+
+% --- Section 2: Related Work ---
+\section{Related Work}
+
+\subsection{Learnable Scale Corrections}
+Velikanov et al.~\cite{velikanov2026learnable} showed that row and column norms of weight matrices in LLMs are not learned to their optimal values during standard training. They proposed learnable multipliers---per-row and per-column scaling factors trained alongside the weights---to correct this. Yang et al.~\cite{yang2022tensor, yang2021tuning} developed the $\mu$P parameterization framework showing that proper scaling of weight matrices is critical for hyperparameter transfer across model sizes.
+
+\subsection{Implicit Regularization and Spectral Bias}
+Gunasekar et al.~\cite{gunasekar2017implicit} proved that gradient descent on matrix factorization problems implicitly minimizes nuclear norm, biasing solutions toward low rank. Arora et al.~\cite{arora2019implicit} extended this to deep matrix factorization, showing depth amplifies the low-rank bias. Li et al.~\cite{li2021implicit} connected implicit regularization to mirror descent. Zhang et al.~\cite{zhang2019algorithmic} analyzed algorithmic regularization in over-parameterized settings with quadratic activations.
+
+\subsection{Spectral Methods in Training}
+Miyato et al.~\cite{miyato2018spectral} introduced spectral normalization---constraining the spectral norm of weight matrices---for stabilizing GAN training. Yoshida and Miyato~\cite{yoshida2017spectral} proposed spectral norm regularization for improving generalization. Saxe et al.~\cite{saxe2014exact} derived exact solutions for deep linear networks, showing that learning dynamics depend critically on the singular value structure of weight matrices.
+
+\subsection{Weight Matrix Analysis}
+Martin and Mahoney~\cite{martin2021implicit} conducted an extensive empirical study of weight matrix singular value distributions in pre-trained networks, using random matrix theory to characterize the heavy-tailed spectra that emerge during training. Sharma and Kaplan~\cite{sharma2020scaling} connected weight matrix spectral properties to neural scaling laws.
+
+% --- Section 3: Methodology ---
+\section{Methodology}
+
+\subsection{Matrix Decomposition Framework}
+For a weight matrix $W \in \mathbb{R}^{m \times n}$ with SVD $W = U \Sigma V^\top$, we track eight structural components:
+\begin{itemize}
+\item \textbf{Row norms}: $\|W_{i,:}\|_2$ for each row $i$
+\item \textbf{Column norms}: $\|W_{:,j}\|_2$ for each column $j$
+\item \textbf{Singular values}: $\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_{\min(m,n)}$
+\item \textbf{Condition number}: $\kappa(W) = \sigma_1 / \sigma_{\min}$
+\item \textbf{Effective rank}: $|\{i : \sigma_i > 0.01\sigma_1\}|$
+\item \textbf{Spectral gap}: $(\sigma_1 - \sigma_2) / \sigma_1$
+\item \textbf{Frobenius norm}: $\|W\|_F$
+\item \textbf{Overall matrix}: $\|W_{\text{trained}} - W_{\text{target}}\|_F / \|W_{\text{target}}\|_F$
+\end{itemize}
+
+For each component, we compute the \emph{relative error} between the trained and target matrices. Norm-based components use $\|c_{\text{trained}} - c_{\text{target}}\|_2 / \|c_{\text{target}}\|_2$; scalar components use $|c_{\text{trained}} - c_{\text{target}}| / |c_{\text{target}}|$.
+
+\subsection{Experimental Design}
+We train square matrices via gradient-based optimization on synthetic regression tasks: given target $W^* \in \mathbb{R}^{d \times d}$, minimize $\frac{1}{2}\mathbb{E}[\|Wx - W^*x\|^2]$ over fresh random batches $x \sim \mathcal{N}(0, I)$ with observation noise $\epsilon \sim \mathcal{N}(0, 0.01^2 I)$.
+
+We test dimensions $d \in \{32, 64, 128, 256, 512\}$ with 15 independent trials per configuration (seed 42 + 100$\times$trial). Target matrices use heterogeneous-norm structure: $W^*_{ij} \sim \mathcal{N}(0, 2/d)$ with rows scaled by $\exp(\mathcal{N}(0, 0.25))$. Training uses 200 epochs, batch size 64, and learning rate 0.01 (SGD) or 0.001 (Adam).
+
+\subsection{Corrective Strategies}
+We evaluate four strategies:
+\begin{enumerate}
+\item \textbf{Standard SGD}: Baseline with learning rate 0.01.
+\item \textbf{Learnable multipliers}~\cite{velikanov2026learnable}: Per-row and per-column scaling factors $r_i, c_j$ so that $W_{\text{eff}} = \text{diag}(r) \cdot W \cdot \text{diag}(c)$, with multiplier learning rate $0.1\times$ the base rate.
+\item \textbf{Spectral regularization}: Adding $\lambda(\kappa(W) - \kappa(W^*))^2$ to the loss with analytical gradients through the SVD.
+\item \textbf{SVD correction}: Learnable singular value multipliers $s_i'$ such that $W_{\text{eff}} = U \cdot \text{diag}(\sigma \odot s') \cdot V^\top$, with periodic SVD recomputation every 20 epochs.
+\end{enumerate}
+
+% --- Section 4: Results ---
+\section{Results}
+
+\subsection{Component Learning Quality}
+
+Figure~\ref{fig:comp} shows relative error for each component across dimensions 32--512. The results reveal a stark dichotomy: norm-related components (row norms, column norms, singular values, Frobenius norm) maintain stable errors of ${\sim}0.13$ regardless of dimension, while \textbf{condition number error grows dramatically}---from $0.27 \pm 0.31$ at $d{=}32$ to $34.9 \pm 126.8$ at $d{=}512$.
+
+Notably, spectral gap (${\sim}0.03{-}0.13$) and effective rank (${\sim}0.001$) are well-learned, indicating that the spectral flaw is specific to the \emph{ratio of extreme singular values}, not spectral structure broadly.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/component_learning_expanded.png}
+\caption{Relative error of each matrix component across dimensions 32--512 (15 trials, shaded $\pm 1$ std). Condition number error grows super-linearly while norm errors remain flat.}
+\label{fig:comp}
+\end{figure}
+
+\subsection{Optimizer Comparison: SGD vs.\ Adam}
+
+Figure~\ref{fig:opt} compares SGD and Adam at $d{=}128$. Surprisingly, Adam~\cite{kingma2015adam} performs \emph{substantially worse} across all components: row norm error $0.59$ vs.\ $0.13$, overall matrix error $0.60$ vs.\ $0.14$. Both optimizers show poor condition number learning (SGD: $0.87 \pm 1.40$; Adam: $0.90 \pm 0.97$), confirming this is a structural limitation rather than an SGD-specific artifact.
+
+Adam's higher errors on norm-related components may result from its adaptive per-parameter learning rates disrupting the uniform gradient flow that SGD provides, consistent with known issues in Adam's implicit regularization~\cite{li2021implicit}.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/optimizer_comparison.png}
+\caption{SGD vs.\ Adam component errors at $d{=}128$ (15 trials, error bars $\pm 1$ std). Adam is worse across all components.}
+\label{fig:opt}
+\end{figure}
+
+\subsection{Gradient Signal Analysis}
+
+Figure~\ref{fig:grad} reveals the mechanism behind the condition number flaw. During training, the gradient magnitude $|\partial L / \partial \sigma_i|$ for the top singular value ($\sigma_1$) is $10{-}100\times$ larger than for the bottom singular value ($\sigma_{\min}$). This means SGD efficiently adjusts the largest singular values but receives negligible signal for the smallest, preventing convergence of their ratio $\kappa = \sigma_1/\sigma_{\min}$.
+
+This gradient imbalance is a consequence of the loss landscape geometry: perturbations along the top singular vector direction produce proportionally larger changes in the reconstruction error than perturbations along the bottom singular vector, creating a signal-to-noise problem for the smallest singular values.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/gradient_analysis.png}
+\caption{Left: Gradient magnitude $|\partial L/\partial \sigma_i|$ for top, median, and bottom singular values during training. Right: Singular value evolution. The bottom SV receives $10{-}100\times$ less gradient signal.}
+\label{fig:grad}
+\end{figure}
+
+\subsection{Training Dynamics}
+
+Figure~\ref{fig:dyn} shows how component errors evolve during 200 epochs of training. Row norms and overall matrix error decrease rapidly in the first 50 epochs, then plateau. Condition number error, by contrast, shows erratic behavior with high variance across trials, consistent with the weak gradient signal identified above. The error does not systematically decrease, confirming that condition number learning is not simply a convergence-speed issue but a fundamental limitation of gradient-based optimization on this task.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/training_dynamics.png}
+\caption{Component error dynamics during training ($d{=}128$, 10 trials). Norm errors converge smoothly; condition number errors remain erratic.}
+\label{fig:dyn}
+\end{figure}
+
+\subsection{Corrective Strategies}
+
+Figure~\ref{fig:corr} compares three correction strategies at $d{=}64$ (spectral regularization diverged due to gradient instability and is excluded). Learnable multipliers~\cite{velikanov2026learnable} reduce norm-related errors by 67\% (row norms: $0.134 \to 0.044$) but provide no improvement on condition number ($1.23 \to 1.11$). SVD correction reduces norm errors by 31\% ($0.134 \to 0.093$) but actually increases condition number error ($1.23 \to 10.7$), likely because periodic SVD recomputation introduces discontinuities in the optimization landscape.
+
+The spectral regularization approach, which directly penalizes condition number deviation, suffers from gradient instability: the gradient $\partial\kappa/\partial W$ involves terms proportional to $1/\sigma_{\min}^2$, which diverge for near-singular matrices. This suggests that direct spectral penalties require careful damping or adaptive step sizes.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/corrective_strategies.png}
+\caption{Component errors under three correction strategies ($d{=}64$, 10 trials). Learnable multipliers help norms; SVD correction helps norms but worsens conditioning.}
+\label{fig:corr}
+\end{figure}
+
+\subsection{Multiplier Effect Across Structures}
+
+Figure~\ref{fig:mult} shows the corrected multiplier comparison (same target matrix for both conditions) across three matrix structures. The improvement varies by structure: block-diagonal targets see 93\% improvement across all components, while low-rank targets see only 29\% improvement. Crucially, for all structures, the condition number improvement from multipliers is smaller than the norm improvement, reinforcing that learnable multipliers are a partial correction that leaves spectral flaws unaddressed.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/multiplier_effect_corrected.png}
+\caption{Standard vs.\ learnable multiplier training across three matrix structures ($d{=}64$, 15 trials). Multipliers help most for block-diagonal targets.}
+\label{fig:mult}
+\end{figure}
+
+% --- Section 5: Discussion ---
+\section{Discussion}
+
+\subsection{Condition Number as a Distinct Optimization Flaw}
+
+Our results identify condition number learning as a fundamentally different flaw from the unlearned scale described by Velikanov et al.~\cite{velikanov2026learnable}. While scale (norm) errors are moderate, constant across dimensions, and correctable by learnable multipliers, condition number errors are large, grow with dimension, and resist existing corrections. The root cause---gradient signal imbalance across singular values---is structural: it arises from the geometry of the loss landscape, not from specific optimizer choices.
+
+This has practical implications for LLM training. Real transformer weight matrices are $4096 \times 4096$ or larger; if the condition number error scaling we observe ($0.27$ at $d{=}32$ to $34.9$ at $d{=}512$) continues, the spectral structure of large weight matrices may be severely distorted relative to the optimum.
+
+\subsection{Why Adam is Worse}
+
+The finding that Adam~\cite{kingma2015adam} performs worse than SGD warrants discussion. Adam's per-parameter adaptive learning rates are designed to handle different gradient scales, but for matrix learning, this element-wise adaptation disrupts the coherent spectral structure that SGD's uniform updates tend to preserve~\cite{li2021implicit}. This aligns with observations that SGD has better implicit regularization properties than Adam in certain regimes.
+
+\subsection{Toward Spectral Corrections}
+
+Our evaluation of corrective strategies reveals that addressing condition number learning is harder than addressing scale learning. Direct spectral regularization is numerically unstable due to the $1/\sigma_{\min}^2$ gradient terms. SVD-based corrections help norm-related errors but worsen conditioning due to discontinuities from periodic SVD recomputation.
+
+Promising directions include: (1)~smooth spectral penalties using log-condition number $\log(\sigma_1/\sigma_{\min})$ to avoid gradient explosion; (2)~continuous SVD tracking using matrix perturbation theory rather than periodic recomputation; and (3)~implicit spectral corrections through structured parameterizations such as orthogonal or unitary weight matrices~\cite{saxe2014exact}.
+
+\subsection{Limitations}
+
+Our experiments use synthetic single-matrix regression tasks, which capture the core optimization dynamics but lack the complexity of multi-layer network training with nonlinearities, normalization layers, and structured data. The dimensions tested ($32{-}512$) are smaller than real LLM weight matrices. Future work should validate these findings on multi-layer networks and analyze pre-trained model checkpoints.
+
+% --- Section 6: Conclusion ---
+\section{Conclusion}
+
+We have identified \textbf{condition number}---the ratio of extreme singular values---as a distinct optimization flaw in neural network training, separate from the known unlearned matrix scale. This flaw grows with matrix dimension, affects both SGD and Adam, and resists existing corrective strategies including learnable multipliers. The root cause is a gradient signal imbalance: small singular values receive orders-of-magnitude less gradient than large ones, preventing convergence of their ratio. Our findings motivate the development of new spectral corrective mechanisms that go beyond norm-based corrections to address the spectral structure of weight matrices.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}
