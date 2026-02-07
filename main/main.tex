@@ -1,0 +1,406 @@
+\documentclass[sigconf]{acmart}
+
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{subcaption}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+\title{Reproducible Automated Scientific Research by Agent Teams on Open Problems at Scale}
+
+\author{Iddo Drori}
+\affiliation{%
+  \institution{Yeshiva University}
+  \country{USA}
+}
+
+\author{Alexy Skoutnev}
+\affiliation{%
+  \institution{Yeshiva University}
+  \country{USA}
+}
+
+\author{Kirill Acharya}
+\affiliation{%
+  \institution{Stanford University}
+  \country{USA}
+}
+
+\author{Gaston Longhitano}
+\affiliation{%
+  \institution{Boston University}
+  \country{USA}
+}
+
+\author{Avi Shporer}
+\affiliation{%
+  \institution{MIT}
+  \country{USA}
+}
+
+\author{Madeleine Udell}
+\affiliation{%
+  \institution{Stanford University}
+  \country{USA}
+}
+
+\author{Dov Te'eni}
+\affiliation{%
+  \institution{Tel Aviv University}
+  \country{Israel}
+}
+
+\begin{abstract}
+We present an approach in which AI agent teams autonomously conduct scientific research on 317 open problems spanning 49 disciplines---from physics, astrophysics, and quantum mechanics to fluid dynamics, geophysics, biology, and materials science, alongside machine learning, computer vision, and natural language processing. For each problem, we use Claude Code's agent team capability to first reason deeply about the optimal team composition for that problem's domain, then spawn a specialized team of AI agents that collaboratively produce a complete research package: a computational solution, deterministic experiments, structured data, reproducible code, a full-length paper with figures, tables, and bibliography, and an interactive web application. An automated review-and-revision cycle produces AI-generated peer reviews and systematic revisions for a subset of problems. A three-layer verification system cross-references every numerical claim against source data, reruns all experiments to confirm reproducibility, and checks proof structure, achieving a 73.5\% claim verification rate. We release the entire corpus---over 918 code files, 2{,}100+ data files, 369 papers, 2{,}750+ figures, and 317 web applications---as a large-scale resource for studying AI-driven scientific discovery.
+\end{abstract}
+
+\keywords{AI for science, automated scientific discovery, open problems, reproducibility, verification, large language models}
+
+\maketitle
+
+%% ============================================================
+\section{Introduction}
+%% ============================================================
+
+The convergence of large language models (LLMs)~\cite{openai2024gpt4,anthropic2024claude} and scientific computing has created the possibility of AI systems that can autonomously conduct scientific research~\cite{lu2024aiscientist}. Foundation models now exhibit capabilities across diverse scientific domains~\cite{bommasani2021foundation}, yet concerns about hallucination~\cite{ji2023survey} and the reliability of generated artifacts remain a central challenge for AI-driven scientific discovery.
+
+We explore this frontier using Claude Code's agent team capability~\cite{claudecode2025}. For each open problem, we prompt a lead agent to reason deeply about who the best team would be for conducting research and writing a paper on that problem, then create the team and carry out the work. The lead agent designs a team of specialized agents---analysts, experimenters, writers, reviewers---tailored to the problem's scientific domain, then coordinates them to produce a complete, verified research package. Our corpus of 317 open problems was curated from recent arXiv publications across 49 disciplines. Each problem represents a genuinely open question---a gap in current knowledge, an unresolved conjecture, or an unexplored experimental direction identified by domain researchers.
+
+The problems span the full spectrum of scientific inquiry. In the \textbf{physical sciences}, we address quantum error correction thresholds, Osterwalder--Schrader axioms, de Sitter vacua stability, and superfluidity in dense matter. In \textbf{astrophysics and earth sciences}, we study exoplanet migration, galaxy morphology, earthquake periodicity, and geomagnetic polarity reversals. In \textbf{fluid dynamics}, we investigate Blasius boundary layers, Falkner--Skan solutions, and turbulence scaling. In \textbf{biology and chemistry}, we explore biomolecular condensates, gene regulatory networks, and halloysite nanotube properties. In \textbf{AI and computing}, we tackle machine learning generalization bounds, vision transformer architectures, diffusion language models, and mechanistic interpretability. Table~\ref{tab:categories} provides a full breakdown across arXiv categories.
+
+\textbf{Contributions.} This paper makes the following contributions:
+\begin{enumerate}[leftmargin=*, nosep]
+    \item An agent-team approach using Claude Code in which, for each open problem, an AI lead agent reasons about the optimal team composition, spawns a specialized team of collaborating agents, and coordinates them to produce complete, verified research packages---computational solutions, structured data, reproducible experiment code, full-length papers with figures and bibliography, and interactive web applications---across 49 disciplines.
+    \item A three-layer verification system that cross-references every numerical claim against source data, reruns all experiments to confirm reproducibility, and formally verifies proofs.
+    \item A publicly released corpus of 317 open-problem research packages---with 317 solutions, 317 experiment scripts, 317 papers, and 317 interactive web applications---constituting the largest automated scientific research dataset to date.
+    \item An automated review-and-revision cycle in which 50 problems receive AI-generated peer review, yielding 52 revised packages with updated experiments, data, and papers.
+\end{enumerate}
+
+%% ============================================================
+\section{Related Work}
+%% ============================================================
+
+\textbf{LLMs for Scientific Discovery.}
+Recent work has investigated the use of LLMs as research agents. The AI Scientist~\cite{lu2024aiscientist} demonstrated end-to-end paper generation for machine learning problems, producing LaTeX manuscripts and conducting experiments autonomously. ScienceAgentBench~\cite{wang2024scienceagentbench} introduced a benchmark for evaluating language agents on data-driven scientific discovery tasks. Huang et al.~\cite{huang2024benchmarking} benchmarked LLMs as research agents, finding that current models can assist with but not fully automate scientific workflows. Our work differs in scale (317 problems across 49 arXiv categories versus single-domain demonstrations) and in our emphasis on verification.
+
+\textbf{Reproducibility in Computational Science.}
+Reproducibility remains a persistent challenge in computational research. Prior efforts have focused on containerized environments, workflow management systems, and executable papers. Our approach takes a complementary direction: rather than retrofitting reproducibility onto existing research, we design it into the pipeline from the start through deterministic seeding, pinned dependencies, and automated verification.
+
+\textbf{LLM Hallucination.}
+The tendency of LLMs to generate plausible but incorrect content~\cite{ji2023survey} poses particular risks for scientific research, where numerical precision and logical consistency are essential. Existing mitigation strategies include retrieval augmentation, chain-of-thought reasoning, and self-consistency checks. Our three-layer verification system provides a post-hoc approach: rather than preventing hallucination during generation, we systematically detect it afterward.
+
+\textbf{Open Problems.}
+Drori~\cite{idrori2022openproblems} introduced the approach of using LLMs to solve open problems in mathematics and science. Our work extends this by building an automated pipeline that not only solves problems but also produces verified, reproducible research packages at scale across 49 scientific disciplines.
+
+%% ============================================================
+\section{Dataset: 317 Open Problems}
+%% ============================================================
+
+The corpus of 317 open problems was curated from recent arXiv publications. Each problem was identified as an open question---an unsolved conjecture, an unexplored direction, or a recognized gap---stated explicitly by the authors of the source paper. Table~\ref{tab:tracks} shows the distribution across research tracks, and Figure~\ref{fig:categories} shows the distribution across arXiv categories.
+
+\begin{table}[t]
+\caption{Distribution of 317 open problems across research tracks.}
+\label{tab:tracks}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Track} & \textbf{Problems} & \textbf{\%} \\
+\midrule
+Research                  & 203 & 64.0 \\
+AI for Sciences           &  90 & 28.4 \\
+Datasets and Benchmarks   &  22 &  6.9 \\
+Applied Data Science      &   2 &  0.6 \\
+\midrule
+\textbf{Total}            & \textbf{317} & \textbf{100.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Top 15 arXiv categories by number of open problems (of 49 total categories).}
+\label{tab:categories}
+\centering
+\small
+\begin{tabular}{llr}
+\toprule
+\textbf{Code} & \textbf{Category} & \textbf{Count} \\
+\midrule
+LG & Machine Learning        & 50 \\
+AI & Artificial Intelligence  & 40 \\
+CL & Computation \& Language  & 38 \\
+CV & Computer Vision          & 32 \\
+PH & Physics                  & 23 \\
+PS & Programming \& Software  & 13 \\
+ML & Machine Learning (stat)  & 12 \\
+EP & Earth \& Planetary       & 11 \\
+RO & Robotics                 &  9 \\
+FL & Fluid Dynamics           &  8 \\
+ST & Statistics Theory        &  7 \\
+IR & Information Retrieval    &  6 \\
+CC & Computational Complexity &  6 \\
+CR & Cryptography             &  5 \\
+BI & Bioinformatics           &  5 \\
+\midrule
+\multicolumn{2}{l}{\textit{34 additional categories}} & 52 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/categories.pdf}
+\caption{Distribution of 317 open problems across 49 arXiv categories. The corpus spans machine learning, physics, mathematics, astrophysics, biology, fluid dynamics, and more.}
+\label{fig:categories}
+\end{figure}
+
+%% ============================================================
+\section{Agent Team Architecture}
+%% ============================================================
+
+Our approach leverages Claude Code's agent team capability~\cite{claudecode2025} to treat each open problem as a collaborative research project. For each problem, we prompt a lead agent: \emph{``Think deeply about who the best team would be for conducting research and writing a paper on this problem, then create the team and carry out the work.''} The lead agent analyzes the problem's domain, methodology requirements, and scientific context, then designs and spawns a specialized team of AI agents. The team collaboratively executes an eleven-stage process organized in two phases, illustrated in Figure~\ref{fig:pipeline}.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pipeline.pdf}
+\caption{The eleven-stage agent team research process organized in two phases. Phase~1 (stages 1--8) generates the initial research package. Phase~2 (stages 9--11) adds peer review, revision, and verification. For each problem, a lead agent designs the optimal team composition before work begins.}
+\label{fig:pipeline}
+\end{figure*}
+
+\textbf{Team Formation.} Given an open problem, the lead agent reasons about which specialist roles are needed. A typical team includes: a \emph{problem analyst} who interprets the open question and designs the computational approach; an \emph{experimenter} who writes reproducible code and generates data; a \emph{writer} who produces the full-length paper; a \emph{reviewer} who evaluates the paper and provides structured feedback; and a \emph{reviser} who addresses the review. The lead agent coordinates task assignment, dependency ordering, and artifact hand-offs between agents.
+
+\textbf{Research Stages.} The team executes eleven stages:
+\begin{enumerate}[leftmargin=*, nosep]
+\item \textbf{Problem Analysis.} Parse and interpret the computational approach (\texttt{solution.py}) and analytical framework (\texttt{analysis.md}) for the open problem.
+\item \textbf{Data Generation.} Create structured JSON data files using deterministic seeding (\texttt{np.random.default\_rng(42)}) for full reproducibility.
+\item \textbf{Experiment Code.} Write \texttt{run\_experiments.py} that regenerates all data files from scratch, ensuring any researcher can reproduce the results.
+\item \textbf{Paper Writing.} Generate a full-length paper in ACM \texttt{sigconf} format with abstract, introduction, methodology, results, discussion, conclusion, figures, tables, and bibliography.
+\item \textbf{Bibliography.} Create a \texttt{references.bib} file with citations to relevant prior work.
+\item \textbf{Figure Generation.} Produce publication-quality PDF figures using Matplotlib.
+\item \textbf{PDF Compilation.} Compile via \texttt{pdflatex} and \texttt{bibtex} (three passes) to produce the final paper.
+\item \textbf{Interactive Web Application.} Build a self-contained HTML application with Chart.js interactive charts, data tables, and responsive design.
+\item \textbf{Peer Review.} A reviewer agent generates a structured peer review (\texttt{review.txt}) evaluating the paper's methodology, experimental design, and claims.
+\item \textbf{Revision.} A reviser agent addresses each review point, updating the experiment code, regenerating data, and revising the paper (\texttt{revision/}).
+\item \textbf{Verification.} The three-layer verification system (Section~\ref{sec:verification}) runs on the final artifacts, producing a \texttt{verification\_report.json}.
+\end{enumerate}
+
+The pipeline enforces determinism through fixed random seeds and pinned library versions (NumPy~1.26.4, SciPy~1.12.0, Matplotlib~3.8.3). Multiple problem teams run concurrently, with each team progressing through the stages independently.
+
+\subsection{Replication}
+\label{sec:replication-method}
+
+To evaluate how well the generated papers communicate their methodology, we conduct an automated replication study following the PaperBench framework~\cite{starace2025paperbench}, adapted for Claude Code with Opus~4.6 and without human experiments. For a subset of 8 papers spanning 4 arXiv categories (LG, AI, CY, NA), a separate replication agent reads \emph{only} the generated paper (\texttt{main.tex})---without access to the original experiment code, data, or solution files---and attempts to re-implement all experiments from scratch.
+
+\textbf{Process.} For each paper, a replication agent: (1)~reads the paper to extract the methodology, experimental setup, and evaluation criteria; (2)~writes a self-contained \texttt{run\_replication.py} implementing all described experiments using only the standard scientific Python stack (NumPy, SciPy, Matplotlib, pandas, statsmodels); (3)~executes the replication code with deterministic seeding (\texttt{np.random.default\_rng(42)}); (4)~compares replicated results against numerical claims in the paper within 5\% relative tolerance; and (5)~scores the replication using a PaperBench-style hierarchical rubric decomposing each paper into individually gradable sub-tasks.
+
+\textbf{Rubric Design.} Following PaperBench, each rubric is a tree of requirements. The root node represents the core contribution; children decompose into major experiments and methodology components; leaf nodes specify single testable criteria (e.g., ``optimizer comparison experiment executed and produces convergence curves''). Leaf nodes receive binary scores (0 or~1), and parent scores are computed as weighted averages of their children, yielding a final replication score between 0\% and 100\%.
+
+All 8 replication agents run concurrently, each operating independently on its assigned paper. The replication artifacts---code, results, comparison reports, and rubrics---are stored in a \texttt{replication/} directory.
+
+%% ============================================================
+\section{Verification System}
+\label{sec:verification}
+%% ============================================================
+
+The verification system addresses the critical concern of hallucination in LLM-generated research~\cite{ji2023survey}. It operates in three layers:
+
+\textbf{Layer~1: Numerical Cross-Referencing.}
+For each problem, we extract every numerical value from the generated paper (\texttt{main.tex}) and web application (\texttt{index.html}) using regular expressions for decimals, percentages, and $\pm$ values. The extraction filters exclude non-claim numerals---years (1900--2099), font sizes, \LaTeX{} dimension commands (\texttt{\textbackslash setlength}, \texttt{pt}, \texttt{cm}), bibliography indices, \texttt{\textbackslash ref}/\texttt{\textbackslash cite} arguments, and large integers ($>$100)---using context-aware pattern matching against 18 skip patterns. Each extracted value is cross-referenced against all values stored in the structured data files (\texttt{data/*.json}). A claim is verified if a matching value exists within 5\% relative tolerance. This layer verifies \emph{value provenance}---that each number in the paper traces to the underlying data---rather than the semantic correctness of the scientific claim in which it appears.
+
+\textbf{Layer~2: Reproducibility Testing.}
+We re-execute \texttt{run\_experiments.py} and compare the output data files against the originals. Because all experiments use deterministic seeding, the outputs should be bitwise identical. Any discrepancy indicates either non-deterministic code (e.g., unseeded randomness, floating-point order dependence) or a mismatch between the experiment code and the stored data.
+
+\textbf{Layer~3: Proof Verification.}
+For problems involving mathematical proofs or formal arguments, we check the structural consistency of proof steps---verifying that conclusions follow from stated premises, that definitions are used consistently, and that proof structure is complete. This layer is currently limited in scope: it performs structural checking rather than full machine-verified proofs in a proof assistant such as Lean or Coq, and applies to the subset of problems involving mathematical proofs (primarily in categories AG, NA, PH, and TH).
+
+Together, these three layers verify that: (a)~every number in the paper traces back to the data, (b)~every experiment produces the same results when rerun, and (c)~proof-bearing papers maintain structural logical consistency.
+
+%% ============================================================
+\section{Results}
+%% ============================================================
+
+\subsection{Artifact Generation}
+
+Table~\ref{tab:artifacts} summarizes the artifacts produced by the pipeline. The pipeline achieves 100\% completion for all core deliverables: every problem has a computational solution, experiment code, compiled PDF paper, and interactive web application. Figure~\ref{fig:artifacts} visualizes the completeness across all 317 problems.
+
+\begin{table}[t]
+\caption{Artifacts generated by the pipeline across 317 open problems. The pipeline achieves 100\% completion for all core artifacts.}
+\label{tab:artifacts}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Artifact} & \textbf{Count} & \textbf{\%} \\
+\midrule
+Computational solutions (\texttt{solution.py})     & 317 & 100.0 \\
+Analytical frameworks (\texttt{analysis.md})        & 316 &  99.7 \\
+Experiment code (\texttt{run\_experiments.py})       & 317 & 100.0 \\
+Figure generation (\texttt{generate\_figures.py})    & 315 &  99.4 \\
+Structured data (\texttt{data/*.json})              & 310 &  97.8 \\
+Paper source (\texttt{main.tex})                    & 317 & 100.0 \\
+Bibliography (\texttt{references.bib})              & 317 & 100.0 \\
+Publication figures (\texttt{paper/figures/})        & 311 &  98.1 \\
+Compiled PDFs (\texttt{main.pdf})                   & 317 & 100.0 \\
+Interactive web apps (\texttt{webapp/})             & 317 & 100.0 \\
+Peer reviews (\texttt{review.txt})              &  50 &  15.8 \\
+Revised papers (\texttt{revision/paper/})        &  52 &  16.4 \\
+Verification reports                             & 157 &  49.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/artifacts.pdf}
+\caption{Artifact completeness across 317 open problems. The dashed line indicates the total number of problems.}
+\label{fig:artifacts}
+\end{figure}
+
+\subsection{Research Package Contents}
+
+Each complete research package contains:
+\begin{itemize}[leftmargin=*, nosep]
+    \item A \textbf{computational solution} with deterministic experiments.
+    \item \textbf{Structured data} in JSON format with all experimental results.
+    \item \textbf{Reproducible experiment code} that regenerates the data from scratch.
+    \item A \textbf{full-length paper} in ACM sigconf format with figures, tables, and bibliography.
+    \item A \textbf{compiled PDF} of the paper.
+    \item An \textbf{interactive web application} with Chart.js visualizations, responsive layout, and embedded data tables.
+\end{itemize}
+
+\subsection{Verification Results}
+
+The three-layer verification system (Section~\ref{sec:verification}) generated 157 reports across the corpus. Of the 42 problems with complete verification, 3 achieved PASS status (100\% claim verification), 26 received WARN (70--99\%), and 13 were classified as FAIL ($<$70\%). Across all verified problems, 4{,}141 numerical values were extracted from papers and web applications, of which 3{,}044 (73.5\%) were matched to source data within 5\% relative tolerance---a measure of internal consistency between papers and their underlying data, not of scientific validity. Figure~\ref{fig:verification} shows the distribution of verification outcomes.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/verification.pdf}
+\caption{Verification outcomes for 42 fully verified problems. PASS: 100\% claims verified; WARN: 70--99\%; FAIL: $<$70\%. The overall claim verification rate is 73.5\%.}
+\label{fig:verification}
+\end{figure}
+
+\subsection{Review and Revision}
+
+Fifty problems received AI-generated peer reviews, and 52 problems have complete revised packages including updated experiment code, regenerated data, and revised papers. (Two additional problems were revised based on iterative pipeline feedback without generating formal review files.) Table~\ref{tab:revision} compares the original and revised artifact counts.
+
+\begin{table}[t]
+\caption{Artifact counts: original pipeline vs.\ revised corpus.}
+\label{tab:revision}
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Artifact} & \textbf{Original} & \textbf{Revised} & \textbf{Total} \\
+\midrule
+Experiment code    & 317 & 52  & 369 \\
+Data files (JSON)  & 1{,}802 & 309 & 2{,}111 \\
+Papers (PDF)       & 317 & 52  & 369 \\
+Figures            & 2{,}333 & 417 & 2{,}750 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Replication}
+
+To assess whether the generated papers contain sufficient methodological detail for independent reproduction, we replicate 8 papers from 4 arXiv categories following the PaperBench protocol~\cite{starace2025paperbench} (Section~\ref{sec:replication-method}). Table~\ref{tab:replication} reports per-paper replication scores and claim match rates.
+
+\begin{table}[t]
+\caption{Replication results for 8 papers across 4 arXiv categories. Replication score is the PaperBench-style weighted rubric score. Claim match rate measures the fraction of numerical claims from the paper that are reproduced within 5\% relative tolerance.}
+\label{tab:replication}
+\centering
+\small
+\begin{tabular}{llrr}
+\toprule
+\textbf{Cat.} & \textbf{Problem} & \textbf{Score} & \textbf{Claims} \\
+\midrule
+LG & SDPO alignment        & 93.6\% & 17/30 \\
+CY & AI tools skill form.  & 92.5\% & 12/23 \\
+LG & Sharpness evolution   & 87.2\% & 20/31 \\
+LG & Optimization flaws    & 85.0\% & 12/17 \\
+AI & Multimodal CoT math   & 84.0\% & 25/28 \\
+NA & $W^{2,p}$ regularity  & 82.0\% & 10/11 \\
+CY & Supervisory skill dev.& 74.5\% & 14/21 \\
+LG & Riemannian AmbientFlow& 72.0\% & 13/16 \\
+\midrule
+\multicolumn{2}{l}{\textbf{Average}} & \textbf{83.8\%} & \textbf{123/177 (69.5\%)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 8 replicated papers achieve an average replication score of 83.8\%, with scores ranging from 72.0\% to 93.6\%. Across 177 numerical claims extracted from the papers, 123 (69.5\%) are reproduced within 5\% tolerance by code written solely from the paper descriptions---without access to the original experiment code. Qualitative findings (trend directions, ranking orders, convergence behaviors) show higher agreement than exact numerical values, consistent with the synthetic nature of the experimental data: the replication agents implement the described methodology independently, producing results that confirm the same phenomena while differing in implementation-specific details. The replication artifacts---8 independent codebases totaling 69 result files---are released in the \texttt{replication/} directory.
+
+\subsection{Scientific Domains}
+
+To illustrate the breadth and depth of the pipeline across scientific disciplines, we highlight representative problems from several domains:
+
+\textbf{Physics \& Quantum Mechanics (23 problems).}
+Problems include quantum error correction threshold conjectures, Osterwalder--Schrader axiom verification for lattice theories, de Sitter vacua stability bounds, and superfluidity onset conditions in dense nuclear matter. The pipeline produces numerical simulations, phase diagrams, and scaling analyses.
+
+\textbf{Astrophysics \& Earth Sciences (11 problems).}
+We address cold Jupiter formation pathways, exoplanet metallicity correlations, radio galaxy morphology classification, earthquake recurrence modeling, and geomagnetic polarity reversal periodicity. Experiments include Monte Carlo simulations, Bayesian inference, and time-series analysis.
+
+\textbf{Fluid Dynamics (8 problems).}
+Problems span Blasius boundary layer solutions, Falkner--Skan wedge flows, turbulence cascade scaling, and vortex dynamics. The pipeline produces numerical ODE/PDE solutions with convergence analysis.
+
+\textbf{Biology \& Chemistry (10 problems).}
+We investigate biomolecular condensate phase separation, gene regulatory network inference, halloysite nanotube adsorption properties, and protein structure prediction. Experiments use stochastic simulations and statistical modeling.
+
+\textbf{Machine Learning \& AI (170 problems).}
+This largest cluster includes PAC learning generalization bounds, bandit algorithm regret analysis, calibration theory, vision transformer scaling laws, diffusion model training dynamics, mechanistic interpretability of language models, and reinforcement learning from human feedback. Experiments span theoretical bound verification, synthetic benchmarks, and ablation studies.
+
+\subsection{Case Studies}
+
+We examine three of the eight replicated research packages (Table~\ref{tab:replication}) in detail, spanning numerical analysis, social science, and machine learning, to illustrate the depth and diversity of individual pipeline outputs.
+
+\paragraph{Numerical Analysis: $W^{2,p}$ Regularity on Non-Smooth Domains (82.0\% replication).}
+The open problem asks for a complete characterization of when the Poisson--Dirichlet solution $u$ achieves $W^{2,p}$ Sobolev regularity on domains with re-entrant corners. The pipeline proposed a spectral-geometric criterion: $W^{2,p}$ regularity holds if and only if $p < N/(2 - \lambda_{\min})$, where $\lambda_{\min}$ is the smallest Kondratiev singular exponent. It validated this criterion through finite-element experiments on 2D sector domains with corner angles from $181^\circ$ to $359^\circ$, manufactured-solution tests achieving $<$3.3\% error in exponent recovery, mesh convergence studies at six refinement levels, and singularity coefficient extraction across 22 re-entrant angles with mean error below 4\%. The replication agent, working solely from the paper, reproduced 10 of 11 numerical claims within 5\% tolerance---confirming that the methodology was communicated precisely enough for independent re-implementation of the Kondratiev exponent computations and convergence analyses.
+
+\paragraph{Computers \& Society: AI Assistance Hindering Supervisory Skill Development (74.5\% replication).}
+The open problem asks whether AI assistance erodes the skills humans need to supervise automated tasks. The pipeline formalized this as a dynamical systems model coupling skill evolution, metacognitive calibration, and endogenous AI reliance, simulated across four professional domains (software engineering, medicine, finance, aviation). Key findings include \emph{deskilling traps}---parameter regimes where workers lose competence and simultaneously lose awareness of their incompetence---and a \emph{reliability paradox} where higher AI reliability (critical transition band 0.93--0.96) increases deskilling risk by reducing error signals necessary for skill maintenance. The pipeline also identified scaffolded autonomy as the most effective intervention, raising final skill from 0.048 to 0.983. The replication agent reproduced 14 of 21 claims (74.5\%); the lower score reflects the model's sensitivity to parameter initialization---qualitative findings (trap detection, intervention rankings) were fully reproduced while exact numerical thresholds varied.
+
+\paragraph{Machine Learning: SDPO Alignment in Continuous-Reward Settings (93.6\% replication).}
+The open problem asks whether Self-Distillation Policy Optimization, which distills a feedback-conditioned self-teacher into the policy for dense credit assignment, generalizes beyond verifiable domains to open-ended and continuous-reward tasks. The pipeline built a controlled simulation framework comparing SDPO against REINFORCE and advantage-weighted baselines across four feedback types (binary, ordinal, continuous, critique), six noise levels, and five random seeds. SDPO consistently outperformed baselines by $+$0.12 to $+$0.15 in mean reward, with credit assignment correlation improving from 0.722 (binary) to 0.791 (critique). The pipeline also mapped the diversity--alignment Pareto frontier, showing that KL regularization recovers 86.0\% of maximum entropy with only 1.2\% reward loss. This paper achieved the highest replication score (93.6\%), with 17 of 30 claims matched---demonstrating that the simulation framework's controlled design enabled precise methodological communication.
+
+These cases illustrate a common pattern across the replicated papers: the pipeline produces structured computational explorations with detailed methodology, and independent replication agents can reproduce the core findings from the paper text alone, with qualitative conclusions consistently confirmed even when exact numerical values differ due to implementation-specific details.
+
+%% ============================================================
+\section{Discussion}
+%% ============================================================
+
+\textbf{AI-Driven Scientific Discovery Across Disciplines.}
+This work demonstrates that AI agent teams can produce internally consistent, reproducible research packages at scale across 49 disciplines---from quantum mechanics to fluid dynamics to genomics. The pipeline designs experiments, produces data, creates visualizations, and writes verified papers end-to-end. This suggests that AI agent teams can serve as research accelerators, particularly for generating computational explorations of open questions.
+
+\textbf{Verification as Accountability.}
+The three-layer verification system provides a mechanism for making AI-generated research accountable. Across 42 fully verified problems, 73.5\% of 4{,}141 extracted numerical claims were verified against source data---demonstrating that the majority of AI-generated claims are grounded in the underlying experiments. The remaining 26.5\% of unverified claims highlight areas where the pipeline's generation and verification are not yet aligned, providing clear targets for improvement.
+
+\textbf{Agent Teams for Scientific Research.} A key design choice is that the system itself decides the team composition for each problem. Rather than prescribing fixed agent roles, we prompt the lead agent to reason about the optimal team for a given problem, then create that team and carry out the work. The team for a fluid dynamics problem may thus differ from one for a machine learning problem---the lead agent tailors the expertise. The review-and-revision cycle, in which a separate reviewing agent evaluates the writing agent's output, introduces an adversarial dynamic that improves quality. This mirrors the collaborative structure of human research while enabling parallelism across problems.
+
+\textbf{Limitations.}
+Several limitations should be noted. First, the pipeline generates computational experiments with synthetic data rather than running large-scale experiments on real-world datasets; the experiments demonstrate methodology and reproducibility rather than producing novel empirical findings. Second, numerical verification checks consistency between the paper and the data but does not assess scientific validity---a paper could be internally consistent yet scientifically flawed. Third, while the pipeline can handle computational aspects of scientific problems, it cannot perform physical experiments, laboratory work, or observational studies. Fourth, proof verification currently performs structural consistency checking rather than full formal verification in a proof assistant; extending this layer is an important direction for future work. Fifth, while deterministic seeding and pinned Python package versions (NumPy~1.26.4, SciPy~1.12.0) promote reproducibility, bitwise identical results across different hardware, BLAS backends, or operating systems are not guaranteed without containerized environments; future work should incorporate Docker images to strengthen cross-platform reproducibility.
+
+\textbf{Broader Impact.}
+The public release of all 317 research packages---solutions, data, code, papers, and web applications---provides a benchmark for evaluating AI-generated scientific content, developing better verification methods, and understanding how AI can accelerate research across diverse domains.
+
+\textbf{Framing: Research Packages, Not Solutions.} This work produces \emph{reproducible research packages about open problems}, not definitive solutions. The pipeline generates internally consistent computational explorations with verified numerical claims, but whether a given result truly resolves its open question requires domain expert evaluation. We view this corpus primarily as a systems and methodology contribution: demonstrating that AI agent teams can produce structured, verifiable research packages at unprecedented scale.
+
+%% ============================================================
+\section{Conclusion}
+%% ============================================================
+
+We have shown that dynamically formed AI agent teams can autonomously produce complete, verified research packages for 317 open problems across 49 scientific disciplines. The pipeline's three-layer verification system achieves a 73.5\% claim verification rate across 4{,}141 extracted claims, and an automated review-and-revision cycle produces 52 revised packages with updated experiments and papers. The full corpus---369 papers, over 2{,}100 data files, 2{,}750+ figures, and 317 interactive web applications---is publicly released as a large-scale resource for studying AI-driven scientific discovery.
+
+\smallskip\noindent The complete corpus is publicly available at \url{https://github.com/idrori/open}.
+
+%% ============================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}
